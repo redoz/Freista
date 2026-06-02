@@ -2,7 +2,9 @@ using System.Collections.Immutable;
 using System.Reflection;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Diagnostics;
 using PUnit.Generator;
+using PUnit.Generator.Analysis;
 using PUnit.Model;
 using PUnit.Scheduling;
 
@@ -75,6 +77,24 @@ public static class GeneratorHarness
         return CSharpGeneratorDriver
             .Create([new ScenarioGenerator().AsSourceGenerator()], parseOptions: parseOptions)
             .RunGenerators(compilation);
+    }
+
+    /// <summary>Runs the analyzer over source and returns just the PUnit diagnostics.</summary>
+    public static async Task<ImmutableArray<Diagnostic>> AnalyzeAsync(string source)
+    {
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+        var tree = CSharpSyntaxTree.ParseText(source, parseOptions);
+        var compilation = CSharpCompilation.Create(
+            "Analyze_" + Guid.NewGuid().ToString("N"),
+            [tree],
+            References,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary,
+                nullableContextOptions: NullableContextOptions.Enable));
+
+        var withAnalyzers = compilation.WithAnalyzers(
+            ImmutableArray.Create<DiagnosticAnalyzer>(new ScenarioAnalyzer()));
+        var diagnostics = await withAnalyzers.GetAnalyzerDiagnosticsAsync();
+        return diagnostics.Where(d => d.Id.StartsWith("PUNIT")).ToImmutableArray();
     }
 
     public static IReadOnlyList<ScenarioDefinition> Definitions(this GeneratorResult result)

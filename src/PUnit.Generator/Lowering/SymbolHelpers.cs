@@ -74,6 +74,13 @@ internal static class SymbolHelpers
         return true;
     }
 
+    /// <summary>True for a non-generic Task/ValueTask (a scenario's required return shape).</summary>
+    public static bool IsVoidTaskLike(ITypeSymbol type)
+        => type is INamedTypeSymbol named
+            && named.ContainingNamespace?.ToDisplayString(NoGlobal) == "System.Threading.Tasks"
+            && named.Name is "Task" or "ValueTask"
+            && named.Arity == 0;
+
     /// <summary>Whether the method has a trailing <c>ScenarioContext</c> parameter not supplied by source args.</summary>
     public static bool WantsContext(IMethodSymbol method, int suppliedArgCount)
     {

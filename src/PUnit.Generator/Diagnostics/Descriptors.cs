@@ -1,0 +1,73 @@
+using Microsoft.CodeAnalysis;
+
+namespace PUnit.Generator.Diagnostics;
+
+/// <summary>Diagnostics for the supported scenario subset (see the design's "Analyzer Rules").</summary>
+internal static class Descriptors
+{
+    const string Category = "PUnit.Usage";
+
+    public static readonly DiagnosticDescriptor MustBeAsyncTask = new(
+        "PUNIT001",
+        "Scenario method must be async Task or async ValueTask",
+        "Scenario method '{0}' must be declared 'async Task' or 'async ValueTask'",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor UnsupportedStatement = new(
+        "PUNIT002",
+        "Unsupported scenario statement",
+        "Scenario statements must be an awaited Given/When/Then call, an awaited tuple, or an awaited array of such calls",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor UnsupportedControlFlow = new(
+        "PUNIT003",
+        "Unsupported control flow in scenario",
+        "Control flow is not supported in scenario bodies in this version",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor NotADslCall = new(
+        "PUNIT004",
+        "Scenario step must be a Given/When/Then call",
+        "Scenario steps must call a static extension member on Given, When, or Then",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor InvalidReturnType = new(
+        "PUNIT005",
+        "DSL method has an unsupported return type",
+        "DSL method '{0}' must return Task, Task<T>, ValueTask, or ValueTask<T>",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor InvalidGroupElement = new(
+        "PUNIT006",
+        "Parallel group element must be a Given/When/Then call",
+        "Every element of a tuple/array parallel group must be a Given/When/Then call",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor InvalidArgument = new(
+        "PUNIT007",
+        "Scenario step argument is not lowerable",
+        "Argument '{0}' must be a prior step output, a scenario parameter, or a constant",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor UnboundPlaceholder = new(
+        "PUNIT008",
+        "Display-name placeholder does not bind to a parameter",
+        "Display-name placeholder '{0}' does not match any parameter of '{1}'",
+        Category,
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+}
