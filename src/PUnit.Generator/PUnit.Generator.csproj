@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>   <!-- required for Roslyn analyzers/generators -->
+    <Description>
+      Roslyn source generator + analyzer. Lowers [Scenario] methods into a PUnit scenario
+      manifest and executor, and reports diagnostics when a scenario uses syntax outside the
+      supported subset.
+    </Description>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <!-- Shipped as an analyzer inside the PUnit.Xunit package, not as its own package. -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Version comes from $(PUnitRoslynVersion) via Directory.Packages.props. PrivateAssets
+         keeps the Roslyn dependency from flowing to consumers of the generator. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

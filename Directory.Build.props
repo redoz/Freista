@@ -1,0 +1,63 @@
+<Project>
+
+  <!-- Settings shared by every project in the repository. -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>            <!-- C# 14: static extension members -->
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>            <!-- don't require XML docs on every public member (yet) -->
+    <Product>PUnit</Product>
+    <Authors>Patrik Husfloen</Authors>
+  </PropertyGroup>
+
+  <!--
+    ============================================================================
+    Roslyn multi-targeting
+    ============================================================================
+    The source generator is compiled against one Microsoft.CodeAnalysis version.
+    That version sets the *minimum* compiler / SDK a consumer needs, so to support
+    more than one baseline from a single NuGet package we recompile the generator's
+    sources against several Roslyn versions and pack each result under
+    'analyzers/dotnet/roslyn<major>.<minor>/cs'. NuGet then hands every consumer the
+    highest variant their compiler can load.
+
+    Today we ship a SINGLE baseline: $(PUnitRoslynVersion), below.
+
+    To add another later, drop in a project whose name is the generator's name plus
+    '.Roslyn<digits>' (e.g. src/PUnit.Generator.Roslyn414/PUnit.Generator.Roslyn414.csproj).
+    The file can be a one-liner — '<Project Sdk="Microsoft.NET.Sdk" />' — because the
+    block below derives the target framework, assembly name, Roslyn package version,
+    and source set entirely from the project name. No other files change.
+    ============================================================================
+  -->
+
+  <!-- The Roslyn baseline the primary generator builds against (major.minor). -->
+  <PropertyGroup>
+    <PUnitRoslynVersion Condition="'$(PUnitRoslynVersion)' == ''">5.3</PUnitRoslynVersion>
+  </PropertyGroup>
+
+  <!-- A variant project ('<Base>.Roslyn<NN>') derives everything from its name. -->
+  <PropertyGroup Condition="$(MSBuildProjectName.Contains('.Roslyn'))">
+    <_RoslynBase>$([System.Text.RegularExpressions.Regex]::Replace('$(MSBuildProjectName)', '\.Roslyn\d+$', ''))</_RoslynBase>
+    <_RoslynDigits>$([System.Text.RegularExpressions.Regex]::Match('$(MSBuildProjectName)', 'Roslyn(\d+)$').Groups[1].Value)</_RoslynDigits>
+    <!-- "50" -> "5.0", "414" -> "4.14": dot after the major (single) digit. -->
+    <PUnitRoslynVersion>$([System.Text.RegularExpressions.Regex]::Replace('$(_RoslynDigits)', '^(\d)(\d+)$', '$1.$2'))</PUnitRoslynVersion>
+
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <AssemblyName>$(_RoslynBase)</AssemblyName>
+    <RootNamespace>$(_RoslynBase)</RootNamespace>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup Condition="$(MSBuildProjectName.Contains('.Roslyn'))">
+    <!-- Recompile the base generator's sources against this variant's Roslyn version. -->
+    <Compile Include="$(MSBuildThisFileDirectory)src\$(_RoslynBase)\**\*.cs"
+             Exclude="$(MSBuildThisFileDirectory)src\$(_RoslynBase)\obj\**\*.cs" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp"
+                      VersionOverride="$(PUnitRoslynVersion).*" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

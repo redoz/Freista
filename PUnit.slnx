@@ -1,0 +1,19 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PUnit/PUnit.csproj" />
+    <Project Path="src/PUnit.Xunit/PUnit.Xunit.csproj" />
+    <Project Path="src/PUnit.Generator/PUnit.Generator.csproj" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="test/PUnit.Test/PUnit.Test.csproj" />
+    <Project Path="test/PUnit.Generator.Test/PUnit.Generator.Test.csproj" />
+    <Project Path="test/PUnit.Xunit.Test/PUnit.Xunit.Test.csproj" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path=".gitignore" />
+    <File Path="README.md" />
+    <File Path="docs/scenario-graph-extension-design.md" />
+  </Folder>
+</Solution>

@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Description>
+      xUnit v3 adapter for PUnit: the [Scenario] discoverer, one visible test per scenario
+      step, and a self-executing test case that runs the generated scenario graph and reports
+      per-step pass/fail/skip messages with dependency-aware skip semantics.
+    </Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PUnit\PUnit.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3.extensibility.core" />
+  </ItemGroup>
+
+  <!--
+    TODO (packaging): when we wire up `dotnet pack`, the PUnit.Generator output (and any
+    future .Roslyn<NN> variants) gets bundled into this package under
+    'analyzers/dotnet/roslyn<major>.<minor>/cs' so `dotnet add package PUnit.Xunit` brings
+    the generator along. Deferred until the runtime types exist and we can build/verify.
+  -->
+
+</Project>

@@ -1,0 +1,30 @@
+<Project>
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- Roslyn variant projects pin their CodeAnalysis version via VersionOverride="x.y.*". -->
+    <CentralPackageFloatingVersionsEnabled>true</CentralPackageFloatingVersionsEnabled>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- xUnit v3 extensibility surface (IXunitTestCase, discoverers, self-executing cases). -->
+    <PackageVersion Include="xunit.v3.extensibility.core" Version="3.2.2" />
+
+    <!--
+      Roslyn the primary generator builds against. Installed SDK 10.0.300 ships Roslyn
+      5.6.0; 5.3.0 is the latest published Microsoft.CodeAnalysis.CSharp and is <= the
+      host compiler, so the generator loads cleanly (a generator can never reference a
+      newer Roslyn than the host). Older .NET 10 SDKs that shipped Roslyn 5.0-5.2 can be
+      supported later by adding a lower PUnit.Generator.Roslyn<NN> variant.
+    -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.3.0" />
+
+    <!-- Test infrastructure. xunit.v3 is pinned to match xunit.v3.extensibility.core. -->
+    <PackageVersion Include="xunit.v3" Version="3.2.2" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.6.0" />
+    <PackageVersion Include="Verify.XunitV3" Version="31.19.0" />
+    <PackageVersion Include="Verify.SourceGenerators" Version="2.5.0" />
+  </ItemGroup>
+
+</Project>
