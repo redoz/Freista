@@ -547,7 +547,10 @@ internal sealed class ScenarioParser
             }
 
             var argExpr = ArgumentForParameter(method, args, token.Text);
-            var constValue = argExpr is null ? default : _model.GetConstantValue(argExpr);
+            // LINQ unrolling substitutes the loop variable, producing detached nodes the model
+            // can't evaluate; treat those as runtime-formatted.
+            var inModel = argExpr is not null && argExpr.SyntaxTree == _model.SyntaxTree;
+            var constValue = inModel ? _model.GetConstantValue(argExpr!) : default;
 
             if (argExpr is not null && constValue.HasValue)
             {
@@ -559,8 +562,10 @@ internal sealed class ScenarioParser
             {
                 anyRuntime = true;
                 constant.Append('{').Append(token.Text).Append('}');
-                var rewritten = ((ExpressionSyntax)rewriter.Visit(argExpr)).ToFullString().Trim();
-                interpolation.Append('{').Append(rewritten).Append('}');
+                var rewritten = ((ExpressionSyntax)rewriter.Visit(argExpr!)).ToFullString().Trim();
+                // Parenthesize so a ':' inside the expression (e.g. global::) isn't read as a
+                // format separator, and to be safe against '?' / nested interpolation.
+                interpolation.Append("{(").Append(rewritten).Append(")}");
             }
             else
             {

@@ -70,6 +70,23 @@ public static class SampleSources
 
                 [StepName("the import should contain the users")]
                 public static Task ImportShouldContainUsers(Import import, User[] users) => Task.CompletedTask;
+
+                [StepName("greet {patient}")]
+                public static Task Greet(Patient patient) => Task.CompletedTask;
+            }
+        }
+        """;
+
+    public const string RuntimeNameScenario =
+        """
+
+        public static class GreetScenarios
+        {
+            [Scenario("greeting")]
+            public static async Task Greeting()
+            {
+                var patient = await Given.PatientExists("Jane");
+                await Then.Greet(patient);
             }
         }
         """;
@@ -87,6 +104,64 @@ public static class SampleSources
                 var slot = await Given.AvailableSlot();
                 var appointment = await When.CreateAppointment(patient, slot);
                 await Then.AppointmentExists(appointment);
+            }
+        }
+        """;
+
+    public const string TupleScenario =
+        """
+
+        public static class TupleScenarios
+        {
+            [Scenario("tuple booking")]
+            public static async Task Booking()
+            {
+                await Given.DatabaseIsClean();
+
+                var (patient, slot) = await (
+                    Given.PatientExists("Jane"),
+                    Given.AvailableSlot());
+
+                var appointment = await When.CreateAppointment(patient, slot);
+                await Then.AppointmentExists(appointment);
+            }
+        }
+        """;
+
+    public const string ArrayScenario =
+        """
+
+        public static class ArrayScenarios
+        {
+            [Scenario("array import")]
+            public static async Task Import()
+            {
+                var users = await new[]
+                {
+                    Given.UserExists("alice"),
+                    Given.UserExists("bob"),
+                };
+
+                var import = await When.ImportUsers(users);
+                await Then.ImportShouldContainUsers(import, users);
+            }
+        }
+        """;
+
+    public const string LinqScenario =
+        """
+
+        public static class LinqScenarios
+        {
+            [Scenario("linq import")]
+            public static async Task Import()
+            {
+                var users = await Enumerable.Range(1, 3)
+                    .Select(i => Given.UserExists($"user-{i}"))
+                    .ToArray();
+
+                var import = await When.ImportUsers(users);
+                await Then.ImportShouldContainUsers(import, users);
             }
         }
         """;

@@ -60,6 +60,23 @@ public static class GeneratorHarness
         return new GeneratorResult(genDiagnostics, emitDiagnostics, generatedSource, assembly);
     }
 
+    /// <summary>Runs the generator over source and returns the driver, for Verify snapshots.</summary>
+    public static GeneratorDriver RunDriver(string source)
+    {
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+        var tree = CSharpSyntaxTree.ParseText(source, parseOptions);
+        var compilation = CSharpCompilation.Create(
+            "Snapshot",
+            [tree],
+            References,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary,
+                nullableContextOptions: NullableContextOptions.Enable));
+
+        return CSharpGeneratorDriver
+            .Create([new ScenarioGenerator().AsSourceGenerator()], parseOptions: parseOptions)
+            .RunGenerators(compilation);
+    }
+
     public static IReadOnlyList<ScenarioDefinition> Definitions(this GeneratorResult result)
     {
         Assert.NotNull(result.Assembly);
