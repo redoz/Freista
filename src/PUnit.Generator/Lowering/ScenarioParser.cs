@@ -611,13 +611,15 @@ internal sealed class ScenarioParser
     int ReadScenarioTimeout()
     {
         var attr = _method.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "ScenarioAttribute");
-        return ReadTimeoutMs(attr);
+        return ReadTimeoutMs(attr, "Timeout"); // FactAttribute.Timeout (ms)
     }
 
     static int ReadStepTimeout(IMethodSymbol method)
-        => ReadTimeoutMs(method.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "StepNameAttribute"));
+        => ReadTimeoutMs(
+            method.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "StepNameAttribute"),
+            "TimeoutMs");
 
-    static int ReadTimeoutMs(AttributeData? attr)
+    static int ReadTimeoutMs(AttributeData? attr, string namedArgument)
     {
         if (attr is null)
         {
@@ -626,7 +628,7 @@ internal sealed class ScenarioParser
 
         foreach (var named in attr.NamedArguments)
         {
-            if (named.Key == "TimeoutMs" && named.Value.Value is int ms)
+            if (named.Key == namedArgument && named.Value.Value is int ms)
             {
                 return ms;
             }

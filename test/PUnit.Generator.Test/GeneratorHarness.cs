@@ -27,6 +27,7 @@ public static class GeneratorHarness
             .Select(p => (MetadataReference)MetadataReference.CreateFromFile(p))
             .ToList();
         refs.Add(MetadataReference.CreateFromFile(typeof(Given).Assembly.Location));
+        refs.Add(MetadataReference.CreateFromFile(typeof(PUnit.ScenarioAttribute).Assembly.Location));
         return refs.ToImmutableArray();
     }
 
