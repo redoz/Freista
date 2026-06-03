@@ -21,5 +21,5 @@ public static class ScenarioRegistry
         => Factories.TryGetValue(methodFullName, out factory);
 
     /// <summary>The method names currently registered.</summary>
-    public static IReadOnlyCollection<string> RegisteredMethods => Factories.Keys.ToArray();
+    public static IReadOnlyCollection<string> RegisteredMethods => [.. Factories.Keys];
 }
