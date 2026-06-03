@@ -12,8 +12,8 @@ internal sealed class ParsedScenario
     public string? SourceFile { get; set; }
     public int SourceLine { get; set; }
     public int TimeoutMs { get; set; }
-    public List<string> Usings { get; } = new();
-    public List<ParsedStep> Steps { get; } = new();
+    public List<string> Usings { get; } = [];
+    public List<ParsedStep> Steps { get; } = [];
 }
 
 /// <summary>One lowered step (graph node).</summary>
@@ -26,7 +26,7 @@ internal sealed class ParsedStep
     public string? SourceFile { get; set; }
     public int SourceLine { get; set; }
     public int TimeoutMs { get; set; }
-    public List<int> DependsOn { get; } = new();
+    public List<int> DependsOn { get; } = [];
     public string? GroupId { get; set; }
 
     /// <summary>True when the DSL method returns a value (Task&lt;T&gt;/ValueTask&lt;T&gt;).</summary>

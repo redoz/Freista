@@ -16,7 +16,11 @@ public sealed class ScenarioScheduler
     readonly int _maxParallelism;
 
     /// <param name="maxParallelism">Maximum steps running at once; 0 (default) means unbounded.</param>
-    public ScenarioScheduler(int maxParallelism = 0) => _maxParallelism = maxParallelism;
+    public ScenarioScheduler(int maxParallelism = 0)
+    {
+        _maxParallelism = maxParallelism;
+    }
+
 
     public async Task<IReadOnlyList<StepResult>> RunAsync(
         ScenarioDefinition definition,
@@ -165,7 +169,7 @@ public sealed class ScenarioScheduler
     {
         var stopwatch = Stopwatch.StartNew();
         using var stepCts = CancellationTokenSource.CreateLinkedTokenSource(scenarioToken);
-        var context = new ScenarioContext(node.StepId, displayName, stepCts.Token, services);
+        var context = new ScenarioContext(node.StepId, displayName, services, stepCts.Token);
 
         try
         {
@@ -179,17 +183,19 @@ public sealed class ScenarioScheduler
 
                 if (winner == delayTask && !invokeTask.IsCompleted)
                 {
-                    stepCts.Cancel(); // best-effort: ask the operation to stop
+                    await stepCts.CancelAsync().ConfigureAwait(false); // best-effort: ask the operation to stop
                     // Observe the abandoned operation's eventual fault so it doesn't surface as an
                     // unobserved task exception in the test host.
                     _ = invokeTask.ContinueWith(
                         static t => _ = t.Exception,
-                        TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
+                        CancellationToken.None,
+                        TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                        TaskScheduler.Default);
                     throw new TimeoutException(
                         $"Step '{displayName}' exceeded its timeout of {timeout}.");
                 }
 
-                delayCts.Cancel(); // operation won the race; stop the timer
+                await delayCts.CancelAsync().ConfigureAwait(false); // operation won the race; stop the timer
                 output = await invokeTask.ConfigureAwait(false);
             }
             else

@@ -15,7 +15,7 @@ namespace PUnit.Generator.Lowering;
 internal sealed class IdentifierReplacer : CSharpSyntaxRewriter
 {
     readonly Dictionary<string, string> _map;
-    readonly HashSet<string> _shadowed = new();
+    readonly HashSet<string> _shadowed = [];
 
     public IdentifierReplacer(Dictionary<string, string> map) => _map = map;
 

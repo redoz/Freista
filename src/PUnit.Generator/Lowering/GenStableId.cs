@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 
 namespace PUnit.Generator.Lowering;
@@ -24,6 +25,6 @@ internal static class GenStableId
             hash *= prime;
         }
 
-        return hash.ToString("x16");
+        return hash.ToString("x16", CultureInfo.InvariantCulture);
     }
 }

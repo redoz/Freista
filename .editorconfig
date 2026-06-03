@@ -1,0 +1,37 @@
+root = true
+
+[*.cs]
+
+# --- Analyzer rules deliberately turned off, repo-wide ---
+
+# CA1716: the DSL phase types (Given/When/Then) and IStepInputs.Get read as natural language in a
+# scenario; avoiding language-reserved words for cross-language (e.g. VB) consumers is a non-goal.
+dotnet_diagnostic.CA1716.severity = none
+
+# CA1062: nullable reference types are enabled repo-wide, which already enforces non-null arguments
+# at call sites, making runtime null-validation of public parameters redundant.
+dotnet_diagnostic.CA1062.severity = none
+
+# CA1031: the scheduler is a test runner. It must catch any exception a user step throws and turn it
+# into a recorded (Failed) step outcome rather than letting it abort the run.
+dotnet_diagnostic.CA1031.severity = none
+
+# CA1508: false positives on Roslyn syntax-API guards. CA1508 cannot evaluate argument counts or
+# member names, and wrongly reports these runtime shape checks as always-true/false.
+dotnet_diagnostic.CA1508.severity = none
+
+# --- Test and sample projects: relax production-oriented rules ---
+# Test/sample code uses underscore_separated names, may block synchronously, builds inline data
+# arrays, and has no synchronization context to flow, so these library rules don't apply there.
+[{test,samples}/**/*.cs]
+dotnet_diagnostic.CA1707.severity = none
+dotnet_diagnostic.CA2007.severity = none
+dotnet_diagnostic.CA1849.severity = none
+dotnet_diagnostic.CA2008.severity = none
+dotnet_diagnostic.CA1861.severity = none
+dotnet_diagnostic.CA1307.severity = none
+dotnet_diagnostic.CA1310.severity = none
+dotnet_diagnostic.CA1515.severity = none
+dotnet_diagnostic.CA1034.severity = none
+dotnet_diagnostic.CA1708.severity = none
+dotnet_diagnostic.CA2000.severity = none

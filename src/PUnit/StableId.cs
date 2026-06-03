@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 
 namespace PUnit;
@@ -32,6 +33,6 @@ public static class StableId
             hash *= prime;
         }
 
-        return hash.ToString("x16");
+        return hash.ToString("x16", CultureInfo.InvariantCulture);
     }
 }

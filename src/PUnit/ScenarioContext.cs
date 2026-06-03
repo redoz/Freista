@@ -16,8 +16,8 @@ public sealed class ScenarioContext
     public ScenarioContext(
         string stepId,
         string stepDisplayName,
-        CancellationToken cancellationToken,
-        IServiceProvider? services)
+        IServiceProvider? services,
+        CancellationToken cancellationToken)
     {
         StepId = stepId;
         StepDisplayName = stepDisplayName;

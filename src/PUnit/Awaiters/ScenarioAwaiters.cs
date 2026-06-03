@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 namespace PUnit;
@@ -11,6 +12,8 @@ namespace PUnit;
 /// The generator still lowers these forms into individual step nodes; these awaiters exist so the
 /// authored scenario method remains honest, compilable, runnable C#.
 /// </summary>
+[SuppressMessage("Performance", "CA1849:Call async methods when in an async method",
+    Justification = "Each result is read only after Task.WhenAll has completed the tasks, so .Result does not block.")]
 public static class ScenarioAwaiters
 {
     public static TaskAwaiter<T[]> GetAwaiter<T>(this Task<T>[] tasks)

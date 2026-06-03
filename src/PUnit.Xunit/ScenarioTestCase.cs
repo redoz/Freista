@@ -88,7 +88,7 @@ public sealed class ScenarioTestCase : XunitTestCase, ISelfExecutingXunitTestCas
             definition,
             services: null,
             observer: reporter,
-            cancellationToken: cancellationTokenSource.Token);
+            cancellationToken: cancellationTokenSource.Token).ConfigureAwait(false);
 
         foreach (var result in results)
         {

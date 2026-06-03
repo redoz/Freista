@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using Microsoft.CodeAnalysis;
@@ -21,19 +22,19 @@ internal sealed class ScenarioParser
     readonly MethodDeclarationSyntax _syntax;
 
     // Variable name -> the step(s) that produced it.
-    readonly Dictionary<string, VarSource> _vars = new();
+    readonly Dictionary<string, VarSource> _vars = [];
 
     // Namespaces that contain the invoked DSL extension members; imported into the generated file
     // so `Given.PatientExists(...)` resolves there too.
-    readonly HashSet<string> _dslNamespaces = new();
+    readonly HashSet<string> _dslNamespaces = [];
 
     // Indices introduced by the previous top-level statement (source-order barrier / join target).
-    List<int> _prevFrontier = new();
+    List<int> _prevFrontier = [];
 
     int _nextIndex;
     string _scenarioId = "";
 
-    readonly List<ParsedStep> _steps = new();
+    readonly List<ParsedStep> _steps = [];
 
     ScenarioParser(SemanticModel model, IMethodSymbol method, MethodDeclarationSyntax syntax)
     {
@@ -296,7 +297,7 @@ internal sealed class ScenarioParser
             var value = start + k;
             // Replace the loop variable with the constant value for this element.
             var substituted = (InvocationExpressionSyntax)new IdentifierReplacer(
-                new Dictionary<string, string> { [loopVar] = value.ToString() }).Visit(bodyCall);
+                new Dictionary<string, string> { [loopVar] = value.ToString(CultureInfo.InvariantCulture) }).Visit(bodyCall);
 
             var step = BuildStep(substituted, groupId, _prevFrontier, semanticNode: bodyCall);
             if (step is null)
@@ -438,7 +439,7 @@ internal sealed class ScenarioParser
         return map;
     }
 
-    string BuildCallText(
+    static string BuildCallText(
         InvocationExpressionSyntax invocation,
         MemberAccessExpressionSyntax member,
         Dictionary<string, string> replacements,
@@ -464,14 +465,14 @@ internal sealed class ScenarioParser
     IEnumerable<string> CollectUsings()
         => _syntax.SyntaxTree.GetCompilationUnitRoot().Usings.Select(u => u.ToString().Trim());
 
-    string? Location(SyntaxNode node, out int line)
+    static string? Location(SyntaxNode node, out int line)
     {
         var span = node.GetLocation().GetLineSpan();
         line = span.StartLinePosition.Line + 1;
         return span.Path;
     }
 
-    string? Location(SyntaxToken token, out int line)
+    static string? Location(SyntaxToken token, out int line)
     {
         var span = token.GetLocation().GetLineSpan();
         line = span.StartLinePosition.Line + 1;
