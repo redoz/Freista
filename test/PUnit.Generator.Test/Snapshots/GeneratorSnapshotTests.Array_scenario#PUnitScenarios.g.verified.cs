@@ -11,12 +11,10 @@ namespace PUnit.Generated
 {
     internal static class PUnitGenerated
     {
-        public static global::System.Collections.Generic.IReadOnlyList<global::PUnit.Model.ScenarioDefinition> CreateAll()
-            => new global::PUnit.Model.ScenarioDefinition[]
-            {
-                Scenario_Demo_ArrayScenarios_Import(),
-            };
-
+        public static global::System.Collections.Generic.IReadOnlyList<global::PUnit.Model.ScenarioDefinition> CreateAll() => new global::PUnit.Model.ScenarioDefinition[]
+        {
+            Scenario_Demo_ArrayScenarios_Import()
+        };
         [global::System.Runtime.CompilerServices.ModuleInitializer]
         internal static void Initialize()
         {
@@ -37,12 +35,14 @@ namespace PUnit.Generated
                 SourceLine = 78,
                 GroupId = "g0",
                 Timeout = null,
-                DependsOn = new int[] {  },
+                DependsOn = new int[]
+                {
+                },
                 Invoke = static async (__inputs, __ctx) =>
                 {
                     var __r = await Given.UserExists("alice");
-                    return (object?)__r;
-                },
+                    return (object? )__r;
+                }
             };
             nodes[1] = new global::PUnit.Model.ScenarioNode
             {
@@ -55,12 +55,14 @@ namespace PUnit.Generated
                 SourceLine = 79,
                 GroupId = "g0",
                 Timeout = null,
-                DependsOn = new int[] {  },
+                DependsOn = new int[]
+                {
+                },
                 Invoke = static async (__inputs, __ctx) =>
                 {
                     var __r = await Given.UserExists("bob");
-                    return (object?)__r;
-                },
+                    return (object? )__r;
+                }
             };
             nodes[2] = new global::PUnit.Model.ScenarioNode
             {
@@ -73,12 +75,16 @@ namespace PUnit.Generated
                 SourceLine = 82,
                 GroupId = null,
                 Timeout = null,
-                DependsOn = new int[] { 0, 1 },
+                DependsOn = new int[]
+                {
+                    0,
+                    1
+                },
                 Invoke = static async (__inputs, __ctx) =>
                 {
                     var __r = await When.ImportUsers(new global::Demo.User[] { __inputs.Get<global::Demo.User>(0), __inputs.Get<global::Demo.User>(1) });
-                    return (object?)__r;
-                },
+                    return (object? )__r;
+                }
             };
             nodes[3] = new global::PUnit.Model.ScenarioNode
             {
@@ -91,12 +97,17 @@ namespace PUnit.Generated
                 SourceLine = 83,
                 GroupId = null,
                 Timeout = null,
-                DependsOn = new int[] { 0, 1, 2 },
+                DependsOn = new int[]
+                {
+                    0,
+                    1,
+                    2
+                },
                 Invoke = static async (__inputs, __ctx) =>
                 {
                     await Then.ImportShouldContainUsers(__inputs.Get<global::Demo.Import>(2), new global::Demo.User[] { __inputs.Get<global::Demo.User>(0), __inputs.Get<global::Demo.User>(1) });
-                    return (object?)null;
-                },
+                    return (object? )null;
+                }
             };
             return new global::PUnit.Model.ScenarioDefinition
             {
@@ -106,9 +117,8 @@ namespace PUnit.Generated
                 SourceFile = "",
                 SourceLine = 74,
                 Timeout = null,
-                Nodes = nodes,
+                Nodes = nodes
             };
         }
-
     }
 }

@@ -11,12 +11,10 @@ namespace PUnit.Generated
 {
     internal static class PUnitGenerated
     {
-        public static global::System.Collections.Generic.IReadOnlyList<global::PUnit.Model.ScenarioDefinition> CreateAll()
-            => new global::PUnit.Model.ScenarioDefinition[]
-            {
-                Scenario_Demo_BookingScenarios_Booking(),
-            };
-
+        public static global::System.Collections.Generic.IReadOnlyList<global::PUnit.Model.ScenarioDefinition> CreateAll() => new global::PUnit.Model.ScenarioDefinition[]
+        {
+            Scenario_Demo_BookingScenarios_Booking()
+        };
         [global::System.Runtime.CompilerServices.ModuleInitializer]
         internal static void Initialize()
         {
@@ -37,12 +35,14 @@ namespace PUnit.Generated
                 SourceLine = 76,
                 GroupId = null,
                 Timeout = null,
-                DependsOn = new int[] {  },
+                DependsOn = new int[]
+                {
+                },
                 Invoke = static async (__inputs, __ctx) =>
                 {
                     var __r = await Given.PatientExists("Jane");
-                    return (object?)__r;
-                },
+                    return (object? )__r;
+                }
             };
             nodes[1] = new global::PUnit.Model.ScenarioNode
             {
@@ -55,12 +55,15 @@ namespace PUnit.Generated
                 SourceLine = 77,
                 GroupId = null,
                 Timeout = null,
-                DependsOn = new int[] { 0 },
+                DependsOn = new int[]
+                {
+                    0
+                },
                 Invoke = static async (__inputs, __ctx) =>
                 {
                     var __r = await Given.AvailableSlot();
-                    return (object?)__r;
-                },
+                    return (object? )__r;
+                }
             };
             nodes[2] = new global::PUnit.Model.ScenarioNode
             {
@@ -73,12 +76,16 @@ namespace PUnit.Generated
                 SourceLine = 78,
                 GroupId = null,
                 Timeout = null,
-                DependsOn = new int[] { 0, 1 },
+                DependsOn = new int[]
+                {
+                    0,
+                    1
+                },
                 Invoke = static async (__inputs, __ctx) =>
                 {
                     var __r = await When.CreateAppointment(__inputs.Get<global::Demo.Patient>(0), __inputs.Get<global::Demo.Slot>(1));
-                    return (object?)__r;
-                },
+                    return (object? )__r;
+                }
             };
             nodes[3] = new global::PUnit.Model.ScenarioNode
             {
@@ -91,12 +98,15 @@ namespace PUnit.Generated
                 SourceLine = 79,
                 GroupId = null,
                 Timeout = null,
-                DependsOn = new int[] { 2 },
+                DependsOn = new int[]
+                {
+                    2
+                },
                 Invoke = static async (__inputs, __ctx) =>
                 {
                     await Then.AppointmentExists(__inputs.Get<global::Demo.Appointment>(2));
-                    return (object?)null;
-                },
+                    return (object? )null;
+                }
             };
             return new global::PUnit.Model.ScenarioDefinition
             {
@@ -106,9 +116,8 @@ namespace PUnit.Generated
                 SourceFile = "",
                 SourceLine = 74,
                 Timeout = null,
-                Nodes = nodes,
+                Nodes = nodes
             };
         }
-
     }
 }
