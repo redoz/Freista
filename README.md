@@ -23,7 +23,62 @@ A Roslyn source generator lowers the scenario method into a manifest + executor 
 
 > The name? The author's name is Patrik — and a test framework that's a pun felt right. Read it as "pun-it."
 
-## Status
+## How it works
 
-Design phase. See [the design spec](docs/scenario-graph-extension-design.md).
+1. You define a domain DSL as C# 14 static extension members on `Given` / `When` / `Then`,
+   each annotated with `[StepName("...")]`. These are real methods returning ordinary
+   `Task<T>` — each `await` in the scenario unwraps to `T`.
+2. You write `[Scenario]` methods using that DSL. The body is **source for the generator** —
+   xUnit never executes it directly.
+3. The generator lowers each body into a dependency graph (`ScenarioDefinition`): one node per
+   step, with **source-order + dataflow** edges, and tuple/array forms lowered to parallel
+   sibling groups.
+4. At run time, the xUnit v3 adapter discovers each `[Scenario]`, runs the graph through a DAG
+   scheduler, and reports **every step as its own test** — passed, failed, or skipped.
+
+### Parallelism is explicit
+
+```csharp
+// sequential by default — runs in written order
+await Given.DatabaseIsClean();
+
+// fork/join with an awaited tuple — both run in parallel, the next step waits for both
+var (patient, slot) = await (Given.PatientExists("Jane"), Given.AvailableSlot());
+
+// homogeneous bulk work — explicit array or a constant LINQ .ToArray()
+var users = await new[] { Given.UserExists("alice"), Given.UserExists("bob") };
+var more  = await Enumerable.Range(1, 10).Select(i => Given.UserExists($"u{i}")).ToArray();
 ```
+
+When a step fails, its transitive dependents are skipped (`dependency failed: <op>`) while
+independent ready branches keep running.
+
+## Project layout
+
+| Project | What it is |
+| --- | --- |
+| `src/PUnit` | Runner-neutral core: phase markers, parallel awaiters, `ScenarioContext`, the graph model, and the DAG scheduler. No xUnit dependency. |
+| `src/PUnit.Generator` | Roslyn incremental generator + analyzer (PUNIT001–008). netstandard2.0. |
+| `src/PUnit.Xunit` | xUnit v3 adapter: `[Scenario]`, discoverer, self-executing test case, per-step reporter. |
+| `samples/AppointmentTests` | End-to-end sample (linear / tuple / array / LINQ). |
+| `test/*` | Scheduler tests (xUnit-free), generator/analyzer tests (behavioral + Verify snapshots), and xUnit acceptance tests. |
+
+## Run it
+
+```bash
+dotnet test                         # whole solution
+dotnet test samples/AppointmentTests # see the steps reported as individual tests
+```
+
+## Supported scenario subset (v1)
+
+- `[Scenario]` methods are `async Task` / `async ValueTask`.
+- Steps are awaited `Given`/`When`/`Then` calls, awaited tuples of them (arity 2–8), awaited
+  `new[] { ... }` arrays, or a constant `Enumerable.Range(a, b).Select(...).ToArray()`.
+- DSL methods return `Task`/`Task<T>`/`ValueTask`/`ValueTask<T>` and may take an optional trailing
+  `ScenarioContext` parameter.
+- Control flow (if/for/while/...) is rejected with a diagnostic; loops, conditionals, and richer
+  collection forms are future work.
+
+See [the design spec](docs/scenario-graph-extension-design.md) and the
+[implementation plan](docs/superpowers/plans/2026-06-03-scenario-graph-extension.md).
