@@ -11,6 +11,8 @@
     <NoWarn>$(NoWarn);CS1591;xUnit1051</NoWarn>
     <Product>PUnit</Product>
     <Authors>Patrik Husfloen</Authors>
+    <Version>0.1.0-alpha</Version>
+    <PackageTags>xunit;testing;scenario;given-when-then;bdd;source-generator</PackageTags>
   </PropertyGroup>
 
   <!--

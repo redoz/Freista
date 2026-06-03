@@ -55,7 +55,10 @@ public sealed class ScenarioTestCase : XunitTestCase, ISelfExecutingXunitTestCas
             UniqueID,
             TestCaseDisplayName);
 
-        var methodFullName = TestClassName + "." + TestMethodName;
+        // xUnit names nested host types with a metadata '+' separator; the generator keys on the
+        // Roslyn display form (with '.'). Normalize so both agree. (Generic host types are out of
+        // the v1 scenario subset.)
+        var methodFullName = TestClassName.Replace('+', '.') + "." + TestMethodName;
         if (!ScenarioRegistry.TryGet(methodFullName, out var factory) || factory is null)
         {
             reporter.ReportScenarioError(

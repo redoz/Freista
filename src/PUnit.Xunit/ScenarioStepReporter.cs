@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using PUnit.Model;
 using PUnit.Scheduling;
 using Xunit.Sdk;
@@ -9,7 +8,8 @@ namespace PUnit;
 /// <summary>
 /// Bridges the scheduler's <see cref="IStepObserver"/> callbacks onto the xUnit v3 message bus,
 /// emitting a <c>TestStarting → (TestPassed|TestFailed|TestSkipped) → TestFinished</c> quartet per
-/// step so every scenario step appears as its own visible test in the runner.
+/// step so every scenario step appears as its own visible test in the runner. The six routing
+/// UniqueIDs are shared, so each message kind is built by a small factory.
 /// </summary>
 internal sealed class ScenarioStepReporter : IStepObserver
 {
@@ -19,6 +19,17 @@ internal sealed class ScenarioStepReporter : IStepObserver
     static readonly IReadOnlyDictionary<string, TestAttachment> EmptyAttachments =
         new Dictionary<string, TestAttachment>();
 
+    static readonly ScenarioNode SyntheticNode = new()
+    {
+        Index = 0,
+        StepId = "error",
+        Phase = "Scenario",
+        OperationName = "Scenario",
+        DisplayNameTemplate = "scenario",
+        DependsOn = [],
+        Invoke = (_, _) => Task.FromResult<object?>(null),
+    };
+
     readonly IMessageBus _bus;
     readonly string _assemblyId;
     readonly string _collectionId;
@@ -26,7 +37,6 @@ internal sealed class ScenarioStepReporter : IStepObserver
     readonly string _methodId;
     readonly string _caseId;
     readonly string _caseDisplayName;
-    readonly ConcurrentDictionary<int, DateTimeOffset> _started = new();
 
     public ScenarioStepReporter(
         IMessageBus bus,
@@ -47,9 +57,7 @@ internal sealed class ScenarioStepReporter : IStepObserver
     }
 
     public void OnStepStarting(ScenarioNode node, string displayName)
-    {
-        _started[node.Index] = DateTimeOffset.UtcNow;
-        _bus.QueueMessage(new TestStarting
+        => _bus.QueueMessage(new TestStarting
         {
             AssemblyUniqueID = _assemblyId,
             TestCollectionUniqueID = _collectionId,
@@ -59,110 +67,85 @@ internal sealed class ScenarioStepReporter : IStepObserver
             TestUniqueID = TestId(node.Index),
             TestDisplayName = $"{_caseDisplayName} ▸ {displayName}",
             Explicit = false,
-            StartTime = _started[node.Index],
+            StartTime = DateTimeOffset.UtcNow,
             Timeout = 0,
             Traits = EmptyTraits,
         });
-    }
 
     public void OnStepFinished(StepResult result)
     {
-        var index = result.Node.Index;
-        var testId = TestId(index);
+        var testId = TestId(result.Node.Index);
         var executionTime = (decimal)result.Duration.TotalSeconds;
         var finishTime = DateTimeOffset.UtcNow;
 
-        switch (result.Status)
+        _bus.QueueMessage(result.Status switch
         {
-            case StepStatus.Skipped:
-                _bus.QueueMessage(new TestSkipped
-                {
-                    AssemblyUniqueID = _assemblyId,
-                    TestCollectionUniqueID = _collectionId,
-                    TestClassUniqueID = _classId,
-                    TestMethodUniqueID = _methodId,
-                    TestCaseUniqueID = _caseId,
-                    TestUniqueID = testId,
-                    Reason = result.SkipReason ?? "skipped",
-                    ExecutionTime = 0m,
-                    FinishTime = finishTime,
-                    Output = string.Empty,
-                    Warnings = null,
-                });
-                break;
-
-            case StepStatus.Failed:
-                _bus.QueueMessage(TestFailed.FromException(
-                    result.Exception ?? new InvalidOperationException("step failed"),
-                    _assemblyId, _collectionId, _classId, _methodId, _caseId, testId,
-                    executionTime, output: string.Empty, warnings: null, finishTime: finishTime));
-                break;
-
-            default: // Passed
-                _bus.QueueMessage(new TestPassed
-                {
-                    AssemblyUniqueID = _assemblyId,
-                    TestCollectionUniqueID = _collectionId,
-                    TestClassUniqueID = _classId,
-                    TestMethodUniqueID = _methodId,
-                    TestCaseUniqueID = _caseId,
-                    TestUniqueID = testId,
-                    ExecutionTime = executionTime,
-                    FinishTime = finishTime,
-                    Output = string.Empty,
-                    Warnings = null,
-                });
-                break;
-        }
-
-        _bus.QueueMessage(new TestFinished
-        {
-            AssemblyUniqueID = _assemblyId,
-            TestCollectionUniqueID = _collectionId,
-            TestClassUniqueID = _classId,
-            TestMethodUniqueID = _methodId,
-            TestCaseUniqueID = _caseId,
-            TestUniqueID = testId,
-            ExecutionTime = executionTime,
-            FinishTime = finishTime,
-            Output = string.Empty,
-            Warnings = null,
-            Attachments = EmptyAttachments,
+            StepStatus.Skipped => Skipped(testId, result.SkipReason ?? "skipped", finishTime),
+            StepStatus.Failed => Failed(testId, result.Exception, executionTime, finishTime),
+            _ => Passed(testId, executionTime, finishTime),
         });
+
+        _bus.QueueMessage(Finished(testId, executionTime, finishTime));
     }
 
     /// <summary>Reports a single failed test for a whole-scenario error (e.g. missing generated graph).</summary>
     public void ReportScenarioError(string displayName, Exception exception)
     {
         OnStepStarting(SyntheticNode, displayName);
-        _bus.QueueMessage(TestFailed.FromException(
-            exception, _assemblyId, _collectionId, _classId, _methodId, _caseId, TestId(0),
-            0m, output: string.Empty, warnings: null, finishTime: DateTimeOffset.UtcNow));
-        _bus.QueueMessage(new TestFinished
-        {
-            AssemblyUniqueID = _assemblyId,
-            TestCollectionUniqueID = _collectionId,
-            TestClassUniqueID = _classId,
-            TestMethodUniqueID = _methodId,
-            TestCaseUniqueID = _caseId,
-            TestUniqueID = TestId(0),
-            ExecutionTime = 0m,
-            FinishTime = DateTimeOffset.UtcNow,
-            Output = string.Empty,
-            Warnings = null,
-            Attachments = EmptyAttachments,
-        });
+        var testId = TestId(0);
+        var now = DateTimeOffset.UtcNow;
+        _bus.QueueMessage(Failed(testId, exception, executionTime: 0m, now));
+        _bus.QueueMessage(Finished(testId, executionTime: 0m, now));
     }
 
-    static readonly ScenarioNode SyntheticNode = new()
+    TestPassed Passed(string testId, decimal executionTime, DateTimeOffset finishTime) => new()
     {
-        Index = 0,
-        StepId = "error",
-        Phase = "Scenario",
-        OperationName = "Scenario",
-        DisplayNameTemplate = "scenario",
-        DependsOn = [],
-        Invoke = (_, _) => System.Threading.Tasks.Task.FromResult<object?>(null),
+        AssemblyUniqueID = _assemblyId,
+        TestCollectionUniqueID = _collectionId,
+        TestClassUniqueID = _classId,
+        TestMethodUniqueID = _methodId,
+        TestCaseUniqueID = _caseId,
+        TestUniqueID = testId,
+        ExecutionTime = executionTime,
+        FinishTime = finishTime,
+        Output = string.Empty,
+        Warnings = null,
+    };
+
+    TestSkipped Skipped(string testId, string reason, DateTimeOffset finishTime) => new()
+    {
+        AssemblyUniqueID = _assemblyId,
+        TestCollectionUniqueID = _collectionId,
+        TestClassUniqueID = _classId,
+        TestMethodUniqueID = _methodId,
+        TestCaseUniqueID = _caseId,
+        TestUniqueID = testId,
+        Reason = reason,
+        ExecutionTime = 0m,
+        FinishTime = finishTime,
+        Output = string.Empty,
+        Warnings = null,
+    };
+
+    IMessageSinkMessage Failed(string testId, Exception? exception, decimal executionTime, DateTimeOffset finishTime)
+        => TestFailed.FromException(
+            exception ?? new InvalidOperationException("step failed"),
+            _assemblyId, _collectionId, _classId, _methodId, _caseId, testId,
+            executionTime, output: string.Empty, warnings: null, finishTime: finishTime);
+
+    TestFinished Finished(string testId, decimal executionTime, DateTimeOffset finishTime) => new()
+    {
+        AssemblyUniqueID = _assemblyId,
+        TestCollectionUniqueID = _collectionId,
+        TestClassUniqueID = _classId,
+        TestMethodUniqueID = _methodId,
+        TestCaseUniqueID = _caseId,
+        TestUniqueID = testId,
+        ExecutionTime = executionTime,
+        FinishTime = finishTime,
+        Output = string.Empty,
+        Warnings = null,
+        Attachments = EmptyAttachments,
     };
 
     string TestId(int index) => UniqueIDGenerator.ForTest(_caseId, index);

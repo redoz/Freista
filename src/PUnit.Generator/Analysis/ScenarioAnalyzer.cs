@@ -239,11 +239,21 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
 
         foreach (var argument in invocation.ArgumentList.Arguments)
         {
-            if (argument.Expression is IdentifierNameSyntax identifier
-                && context.SemanticModel.GetSymbolInfo(identifier).Symbol is ILocalSymbol local
-                && !stepOutputs.Contains(local))
+            foreach (var identifier in argument.Expression.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>())
             {
-                Report(context, Descriptors.InvalidArgument, identifier.GetLocation(), identifier.Identifier.Text);
+                // Skip member names (`x.Member`) and argument labels (`name:`); flag any other
+                // identifier that binds to a local which isn't a prior step output.
+                if ((identifier.Parent is MemberAccessExpressionSyntax access && access.Name == identifier)
+                    || identifier.Parent is NameColonSyntax or NameEqualsSyntax)
+                {
+                    continue;
+                }
+
+                if (context.SemanticModel.GetSymbolInfo(identifier).Symbol is ILocalSymbol local
+                    && !stepOutputs.Contains(local))
+                {
+                    Report(context, Descriptors.InvalidArgument, identifier.GetLocation(), identifier.Identifier.Text);
+                }
             }
         }
     }

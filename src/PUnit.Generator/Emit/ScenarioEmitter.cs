@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Microsoft.CodeAnalysis.CSharp;
 using PUnit.Generator.Lowering;
 
 namespace PUnit.Generator.Emit;
@@ -171,27 +172,5 @@ internal static class ScenarioEmitter
         => ms > 0 ? $"global::System.TimeSpan.FromMilliseconds({ms})" : "null";
 
     static string Literal(string? value)
-    {
-        if (value is null)
-        {
-            return "null";
-        }
-
-        var sb = new StringBuilder("\"");
-        foreach (var c in value)
-        {
-            switch (c)
-            {
-                case '\\': sb.Append("\\\\"); break;
-                case '"': sb.Append("\\\""); break;
-                case '\r': sb.Append("\\r"); break;
-                case '\n': sb.Append("\\n"); break;
-                case '\t': sb.Append("\\t"); break;
-                default: sb.Append(c); break;
-            }
-        }
-
-        sb.Append('"');
-        return sb.ToString();
-    }
+        => value is null ? "null" : SyntaxFactory.Literal(value).ToString();
 }

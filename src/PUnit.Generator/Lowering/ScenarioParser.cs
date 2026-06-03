@@ -648,19 +648,9 @@ internal sealed class ScenarioParser
         return null;
     }
 
+    // The emitter dedupes the merged using set, so no need to dedupe here.
     IEnumerable<string> CollectUsings()
-    {
-        var root = _syntax.SyntaxTree.GetCompilationUnitRoot();
-        var seen = new HashSet<string>();
-        foreach (var u in root.Usings)
-        {
-            var text = u.ToString().Trim();
-            if (seen.Add(text))
-            {
-                yield return text;
-            }
-        }
-    }
+        => _syntax.SyntaxTree.GetCompilationUnitRoot().Usings.Select(u => u.ToString().Trim());
 
     string? Location(SyntaxNode node, out int line)
     {
@@ -687,27 +677,56 @@ internal sealed class ScenarioParser
         return sb.ToString();
     }
 
-    /// <summary>Replaces bare identifiers (locals/loop variables) with provided expressions.</summary>
+    /// <summary>
+    /// Replaces bare references to step-output locals (and LINQ loop variables) with the supplied
+    /// expressions. It leaves member names and argument labels alone, and is scope-aware: an
+    /// identifier shadowed by a lambda parameter is not rewritten.
+    /// </summary>
     sealed class IdentifierReplacer : CSharpSyntaxRewriter
     {
         readonly Dictionary<string, string> _map;
+        readonly HashSet<string> _shadowed = new();
 
         public IdentifierReplacer(Dictionary<string, string> map) => _map = map;
 
+        public override SyntaxNode? VisitSimpleLambdaExpression(SimpleLambdaExpressionSyntax node)
+            => WithShadow([node.Parameter.Identifier.Text], () => base.VisitSimpleLambdaExpression(node));
+
+        public override SyntaxNode? VisitParenthesizedLambdaExpression(ParenthesizedLambdaExpressionSyntax node)
+            => WithShadow(
+                node.ParameterList.Parameters.Select(p => p.Identifier.Text),
+                () => base.VisitParenthesizedLambdaExpression(node));
+
         public override SyntaxNode? VisitIdentifierName(IdentifierNameSyntax node)
         {
-            // Don't rewrite the member-name side of a member access (e.g. the ".Method" part).
-            if (node.Parent is MemberAccessExpressionSyntax member && member.Name == node)
+            // Leave member names (`x.Member`) and argument labels (`name:` / `Name =`) untouched,
+            // and never rewrite a name that a nested scope (lambda parameter) has shadowed.
+            if ((node.Parent is MemberAccessExpressionSyntax member && member.Name == node)
+                || node.Parent is NameColonSyntax or NameEqualsSyntax
+                || _shadowed.Contains(node.Identifier.Text))
             {
                 return base.VisitIdentifierName(node);
             }
 
-            if (_map.TryGetValue(node.Identifier.Text, out var replacement))
-            {
-                return SyntaxFactory.ParseExpression(replacement).WithTriviaFrom(node);
-            }
+            return _map.TryGetValue(node.Identifier.Text, out var replacement)
+                ? SyntaxFactory.ParseExpression(replacement).WithTriviaFrom(node)
+                : base.VisitIdentifierName(node);
+        }
 
-            return base.VisitIdentifierName(node);
+        SyntaxNode? WithShadow(IEnumerable<string> names, Func<SyntaxNode?> visit)
+        {
+            var added = names.Where(_shadowed.Add).ToList();
+            try
+            {
+                return visit();
+            }
+            finally
+            {
+                foreach (var name in added)
+                {
+                    _shadowed.Remove(name);
+                }
+            }
         }
     }
 }

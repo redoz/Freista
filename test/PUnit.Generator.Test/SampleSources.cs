@@ -77,6 +77,23 @@ public static class SampleSources
         }
         """;
 
+    // Named arguments: the label (`patient:`) must be left alone; only the value is rewritten.
+    public const string NamedArgScenario =
+        """
+
+        public static class NamedArgScenarios
+        {
+            [Scenario("named args")]
+            public static async Task Booking()
+            {
+                var patient = await Given.PatientExists(name: "Jane");
+                var slot = await Given.AvailableSlot();
+                var appointment = await When.CreateAppointment(patient: patient, slot: slot);
+                await Then.AppointmentExists(appointment: appointment);
+            }
+        }
+        """;
+
     public const string RuntimeNameScenario =
         """
 

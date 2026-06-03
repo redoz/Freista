@@ -28,25 +28,6 @@ internal static class SymbolHelpers
         return type.Name is "Given" or "When" or "Then" ? type.Name : null;
     }
 
-    /// <summary>True when the invocation is a phase-marker DSL call (e.g. <c>Given.PatientExists(...)</c>).</summary>
-    public static bool IsDslCall(InvocationExpressionSyntax invocation, SemanticModel model, out string phase)
-    {
-        phase = "";
-        if (invocation.Expression is not MemberAccessExpressionSyntax member)
-        {
-            return false;
-        }
-
-        var detected = PhaseOf(member.Expression, model);
-        if (detected is null)
-        {
-            return false;
-        }
-
-        phase = detected;
-        return true;
-    }
-
     /// <summary>Unwraps Task/ValueTask return types; out result type is null when there is none.</summary>
     public static bool TryUnwrapReturn(ITypeSymbol returnType, out ITypeSymbol? resultType)
     {

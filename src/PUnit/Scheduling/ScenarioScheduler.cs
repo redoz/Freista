@@ -95,7 +95,7 @@ public sealed class ScenarioScheduler
                     {
                         pending.Remove(i);
                         status[i] = StepStatus.Running;
-                        var displayName = FormatName(node, inputs, safe: false);
+                        var displayName = FormatName(node, inputs);
                         observer?.OnStepStarting(node, displayName);
                         running[RunNodeAsync(node, inputs, services, displayName, cancellationToken)] = i;
                         progressed = true;
@@ -142,7 +142,7 @@ public sealed class ScenarioScheduler
             pending.Remove(i);
             status[i] = StepStatus.Skipped;
             var node = nodes[i];
-            var name = FormatName(node, inputs, safe: true);
+            var name = FormatName(node, inputs);
             observer?.OnStepStarting(node, name);
             var result = new StepResult
             {
@@ -180,6 +180,11 @@ public sealed class ScenarioScheduler
                 if (winner == delayTask && !invokeTask.IsCompleted)
                 {
                     stepCts.Cancel(); // best-effort: ask the operation to stop
+                    // Observe the abandoned operation's eventual fault so it doesn't surface as an
+                    // unobserved task exception in the test host.
+                    _ = invokeTask.ContinueWith(
+                        static t => _ = t.Exception,
+                        TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
                     throw new TimeoutException(
                         $"Step '{displayName}' exceeded its timeout of {timeout}.");
                 }
@@ -232,16 +237,11 @@ public sealed class ScenarioScheduler
                 null);
     }
 
-    static string FormatName(ScenarioNode node, IStepInputs inputs, bool safe)
+    static string FormatName(ScenarioNode node, IStepInputs inputs)
     {
         if (node.FormatDisplayName is null)
         {
             return node.DisplayNameTemplate;
-        }
-
-        if (!safe)
-        {
-            return node.FormatDisplayName(inputs);
         }
 
         try
@@ -250,7 +250,9 @@ public sealed class ScenarioScheduler
         }
         catch
         {
-            return node.DisplayNameTemplate; // dependency outputs may be unavailable for skips
+            // A throwing formatter (or, for skips, unavailable dependency outputs) must not abort
+            // the scenario — fall back to the unformatted template.
+            return node.DisplayNameTemplate;
         }
     }
 

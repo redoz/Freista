@@ -136,6 +136,26 @@ public class AnalyzerTests
     }
 
     [Fact]
+    public async Task PUNIT007_non_step_local_inside_a_compound_argument()
+    {
+        // A bare identifier is flagged, but so must a non-step local buried in an expression —
+        // otherwise the generator emits code referencing a local that doesn't exist.
+        var diagnostics = await Analyze(
+            """
+            public static class S
+            {
+                [Scenario] public static async Task Bad()
+                {
+                    var name = "Jane";
+                    var patient = await Given.PatientExists(name + "!");
+                }
+            }
+            """);
+
+        AssertHas(diagnostics, "PUNIT007");
+    }
+
+    [Fact]
     public async Task PUNIT008_unbound_display_name_placeholder()
     {
         var source =

@@ -22,10 +22,32 @@
   </ItemGroup>
 
   <!--
-    TODO (packaging): when we wire up `dotnet pack`, the PUnit.Generator output (and any
-    future .Roslyn<NN> variants) gets bundled into this package under
-    'analyzers/dotnet/roslyn<major>.<minor>/cs' so `dotnet add package PUnit.Xunit` brings
-    the generator along. Deferred until the runtime types exist and we can build/verify.
+    Packaging: `dotnet add package PUnit.Xunit` should bring the generator along. We reference the
+    generator only to order its build (its assembly is not referenced and never becomes a package
+    dependency), then drop its dll into the package's analyzers path. The PUnit core reference
+    becomes an ordinary package dependency. Add a higher Roslyn variant later by recompiling the
+    generator's sources against it (see Directory.Build.props) and packing it under its own folder.
   -->
+  <ItemGroup>
+    <ProjectReference Include="..\PUnit.Generator\PUnit.Generator.csproj"
+                      ReferenceOutputAssembly="false" PrivateAssets="all" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);_IncludePUnitGenerator</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+
+  <Target Name="_IncludePUnitGenerator">
+    <!-- Pin the analyzer TFM so this net10.0 project's TargetFramework doesn't flow to the
+         netstandard2.0 generator via the MSBuild task's inherited global properties. -->
+    <MSBuild Projects="..\PUnit.Generator\PUnit.Generator.csproj" Targets="GetTargetPath"
+             Properties="TargetFramework=netstandard2.0;Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="_PUnitGeneratorPath" />
+    </MSBuild>
+    <ItemGroup>
+      <TfmSpecificPackageFile Include="@(_PUnitGeneratorPath)"
+                              PackagePath="analyzers/dotnet/roslyn$(PUnitRoslynVersion)/cs" />
+    </ItemGroup>
+  </Target>
 
 </Project>
