@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -73,24 +72,58 @@ internal static class ScenarioEmitter
 
     static MethodDeclarationSyntax BuildCreateAll(IReadOnlyList<ParsedScenario> scenarios)
     {
-        var body = scenarios.Count == 0
-            ? "global::System.Array.Empty<global::PUnit.Model.ScenarioDefinition>()"
-            : "new global::PUnit.Model.ScenarioDefinition[] { "
-              + string.Join(", ", scenarios.Select(s => $"Scenario_{s.SafeName}()"))
-              + " }";
+        ExpressionSyntax body;
+        if (scenarios.Count == 0)
+        {
+            // global::System.Array.Empty<global::PUnit.Model.ScenarioDefinition>()
+            body = InvocationExpression(
+                MemberAccessExpression(
+                    SyntaxKind.SimpleMemberAccessExpression,
+                    ParseName("global::System.Array"),
+                    GenericName(Identifier("Empty"))
+                        .WithTypeArgumentList(TypeArgumentList(SingletonSeparatedList<TypeSyntax>(
+                            ParseTypeName("global::PUnit.Model.ScenarioDefinition"))))))
+                .WithArgumentList(ArgumentList());
+        }
+        else
+        {
+            // new global::PUnit.Model.ScenarioDefinition[] { Scenario_X(), ... }
+            var calls = scenarios.Select(s =>
+                (ExpressionSyntax)InvocationExpression(IdentifierName($"Scenario_{s.SafeName}"))
+                    .WithArgumentList(ArgumentList()));
+            body = ArrayCreationExpression(
+                ArrayType(ParseTypeName("global::PUnit.Model.ScenarioDefinition"))
+                    .WithRankSpecifiers(SingletonList(
+                        ArrayRankSpecifier(SingletonSeparatedList<ExpressionSyntax>(
+                            OmittedArraySizeExpression())))))
+                .WithInitializer(InitializerExpression(
+                    SyntaxKind.ArrayInitializerExpression,
+                    SeparatedList<ExpressionSyntax>(calls)));
+        }
 
         return MethodDeclaration(
                 ParseTypeName("global::System.Collections.Generic.IReadOnlyList<global::PUnit.Model.ScenarioDefinition>"),
                 "CreateAll")
             .AddModifiers(Token(SyntaxKind.PublicKeyword), Token(SyntaxKind.StaticKeyword))
-            .WithExpressionBody(ArrowExpressionClause(ParseExpression(body)))
+            .WithExpressionBody(ArrowExpressionClause(body))
             .WithSemicolonToken(Token(SyntaxKind.SemicolonToken));
     }
 
     static MethodDeclarationSyntax BuildModuleInitializer(IReadOnlyList<ParsedScenario> scenarios)
     {
-        var statements = scenarios.Select(s => ParseStatement(
-            $"global::PUnit.ScenarioRegistry.Register({LiteralText(s.MethodFullName)}, Scenario_{s.SafeName});"));
+        // global::PUnit.ScenarioRegistry.Register("...", Scenario_X);
+        var statements = scenarios.Select(s =>
+            (StatementSyntax)ExpressionStatement(
+                InvocationExpression(
+                    MemberAccessExpression(
+                        SyntaxKind.SimpleMemberAccessExpression,
+                        ParseName("global::PUnit.ScenarioRegistry"),
+                        IdentifierName("Register")))
+                    .WithArgumentList(ArgumentList(SeparatedList<ArgumentSyntax>(new[]
+                    {
+                        Argument(Lit(s.MethodFullName)),
+                        Argument(IdentifierName($"Scenario_{s.SafeName}")),
+                    })))));
 
         return MethodDeclaration(PredefinedType(Token(SyntaxKind.VoidKeyword)), "Initialize")
             .AddAttributeLists(AttributeList(SingletonSeparatedList(
@@ -101,10 +134,20 @@ internal static class ScenarioEmitter
 
     static MemberDeclarationSyntax BuildScenarioBuilder(ParsedScenario scenario)
     {
-        var statements = new List<StatementSyntax>
-        {
-            ParseStatement($"var nodes = new global::PUnit.Model.ScenarioNode[{scenario.Steps.Count}];"),
-        };
+        // var nodes = new global::PUnit.Model.ScenarioNode[N];
+        var arrayExpr = ArrayCreationExpression(
+            ArrayType(ParseTypeName("global::PUnit.Model.ScenarioNode"))
+                .WithRankSpecifiers(SingletonList(
+                    ArrayRankSpecifier(SingletonSeparatedList<ExpressionSyntax>(
+                        Num(scenario.Steps.Count))))));
+
+        var nodesDecl = LocalDeclarationStatement(
+            VariableDeclaration(IdentifierName("var"))
+                .WithVariables(SingletonSeparatedList(
+                    VariableDeclarator(Identifier("nodes"))
+                        .WithInitializer(EqualsValueClause(arrayExpr)))));
+
+        var statements = new List<StatementSyntax> { nodesDecl };
 
         foreach (var step in scenario.Steps)
         {
@@ -150,23 +193,92 @@ internal static class ScenarioEmitter
             Set("SourceLine", Num(step.SourceLine)),
             Set("GroupId", Lit(step.GroupId)),
             Set("Timeout", Timeout(step.TimeoutMs)),
-            Set("DependsOn", ParseExpression($"new int[] {{ {string.Join(", ", step.DependsOn)} }}")),
-            Set("Invoke", ParseExpression(InvokeLambda(step))),
+            Set("DependsOn", IntArray(step.DependsOn)),
+            Set("Invoke", BuildInvokeLambda(step)),
         };
 
         if (step.FormatExpression is not null)
         {
-            members.Add(Set("FormatDisplayName", ParseExpression($"static __inputs => {step.FormatExpression}")));
+            members.Add(Set("FormatDisplayName",
+                SimpleLambdaExpression(Parameter(Identifier("__inputs")))
+                    .WithModifiers(TokenList(Token(SyntaxKind.StaticKeyword)))
+                    .WithExpressionBody(ParseExpression(step.FormatExpression))));
         }
 
         return ObjectCreationExpression(ParseTypeName("global::PUnit.Model.ScenarioNode"))
             .WithInitializer(InitializerExpression(SyntaxKind.ObjectInitializerExpression, SeparatedList(members)));
     }
 
-    static string InvokeLambda(ParsedStep step)
-        => step.HasResult
-            ? $"static async (__inputs, __ctx) => {{ var __r = await {step.InvokeCallText}; return (object?)__r; }}"
-            : $"static async (__inputs, __ctx) => {{ await {step.InvokeCallText}; return (object?)null; }}";
+    /// <summary>
+    /// Builds: <c>static async (__inputs, __ctx) => { var __r = await CALL; return (object?)__r; }</c>
+    /// or:     <c>static async (__inputs, __ctx) => { await CALL; return (object?)null; }</c>
+    /// </summary>
+    static ParenthesizedLambdaExpressionSyntax BuildInvokeLambda(ParsedStep step)
+    {
+        var callExpr = ParseExpression(step.InvokeCallText);
+        var awaitExpr = AwaitExpression(callExpr);
+
+        List<StatementSyntax> bodyStatements;
+        if (step.HasResult)
+        {
+            // var __r = await CALL;
+            var varDecl = LocalDeclarationStatement(
+                VariableDeclaration(IdentifierName("var"))
+                    .WithVariables(SingletonSeparatedList(
+                        VariableDeclarator(Identifier("__r"))
+                            .WithInitializer(EqualsValueClause(awaitExpr)))));
+            // return (object?)__r;
+            var returnStmt = ReturnStatement(
+                CastExpression(
+                    NullableType(PredefinedType(Token(SyntaxKind.ObjectKeyword))),
+                    IdentifierName("__r")));
+            bodyStatements = new List<StatementSyntax> { varDecl, returnStmt };
+        }
+        else
+        {
+            // await CALL;
+            var awaitStmt = ExpressionStatement(awaitExpr);
+            // return (object?)null;
+            var returnStmt = ReturnStatement(
+                CastExpression(
+                    NullableType(PredefinedType(Token(SyntaxKind.ObjectKeyword))),
+                    LiteralExpression(SyntaxKind.NullLiteralExpression)));
+            bodyStatements = new List<StatementSyntax> { awaitStmt, returnStmt };
+        }
+
+        return ParenthesizedLambdaExpression()
+            .WithModifiers(TokenList(Token(SyntaxKind.StaticKeyword), Token(SyntaxKind.AsyncKeyword)))
+            .WithParameterList(ParameterList(SeparatedList(new[]
+            {
+                Parameter(Identifier("__inputs")),
+                Parameter(Identifier("__ctx")),
+            })))
+            .WithBlock(Block(bodyStatements));
+    }
+
+    /// <summary>Builds <c>new int[] { i0, i1, … }</c> (empty initializer when the list is empty).</summary>
+    static ArrayCreationExpressionSyntax IntArray(IEnumerable<int> ints)
+        => ArrayCreationExpression(
+            ArrayType(PredefinedType(Token(SyntaxKind.IntKeyword)))
+                .WithRankSpecifiers(SingletonList(
+                    ArrayRankSpecifier(SingletonSeparatedList<ExpressionSyntax>(
+                        OmittedArraySizeExpression())))))
+            .WithInitializer(InitializerExpression(
+                SyntaxKind.ArrayInitializerExpression,
+                SeparatedList<ExpressionSyntax>(ints.Select(i => (ExpressionSyntax)Num(i)))));
+
+    /// <summary>
+    /// Builds <c>global::System.TimeSpan.FromMilliseconds(ms)</c> or <c>null</c> when ms &lt;= 0.
+    /// </summary>
+    static ExpressionSyntax Timeout(int ms)
+        => ms > 0
+            ? InvocationExpression(
+                MemberAccessExpression(
+                    SyntaxKind.SimpleMemberAccessExpression,
+                    ParseName("global::System.TimeSpan"),
+                    IdentifierName("FromMilliseconds")))
+                .WithArgumentList(ArgumentList(SingletonSeparatedList(Argument(Num(ms)))))
+            : LiteralExpression(SyntaxKind.NullLiteralExpression);
 
     static AssignmentExpressionSyntax Set(string member, ExpressionSyntax value)
         => AssignmentExpression(SyntaxKind.SimpleAssignmentExpression, IdentifierName(member), value);
@@ -178,11 +290,4 @@ internal static class ScenarioEmitter
         => value is null
             ? LiteralExpression(SyntaxKind.NullLiteralExpression)
             : LiteralExpression(SyntaxKind.StringLiteralExpression, Literal(value));
-
-    static ExpressionSyntax Timeout(int ms)
-        => ms > 0
-            ? ParseExpression($"global::System.TimeSpan.FromMilliseconds({ms.ToString(CultureInfo.InvariantCulture)})")
-            : LiteralExpression(SyntaxKind.NullLiteralExpression);
-
-    static string LiteralText(string value) => Literal(value).ToString();
 }
