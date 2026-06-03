@@ -4,7 +4,6 @@ using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using PUnit.Generator.Internal;
 
 namespace PUnit.Generator.Lowering;
 
@@ -110,15 +109,13 @@ internal sealed class ScenarioParser
 
     bool ParseStatement(StatementSyntax statement)
     {
-        switch (statement)
+        return statement switch
         {
-            case LocalDeclarationStatementSyntax local:
-                return ParseLocalDeclaration(local);
-            case ExpressionStatementSyntax expr:
-                return ParseExpressionStatement(expr);
-            default:
-                return false;
-        }
+            LocalDeclarationStatementSyntax local => ParseLocalDeclaration(local),
+            ExpressionStatementSyntax expr => ParseExpressionStatement(expr),
+            _ => false,
+        };
+
     }
 
     bool ParseLocalDeclaration(LocalDeclarationStatementSyntax local)
@@ -134,15 +131,13 @@ internal sealed class ScenarioParser
 
     bool ParseExpressionStatement(ExpressionStatementSyntax statement)
     {
-        switch (statement.Expression)
+        return statement.Expression switch
         {
-            case AwaitExpressionSyntax bareAwait:
-                return ParseAwaited(bareAwait.Expression, binding: null);
-            case AssignmentExpressionSyntax { Right: AwaitExpressionSyntax await } assignment:
-                return ParseAwaited(await.Expression, binding: DeconstructBinding(assignment.Left));
-            default:
-                return false;
-        }
+            AwaitExpressionSyntax bareAwait => ParseAwaited(bareAwait.Expression, binding: null),
+            AssignmentExpressionSyntax { Right: AwaitExpressionSyntax await } assignment => ParseAwaited(await.Expression, binding: DeconstructBinding(assignment.Left)),
+            _ => false,
+        };
+
     }
 
     Binding SingleBinding(string name) => new(BindingKind.Single, [name]);

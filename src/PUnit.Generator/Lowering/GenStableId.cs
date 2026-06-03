@@ -1,9 +1,9 @@
 using System.Text;
 
-namespace PUnit.Generator.Internal;
+namespace PUnit.Generator.Lowering;
 
 /// <summary>
-/// Compile-time id generation, byte-for-byte identical to <c>PUnit.Identity.StableId</c> so the
+/// Compile-time id generation, byte-for-byte identical to <c>PUnit.StableId</c> so the
 /// ids the generator bakes into the manifest match the runtime/reference implementation.
 /// </summary>
 internal static class GenStableId

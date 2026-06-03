@@ -1,6 +1,6 @@
 using Microsoft.CodeAnalysis;
 
-namespace PUnit.Generator.Diagnostics;
+namespace PUnit.Generator.Analysis;
 
 /// <summary>Diagnostics for the supported scenario subset (see the design's "Analyzer Rules").</summary>
 internal static class Descriptors

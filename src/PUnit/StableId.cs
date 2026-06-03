@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace PUnit.Identity;
+namespace PUnit;
 
 /// <summary>
 /// Deterministic id generation for scenarios and steps. Ids are an FNV-1a 64-bit hash rendered as

@@ -5,7 +5,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
-using PUnit.Generator.Diagnostics;
 using PUnit.Generator.Lowering;
 
 namespace PUnit.Generator.Analysis;
