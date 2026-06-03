@@ -369,6 +369,7 @@ internal sealed class ScenarioParser
             TimeoutMs = AttributeReader.StepTimeout(method),
             SourceFile = Location(invocation, out var line),
             SourceLine = line,
+            CallSpan = SpanOf(invocation),
             DependsOn = [.. deps],
         };
 
@@ -448,6 +449,20 @@ internal sealed class ScenarioParser
         var span = node.GetLocation().GetLineSpan();
         line = span.StartLinePosition.Line + 1;
         return span.Path;
+    }
+
+    static SourceSpan? SpanOf(SyntaxNode node)
+    {
+        var s = node.GetLocation().GetLineSpan();
+        if (string.IsNullOrEmpty(s.Path))
+        {
+            return null;
+        }
+
+        return new SourceSpan(
+            s.Path,
+            s.StartLinePosition.Line, s.StartLinePosition.Character,
+            s.EndLinePosition.Line, s.EndLinePosition.Character);
     }
 
     static string? Location(SyntaxToken token, out int line)

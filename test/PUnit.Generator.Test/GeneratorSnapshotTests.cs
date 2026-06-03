@@ -25,4 +25,9 @@ public class GeneratorSnapshotTests
     public Task Array_scenario() =>
         Verify(GeneratorHarness.RunDriver(SampleSources.Dsl + SampleSources.ArrayScenario))
             .UseDirectory("Snapshots");
+
+    [Fact]
+    public Task PathBearing_scenario() =>
+        Verify(GeneratorHarness.RunDriver(SampleSources.Dsl + SampleSources.LinearScenario, "Scenario.cs"))
+            .UseDirectory("Snapshots");
 }

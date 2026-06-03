@@ -66,10 +66,10 @@ public static class GeneratorHarness
     }
 
     /// <summary>Runs the generator over source and returns the driver, for Verify snapshots.</summary>
-    public static GeneratorDriver RunDriver(string source)
+    public static GeneratorDriver RunDriver(string source, string? path = null)
     {
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
-        var tree = CSharpSyntaxTree.ParseText(source, parseOptions);
+        var tree = CSharpSyntaxTree.ParseText(source, parseOptions, path: path ?? "");
         var compilation = CSharpCompilation.Create(
             "Snapshot",
             [tree],

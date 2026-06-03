@@ -2,6 +2,11 @@ using System.Collections.Generic;
 
 namespace PUnit.Generator.Lowering;
 
+/// <summary>The original-source span of a step's DSL call, for span-form #line emission. 0-based
+/// (Roslyn LinePosition); the emitter converts to the directive's 1-based form.</summary>
+internal readonly record struct SourceSpan(
+    string File, int StartLine, int StartChar, int EndLine, int EndChar);
+
 /// <summary>A lowered scenario ready for emission.</summary>
 internal sealed record ParsedScenario
 {
@@ -25,6 +30,11 @@ internal sealed record ParsedStep
     public string OperationName { get; init; } = "";
     public string? SourceFile { get; init; }
     public int SourceLine { get; init; }
+
+    /// <summary>Original span of the DSL invocation, for column-accurate #line mapping; null when
+    /// the input was parsed without a path (e.g. pathless snapshot harness) ⇒ no directive.</summary>
+    public SourceSpan? CallSpan { get; init; }
+
     public int TimeoutMs { get; init; }
     public IReadOnlyList<int> DependsOn { get; init; } = [];
     public string? GroupId { get; init; }

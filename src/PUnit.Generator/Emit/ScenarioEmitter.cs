@@ -226,7 +226,8 @@ internal static class ScenarioEmitter
                 VariableDeclaration(IdentifierName("var"))
                     .WithVariables(SingletonSeparatedList(
                         VariableDeclarator(Identifier("__r"))
-                            .WithInitializer(EqualsValueClause(awaitExpr)))));
+                            .WithInitializer(EqualsValueClause(awaitExpr)))))
+                .WithLeadingTrivia(LineMappedTrivia(step));
             // return (object?)__r;
             var returnStmt = ReturnStatement(
                 CastExpression(
@@ -238,7 +239,7 @@ internal static class ScenarioEmitter
         else
         {
             // await CALL;
-            var awaitStmt = ExpressionStatement(awaitExpr);
+            var awaitStmt = ExpressionStatement(awaitExpr).WithLeadingTrivia(LineMappedTrivia(step));
             // return (object?)null;
             var returnStmt = ReturnStatement(
                 CastExpression(
@@ -260,6 +261,28 @@ internal static class ScenarioEmitter
 
     static SyntaxTriviaList HiddenTrivia()
         => TriviaList(Trivia(LineDirectiveTrivia(Token(SyntaxKind.HiddenKeyword), isActive: true)), EndOfLine("\n"));
+
+    // NormalizeWhitespace indents the Invoke-lambda body to this column (5 levels x 4 spaces).
+    // charOffset must equal the column where the call STATEMENT begins, so the statement's
+    // sequence point (which starts at `var`/`await`) maps to the original invocation start.
+    // Confirmed by the LineMappingPdbTests calibration.
+    const int LambdaBodyIndent = 20;
+
+    static SyntaxTriviaList LineMappedTrivia(ParsedStep step)
+    {
+        if (step.CallSpan is not { } span)
+        {
+            return TriviaList();   // pathless input ⇒ no directive (snapshot determinism)
+        }
+
+        var directive = LineSpanDirectiveTrivia(
+            LineDirectivePosition(Literal(span.StartLine + 1), Literal(span.StartChar + 1)),   // 1-based
+            LineDirectivePosition(Literal(span.EndLine + 1), Literal(span.EndChar + 1)),
+            Literal(LambdaBodyIndent),
+            Literal(span.File),
+            isActive: true);
+        return TriviaList(Trivia(directive), EndOfLine("\n"));
+    }
 
     /// <summary>Builds <c>new int[] { i0, i1, … }</c> (empty initializer when the list is empty).</summary>
     static ArrayCreationExpressionSyntax IntArray(IEnumerable<int> ints)
