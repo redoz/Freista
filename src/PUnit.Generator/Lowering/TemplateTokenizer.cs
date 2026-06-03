@@ -6,17 +6,7 @@ namespace PUnit.Generator.Lowering;
 /// <summary>Splits a display-name template into literal runs and <c>{placeholder}</c> tokens.</summary>
 internal static class TemplateTokenizer
 {
-    public readonly struct Token
-    {
-        public Token(string text, bool isPlaceholder)
-        {
-            Text = text;
-            IsPlaceholder = isPlaceholder;
-        }
-
-        public string Text { get; }
-        public bool IsPlaceholder { get; }
-    }
+    public readonly record struct Token(string Text, bool IsPlaceholder);
 
     public static List<Token> Tokenize(string template)
     {

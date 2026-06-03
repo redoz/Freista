@@ -9,17 +9,8 @@ internal enum BindingKind { Single, Tuple }
 /// The variables a scenario statement binds: a single local (<c>var x = ...</c>) or a tuple
 /// deconstruction (<c>var (a, b) = ...</c> / <c>(var a, var b) = ...</c>).
 /// </summary>
-internal sealed class Binding
+internal sealed record Binding(BindingKind Kind, IReadOnlyList<string> Names)
 {
-    public Binding(BindingKind kind, List<string> names)
-    {
-        Kind = kind;
-        Names = names;
-    }
-
-    public BindingKind Kind { get; }
-    public List<string> Names { get; }
-
     public static Binding Single(string name) => new(BindingKind.Single, [name]);
 
     /// <summary>The binding for the left-hand side of an awaited assignment, or null if unsupported.</summary>

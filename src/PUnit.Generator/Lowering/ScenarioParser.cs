@@ -43,21 +43,8 @@ internal sealed class ScenarioParser
         _syntax = syntax;
     }
 
-    readonly struct VarSource
+    readonly record struct VarSource(bool IsArray, int Index, int[] Indices, string ElementType)
     {
-        VarSource(bool isArray, int index, int[] indices, string elementType)
-        {
-            IsArray = isArray;
-            Index = index;
-            Indices = indices;
-            ElementType = elementType;
-        }
-
-        public bool IsArray { get; }
-        public int Index { get; }
-        public int[] Indices { get; }
-        public string ElementType { get; }
-
         public static VarSource Scalar(int index) => new(false, index, [], "");
         public static VarSource Array(int[] indices, string elementType) => new(true, -1, indices, elementType);
     }
@@ -83,7 +70,13 @@ internal sealed class ScenarioParser
             }
         }
 
-        var scenario = new ParsedScenario
+        var usings = CollectUsings().ToList();
+        foreach (var ns in _dslNamespaces)
+        {
+            usings.Add($"using {ns};");
+        }
+
+        return new ParsedScenario
         {
             MethodFullName = methodFullName,
             SafeName = SafeName(methodFullName),
@@ -92,20 +85,9 @@ internal sealed class ScenarioParser
             TimeoutMs = AttributeReader.ScenarioTimeout(_method),
             SourceFile = Location(_syntax.Identifier, out var line),
             SourceLine = line,
+            Steps = [.. _steps],
+            Usings = usings,
         };
-
-        scenario.Steps.AddRange(_steps);
-        foreach (var u in CollectUsings())
-        {
-            scenario.Usings.Add(u);
-        }
-
-        foreach (var ns in _dslNamespaces)
-        {
-            scenario.Usings.Add($"using {ns};");
-        }
-
-        return scenario;
     }
 
     bool ParseStatement(StatementSyntax statement)
@@ -387,12 +369,8 @@ internal sealed class ScenarioParser
             TimeoutMs = AttributeReader.StepTimeout(method),
             SourceFile = Location(invocation, out var line),
             SourceLine = line,
+            DependsOn = [.. deps],
         };
-
-        foreach (var d in deps)
-        {
-            step.DependsOn.Add(d);
-        }
 
         _steps.Add(step);
         return step;

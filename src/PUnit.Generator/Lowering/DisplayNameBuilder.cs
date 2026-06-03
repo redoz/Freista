@@ -6,6 +6,10 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace PUnit.Generator.Lowering;
 
+/// <summary>A lowered display name: the constant template plus an optional interpolated format
+/// expression (in terms of <c>__inputs</c>) for runtime placeholders; null when fully constant.</summary>
+internal readonly record struct LoweredDisplayName(string Template, string? FormatExpression);
+
 /// <summary>
 /// Builds a step's display name from its <c>[StepName]</c> template: constant placeholders are
 /// folded into a literal, and runtime ones become an interpolated <c>$"..."</c> expression (in
@@ -13,7 +17,7 @@ namespace PUnit.Generator.Lowering;
 /// </summary>
 internal static class DisplayNameBuilder
 {
-    public static (string Template, string? FormatExpression) Build(
+    public static LoweredDisplayName Build(
         SemanticModel model,
         IMethodSymbol method,
         SeparatedSyntaxList<ArgumentSyntax> args,
@@ -65,7 +69,7 @@ internal static class DisplayNameBuilder
         }
 
         interpolation.Append('"');
-        return (constant.ToString(), anyRuntime ? interpolation.ToString() : null);
+        return new LoweredDisplayName(constant.ToString(), anyRuntime ? interpolation.ToString() : null);
     }
 
     static ExpressionSyntax? ArgumentForParameter(
