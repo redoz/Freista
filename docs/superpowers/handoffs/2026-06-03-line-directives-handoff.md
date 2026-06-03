@@ -1,6 +1,11 @@
 # Handoff: `#line` directives for step-into debugging
 
 **Status:** Designed + planned. **Not implemented.** Ready to execute.
+
+> **Superseded (2026-06-03):** implemented with span-form `#line` mapping instead of line-only.
+> See `docs/superpowers/specs/2026-06-03-line-span-mapping-design.md` and
+> `docs/superpowers/plans/2026-06-03-line-span-mapping.md`.
+
 **Date:** 2026-06-03
 **Predecessor:** the emitter is now AST-based (`docs/superpowers/plans/2026-06-03-emitter-ast-migration.md`, committed). This feature builds on that.
 **Execute with:** superpowers:subagent-driven-development (sequential; main workdir; no worktrees, matching how this repo has been run).

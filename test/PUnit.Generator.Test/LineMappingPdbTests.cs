@@ -38,6 +38,14 @@ public class LineMappingPdbTests(ITestOutputHelper output)
             p.Document == Path && p.StartLine == expected.startLine && p.StartColumn == expected.startCol);
     }
 
+    [Fact]
+    public void PathBearing_scenario_compiles()
+    {
+        var result = GeneratorHarness.RunWithPath(
+            SampleSources.Dsl + SampleSources.LinearScenario, "Scenario.cs");
+        result.AssertCompiles();
+    }
+
     static (int startLine, int startCol, int endLine, int endCol) InvocationSpan(
         string source, string path, string receiver, string method)
     {
