@@ -9,6 +9,9 @@
     <Project Path="test/PUnit.Generator.Test/PUnit.Generator.Test.csproj" />
     <Project Path="test/PUnit.Xunit.Test/PUnit.Xunit.Test.csproj" />
   </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/AppointmentTests/AppointmentTests.csproj" />
+  </Folder>
   <Folder Name="/Solution Items/">
     <File Path="Directory.Build.props" />
     <File Path="Directory.Packages.props" />

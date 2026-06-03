@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <!-- The canonical end-to-end sample: authoring scenarios with the Given/When/Then DSL, run by
+       the xUnit v3 runner with each business step reported as its own test. A real consumer would
+       add `dotnet add package PUnit.Xunit` (which bundles the generator); here we reference the
+       runtime adapter and wire the generator in as an analyzer. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\PUnit.Xunit\PUnit.Xunit.csproj" />
+    <ProjectReference Include="..\..\src\PUnit.Generator\PUnit.Generator.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>
