@@ -87,8 +87,8 @@ internal sealed class ScenarioParser
             MethodFullName = methodFullName,
             SafeName = SafeName(methodFullName),
             ScenarioId = _scenarioId,
-            DisplayName = ReadScenarioDisplayName() ?? _method.Name,
-            TimeoutMs = ReadScenarioTimeout(),
+            DisplayName = AttributeReader.ScenarioDisplayName(_method) ?? _method.Name,
+            TimeoutMs = AttributeReader.ScenarioTimeout(_method),
             SourceFile = Location(_syntax.Identifier, out var line),
             SourceLine = line,
         };
@@ -126,7 +126,7 @@ internal sealed class ScenarioParser
             return false;
         }
 
-        return ParseAwaited(await.Expression, binding: SingleBinding(variables[0].Identifier.Text));
+        return ParseAwaited(await.Expression, binding: Binding.Single(variables[0].Identifier.Text));
     }
 
     bool ParseExpressionStatement(ExpressionStatementSyntax statement)
@@ -134,69 +134,10 @@ internal sealed class ScenarioParser
         return statement.Expression switch
         {
             AwaitExpressionSyntax bareAwait => ParseAwaited(bareAwait.Expression, binding: null),
-            AssignmentExpressionSyntax { Right: AwaitExpressionSyntax await } assignment => ParseAwaited(await.Expression, binding: DeconstructBinding(assignment.Left)),
+            AssignmentExpressionSyntax { Right: AwaitExpressionSyntax await } assignment => ParseAwaited(await.Expression, binding: Binding.FromAssignment(assignment.Left)),
             _ => false,
         };
 
-    }
-
-    Binding SingleBinding(string name) => new(BindingKind.Single, [name]);
-
-    Binding? DeconstructBinding(ExpressionSyntax left)
-    {
-        // var (a, b) = ...
-        if (left is DeclarationExpressionSyntax { Designation: ParenthesizedVariableDesignationSyntax paren })
-        {
-            var names = new List<string>();
-            foreach (var d in paren.Variables)
-            {
-                if (d is SingleVariableDesignationSyntax single)
-                {
-                    names.Add(single.Identifier.Text);
-                }
-                else
-                {
-                    return null;
-                }
-            }
-
-            return new Binding(BindingKind.Tuple, names);
-        }
-
-        // (var a, var b) = ...
-        if (left is TupleExpressionSyntax tuple)
-        {
-            var names = new List<string>();
-            foreach (var arg in tuple.Arguments)
-            {
-                if (arg.Expression is DeclarationExpressionSyntax { Designation: SingleVariableDesignationSyntax single })
-                {
-                    names.Add(single.Identifier.Text);
-                }
-                else
-                {
-                    return null;
-                }
-            }
-
-            return new Binding(BindingKind.Tuple, names);
-        }
-
-        return null;
-    }
-
-    enum BindingKind { Single, Tuple }
-
-    sealed class Binding
-    {
-        public Binding(BindingKind kind, List<string> names)
-        {
-            Kind = kind;
-            Names = names;
-        }
-
-        public BindingKind Kind { get; }
-        public List<string> Names { get; }
     }
 
     bool ParseAwaited(ExpressionSyntax awaited, Binding? binding)
@@ -428,7 +369,7 @@ internal sealed class ScenarioParser
         var wantsCtx = SymbolHelpers.WantsContext(method, invocation.ArgumentList.Arguments.Count);
         var callText = BuildCallText(invocation, member, replacements, wantsCtx);
 
-        var (template, formatExpr) = BuildDisplayName(method, invocation.ArgumentList.Arguments, replacements);
+        var (template, formatExpr) = DisplayNameBuilder.Build(_model, method, invocation.ArgumentList.Arguments, replacements);
 
         var step = new ParsedStep
         {
@@ -442,7 +383,7 @@ internal sealed class ScenarioParser
             DisplayNameTemplate = template,
             FormatExpression = formatExpr,
             GroupId = groupId,
-            TimeoutMs = ReadStepTimeout(method),
+            TimeoutMs = AttributeReader.StepTimeout(method),
             SourceFile = Location(invocation, out var line),
             SourceLine = line,
         };
@@ -519,130 +460,6 @@ internal sealed class ScenarioParser
         return $"{receiver}.{name}({string.Join(", ", args)})";
     }
 
-    (string Template, string? FormatExpression) BuildDisplayName(
-        IMethodSymbol method,
-        SeparatedSyntaxList<ArgumentSyntax> args,
-        Dictionary<string, string> replacements)
-    {
-        var template = ReadStepTemplate(method) ?? method.Name;
-        var tokens = TemplateTokenizer.Tokenize(template);
-        var rewriter = new IdentifierReplacer(replacements);
-
-        var constant = new StringBuilder();
-        var interpolation = new StringBuilder("$\"");
-        var anyRuntime = false;
-
-        foreach (var token in tokens)
-        {
-            if (!token.IsPlaceholder)
-            {
-                constant.Append(token.Text);
-                interpolation.Append(EscapeForInterpolation(token.Text));
-                continue;
-            }
-
-            var argExpr = ArgumentForParameter(method, args, token.Text);
-            // LINQ unrolling substitutes the loop variable, producing detached nodes the model
-            // can't evaluate; treat those as runtime-formatted.
-            var inModel = argExpr is not null && argExpr.SyntaxTree == _model.SyntaxTree;
-            var constValue = inModel ? _model.GetConstantValue(argExpr!) : default;
-
-            if (argExpr is not null && constValue.HasValue)
-            {
-                var text = constValue.Value?.ToString() ?? "";
-                constant.Append(text);
-                interpolation.Append(EscapeForInterpolation(text));
-            }
-            else if (argExpr is not null)
-            {
-                anyRuntime = true;
-                constant.Append('{').Append(token.Text).Append('}');
-                var rewritten = ((ExpressionSyntax)rewriter.Visit(argExpr!)).ToFullString().Trim();
-                // Parenthesize so a ':' inside the expression (e.g. global::) isn't read as a
-                // format separator, and to be safe against '?' / nested interpolation.
-                interpolation.Append("{(").Append(rewritten).Append(")}");
-            }
-            else
-            {
-                constant.Append('{').Append(token.Text).Append('}');
-                interpolation.Append("{{").Append(token.Text).Append("}}");
-            }
-        }
-
-        interpolation.Append('"');
-        return (constant.ToString(), anyRuntime ? interpolation.ToString() : null);
-    }
-
-    static ExpressionSyntax? ArgumentForParameter(
-        IMethodSymbol method,
-        SeparatedSyntaxList<ArgumentSyntax> args,
-        string parameterName)
-    {
-        for (var i = 0; i < method.Parameters.Length; i++)
-        {
-            if (method.Parameters[i].Name == parameterName && i < args.Count)
-            {
-                return args[i].Expression;
-            }
-        }
-
-        return null;
-    }
-
-    static string EscapeForInterpolation(string text)
-        => text.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("{", "{{").Replace("}", "}}");
-
-    string? ReadScenarioDisplayName()
-    {
-        var attr = _method.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "ScenarioAttribute");
-        if (attr is { ConstructorArguments.Length: > 0 } && attr.ConstructorArguments[0].Value is string name)
-        {
-            return name;
-        }
-
-        return null;
-    }
-
-    int ReadScenarioTimeout()
-    {
-        var attr = _method.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "ScenarioAttribute");
-        return ReadTimeoutMs(attr, "Timeout"); // FactAttribute.Timeout (ms)
-    }
-
-    static int ReadStepTimeout(IMethodSymbol method)
-        => ReadTimeoutMs(
-            method.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "StepNameAttribute"),
-            "TimeoutMs");
-
-    static int ReadTimeoutMs(AttributeData? attr, string namedArgument)
-    {
-        if (attr is null)
-        {
-            return 0;
-        }
-
-        foreach (var named in attr.NamedArguments)
-        {
-            if (named.Key == namedArgument && named.Value.Value is int ms)
-            {
-                return ms;
-            }
-        }
-
-        return 0;
-    }
-
-    static string? ReadStepTemplate(IMethodSymbol method)
-    {
-        var attr = method.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "StepNameAttribute");
-        if (attr is { ConstructorArguments.Length: > 0 } && attr.ConstructorArguments[0].Value is string template)
-        {
-            return template;
-        }
-
-        return null;
-    }
-
     // The emitter dedupes the merged using set, so no need to dedupe here.
     IEnumerable<string> CollectUsings()
         => _syntax.SyntaxTree.GetCompilationUnitRoot().Usings.Select(u => u.ToString().Trim());
@@ -670,58 +487,5 @@ internal sealed class ScenarioParser
         }
 
         return sb.ToString();
-    }
-
-    /// <summary>
-    /// Replaces bare references to step-output locals (and LINQ loop variables) with the supplied
-    /// expressions. It leaves member names and argument labels alone, and is scope-aware: an
-    /// identifier shadowed by a lambda parameter is not rewritten.
-    /// </summary>
-    sealed class IdentifierReplacer : CSharpSyntaxRewriter
-    {
-        readonly Dictionary<string, string> _map;
-        readonly HashSet<string> _shadowed = new();
-
-        public IdentifierReplacer(Dictionary<string, string> map) => _map = map;
-
-        public override SyntaxNode? VisitSimpleLambdaExpression(SimpleLambdaExpressionSyntax node)
-            => WithShadow([node.Parameter.Identifier.Text], () => base.VisitSimpleLambdaExpression(node));
-
-        public override SyntaxNode? VisitParenthesizedLambdaExpression(ParenthesizedLambdaExpressionSyntax node)
-            => WithShadow(
-                node.ParameterList.Parameters.Select(p => p.Identifier.Text),
-                () => base.VisitParenthesizedLambdaExpression(node));
-
-        public override SyntaxNode? VisitIdentifierName(IdentifierNameSyntax node)
-        {
-            // Leave member names (`x.Member`) and argument labels (`name:` / `Name =`) untouched,
-            // and never rewrite a name that a nested scope (lambda parameter) has shadowed.
-            if ((node.Parent is MemberAccessExpressionSyntax member && member.Name == node)
-                || node.Parent is NameColonSyntax or NameEqualsSyntax
-                || _shadowed.Contains(node.Identifier.Text))
-            {
-                return base.VisitIdentifierName(node);
-            }
-
-            return _map.TryGetValue(node.Identifier.Text, out var replacement)
-                ? SyntaxFactory.ParseExpression(replacement).WithTriviaFrom(node)
-                : base.VisitIdentifierName(node);
-        }
-
-        SyntaxNode? WithShadow(IEnumerable<string> names, Func<SyntaxNode?> visit)
-        {
-            var added = names.Where(_shadowed.Add).ToList();
-            try
-            {
-                return visit();
-            }
-            finally
-            {
-                foreach (var name in added)
-                {
-                    _shadowed.Remove(name);
-                }
-            }
-        }
     }
 }
