@@ -160,18 +160,37 @@ public class PUnitTestFramework :
     }
 
     /// <summary>
-    /// Performs discovery for the session. Phase 2 is a no-op that simply completes the operation;
-    /// Phase 3 replaces this with <c>ScenarioRegistry</c>-driven per-step node emission.
+    /// Performs discovery for the session: enumerates every scenario registered in
+    /// <see cref="ScenarioRegistry"/>, lowers it via its factory, and publishes one
+    /// <see cref="TestNodeUpdateMessage"/> per step node (see <see cref="PUnitDiscoverer"/>).
+    /// Step nodes only — no parent scenario node (design decision ①).
     /// </summary>
-    protected virtual ValueTask OnDiscoverAsync(
+    protected virtual async ValueTask OnDiscoverAsync(
         SessionUid sessionUid,
         ITestExecutionFilter? filter,
         IMessageBus messageBus,
         Action operationComplete,
         CancellationToken cancellationToken)
     {
+        foreach (var methodName in ScenarioRegistry.RegisteredMethods)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!ScenarioRegistry.TryGet(methodName, out var factory) || factory is null)
+            {
+                continue;
+            }
+
+            var definition = factory();
+            foreach (var node in PUnitDiscoverer.BuildNodes(definition))
+            {
+                await messageBus
+                    .PublishAsync(this, new TestNodeUpdateMessage(sessionUid, node))
+                    .ConfigureAwait(false);
+            }
+        }
+
         operationComplete();
-        return default;
     }
 
     /// <summary>
