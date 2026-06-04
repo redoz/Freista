@@ -2,6 +2,12 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <!-- This is the FRAMEWORK library, not a runnable test app. The Microsoft.Testing.Platform
+         package defaults IsTestingPlatformApplication to true, which would make `dotnet test` (under
+         the repo's MTP runner in global.json) try to run this library as a test executable and fail
+         with "OutputType is 'Library'". Consumers (the sample, generated entry points) are the
+         runnable apps; opt this library out. -->
+    <IsTestingPlatformApplication>false</IsTestingPlatformApplication>
     <Description>
       Microsoft.Testing.Platform test framework for PUnit: PUnit's own ITestFramework that
       discovers, runs, and reports each scenario step as a first-class MTP test node, plus a
