@@ -12,6 +12,8 @@ using Microsoft.Testing.Platform.Extensions.TestFramework;
 using Microsoft.Testing.Platform.Messages;
 using Microsoft.Testing.Platform.Requests;
 using Microsoft.Testing.Platform.TestHost;
+using PUnit.Model;
+using PUnit.Scheduling;
 using ITestPlatformTestFramework = Microsoft.Testing.Platform.Extensions.TestFramework.ITestFramework;
 
 namespace PUnit.Mtp;
@@ -194,18 +196,57 @@ public class PUnitTestFramework :
     }
 
     /// <summary>
-    /// Runs the requested tests for the session. Phase 2 is a no-op that simply completes the
-    /// operation; Phase 5 replaces this with the scenario run loop that lights up executed siblings.
+    /// Runs the requested tests for the session via the <see cref="PUnitRunLoop"/>: the filter is
+    /// reduced to the distinct scenarios it selects, each is run once through a
+    /// <see cref="ScenarioScheduler"/>, and every executed step is published (siblings light up).
     /// </summary>
-    protected virtual ValueTask OnExecuteAsync(
+    protected virtual async ValueTask OnExecuteAsync(
         SessionUid sessionUid,
         ITestExecutionFilter? filter,
         IMessageBus messageBus,
         Action operationComplete,
         CancellationToken cancellationToken)
     {
+        var uids = ReadUidFilter(filter);
+        var loop = new PUnitRunLoop(EnumerateRegisteredScenarios);
+
+        await loop.RunAsync(sessionUid, uids, messageBus, this, cancellationToken).ConfigureAwait(false);
+
         operationComplete();
-        return default;
+    }
+
+    /// <summary>
+    /// Reduces an MTP execution filter to the set of step uids to run, or <see langword="null"/> to
+    /// run everything. A <see cref="TestNodeUidListFilter"/> carries an explicit uid list; a null or
+    /// no-op filter means "run all". Unknown filter kinds are rejected so a silent partial run can't
+    /// masquerade as success.
+    /// </summary>
+    static HashSet<string>? ReadUidFilter(ITestExecutionFilter? filter) => filter switch
+    {
+        null => null,
+#pragma warning disable TPEXP // NopFilter is an experimental Microsoft.Testing.Platform API.
+        NopFilter => null,
+#pragma warning restore TPEXP
+        TestNodeUidListFilter uidFilter =>
+            uidFilter.TestNodeUids.Select(u => u.Value).ToHashSet(StringComparer.OrdinalIgnoreCase),
+        _ => throw new ArgumentException(
+            string.Format(
+                CultureInfo.CurrentCulture,
+                "Unsupported execution filter type '{0}'.",
+                filter.GetType().FullName),
+            nameof(filter)),
+    };
+
+    /// <summary>Lowers every scenario registered in <see cref="ScenarioRegistry"/> to its definition.</summary>
+    static IEnumerable<ScenarioDefinition> EnumerateRegisteredScenarios()
+    {
+        foreach (var methodName in ScenarioRegistry.RegisteredMethods)
+        {
+            if (ScenarioRegistry.TryGet(methodName, out var factory) && factory is not null)
+            {
+                yield return factory();
+            }
+        }
     }
 
     void EnsureSession(SessionUid sessionUid, string requestKind)
