@@ -11,6 +11,13 @@
     <PackageVersion Include="xunit.v3.extensibility.core" Version="3.2.2" />
 
     <!--
+      Microsoft.Testing.Platform: PUnit.Mtp is its own MTP ITestFramework (replacing the
+      xUnit extension). 1.9.1 is the v1 line xunit.v3 itself references transitively
+      (vendor/xunit @ v3-3.2.2: src/Versions.props Microsoft_Testing_v1_Version).
+    -->
+    <PackageVersion Include="Microsoft.Testing.Platform" Version="1.9.1" />
+
+    <!--
       Roslyn the primary generator builds against. Installed SDK 10.0.300 ships Roslyn
       5.6.0; 5.3.0 is the latest published Microsoft.CodeAnalysis.CSharp and is <= the
       host compiler, so the generator loads cleanly (a generator can never reference a

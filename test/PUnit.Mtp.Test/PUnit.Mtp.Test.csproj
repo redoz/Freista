@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <!-- Behavioral tests for PUnit's MTP test framework: discovery emits one node per step,
+       the IStepObserver reporter maps each StepStatus onto MTP node states, and the run loop
+       runs each scenario once while lighting up every executed sibling. Uses the same runner
+       setup as the other PUnit test projects. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\PUnit.Mtp\PUnit.Mtp.csproj" />
+    <!-- Run the generator over this project's scenarios, as a real consumer would. -->
+    <ProjectReference Include="..\..\src\PUnit.Generator\PUnit.Generator.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>
