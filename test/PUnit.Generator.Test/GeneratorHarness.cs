@@ -5,6 +5,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Emit;
 using Microsoft.CodeAnalysis.Diagnostics;
+using Microsoft.CodeAnalysis.Text;
 using PUnit.Generator;
 using PUnit.Generator.Analysis;
 using PUnit.Model;
@@ -31,6 +32,28 @@ public static class GeneratorHarness
         refs.Add(MetadataReference.CreateFromFile(typeof(Given).Assembly.Location));
         refs.Add(MetadataReference.CreateFromFile(typeof(PUnit.ScenarioAttribute).Assembly.Location));
         return refs.ToImmutableArray();
+    }
+
+    /// <summary>
+    /// Compiles generated source as a console app against PUnit.Mtp (so the emitted entry point binds
+    /// to the real <c>PUnitTestApplication.RunAsync</c> signature) and returns any compile errors.
+    /// </summary>
+    public static ImmutableArray<Diagnostic> CompileWithMtp(string generatedSource)
+    {
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+        var refs = References.Add(
+            MetadataReference.CreateFromFile(typeof(PUnit.Mtp.PUnitTestApplication).Assembly.Location));
+        var compilation = CSharpCompilation.Create(
+            "EntryPointCompile_" + Guid.NewGuid().ToString("N"),
+            [CSharpSyntaxTree.ParseText(generatedSource, parseOptions)],
+            refs,
+            new CSharpCompilationOptions(OutputKind.ConsoleApplication,
+                nullableContextOptions: NullableContextOptions.Enable));
+
+        using var ms = new MemoryStream();
+        return compilation.Emit(ms).Diagnostics
+            .Where(d => d.Severity == DiagnosticSeverity.Error)
+            .ToImmutableArray();
     }
 
     public static GeneratorResult Run(string source, string assemblyName = "ScenarioTests")
@@ -65,8 +88,10 @@ public static class GeneratorHarness
         return new GeneratorResult(genDiagnostics, emitDiagnostics, generatedSource, assembly);
     }
 
-    /// <summary>Runs the generator over source and returns the driver, for Verify snapshots.</summary>
-    public static GeneratorDriver RunDriver(string source, string? path = null)
+    /// <summary>Runs the generator over source and returns the driver, for Verify snapshots. By
+    /// default the entry point is suppressed (<paramref name="generateProgram"/> = "false") so the
+    /// lowering snapshots stay scoped to the scenario manifest; the entry point has its own snapshot.</summary>
+    public static GeneratorDriver RunDriver(string source, string? path = null, string? generateProgram = "false")
     {
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
         var tree = CSharpSyntaxTree.ParseText(source, parseOptions, path: path ?? "");
@@ -77,8 +102,18 @@ public static class GeneratorHarness
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary,
                 nullableContextOptions: NullableContextOptions.Enable));
 
+        var optionsProvider = generateProgram is null
+            ? null
+            : new TestOptionsProvider(new Dictionary<string, string>
+            {
+                ["build_property.PUnitGenerateProgram"] = generateProgram,
+            });
+
         return CSharpGeneratorDriver
-            .Create([new ScenarioGenerator().AsSourceGenerator()], parseOptions: parseOptions)
+            .Create(
+                [new ScenarioGenerator().AsSourceGenerator()],
+                parseOptions: parseOptions,
+                optionsProvider: optionsProvider)
             .RunGenerators(compilation);
     }
 
@@ -173,6 +208,41 @@ public static class GeneratorHarness
         return result;
     }
 
+    /// <summary>
+    /// Runs the generator over source and returns each generated file keyed by its hint name. When
+    /// <paramref name="generateProgram"/> is non-null it is surfaced to the generator as the
+    /// <c>build_property.PUnitGenerateProgram</c> analyzer-config value (the MSBuild property a
+    /// consuming project would set); null leaves the property unset so the generator sees its default.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> RunGeneratedFiles(string source, string? generateProgram = null)
+    {
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+        var tree = CSharpSyntaxTree.ParseText(source, parseOptions);
+        var compilation = CSharpCompilation.Create(
+            "GenFiles_" + Guid.NewGuid().ToString("N"),
+            [tree],
+            References,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary,
+                nullableContextOptions: NullableContextOptions.Enable));
+
+        var optionsProvider = generateProgram is null
+            ? null
+            : new TestOptionsProvider(new Dictionary<string, string>
+            {
+                ["build_property.PUnitGenerateProgram"] = generateProgram,
+            });
+
+        var driver = CSharpGeneratorDriver.Create(
+            [new ScenarioGenerator().AsSourceGenerator()],
+            parseOptions: parseOptions,
+            optionsProvider: optionsProvider);
+
+        var result = driver.RunGenerators(compilation).GetRunResult();
+        return result.Results
+            .SelectMany(r => r.GeneratedSources)
+            .ToDictionary(s => s.HintName, s => s.SourceText.ToString());
+    }
+
     /// <summary>Runs the analyzer over source and returns just the PUnit diagnostics.</summary>
     public static async Task<ImmutableArray<Diagnostic>> AnalyzeAsync(string source)
     {
@@ -203,6 +273,23 @@ public static class GeneratorHarness
 
     public static Task<IReadOnlyList<StepResult>> RunAsync(this ScenarioDefinition definition, int maxParallelism = 0)
         => new ScenarioScheduler(maxParallelism).RunAsync(definition);
+}
+
+/// <summary>An <see cref="AnalyzerConfigOptionsProvider"/> whose global options are a fixed map —
+/// mirrors how MSBuild surfaces <c>&lt;CompilerVisibleProperty&gt;</c> values to a generator.</summary>
+file sealed class TestOptionsProvider(IReadOnlyDictionary<string, string> globals) : AnalyzerConfigOptionsProvider
+{
+    public override AnalyzerConfigOptions GlobalOptions { get; } = new TestOptions(globals);
+
+    public override AnalyzerConfigOptions GetOptions(SyntaxTree tree) => GlobalOptions;
+
+    public override AnalyzerConfigOptions GetOptions(AdditionalText textFile) => GlobalOptions;
+
+    sealed class TestOptions(IReadOnlyDictionary<string, string> values) : AnalyzerConfigOptions
+    {
+        public override bool TryGetValue(string key, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? value)
+            => values.TryGetValue(key, out value);
+    }
 }
 
 public sealed record GeneratorResult(

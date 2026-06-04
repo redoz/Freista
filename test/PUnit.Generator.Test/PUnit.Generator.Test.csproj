@@ -26,6 +26,9 @@
     <ProjectReference Include="..\..\src\PUnit\PUnit.csproj" />
     <!-- ScenarioAttribute lives here; test input compilations need it to resolve [Scenario]. -->
     <ProjectReference Include="..\..\src\PUnit.Xunit\PUnit.Xunit.csproj" />
+    <!-- The generated entry point calls PUnit.Mtp's bootstrap; reference it so a compile test can
+         prove the emitted Program.cs binds to the real RunAsync signature. -->
+    <ProjectReference Include="..\..\src\PUnit.Mtp\PUnit.Mtp.csproj" />
   </ItemGroup>
 
 </Project>

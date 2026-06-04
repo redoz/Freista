@@ -38,6 +38,16 @@
     <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);_IncludePUnitGenerator</TargetsForTfmSpecificContentInPackage>
   </PropertyGroup>
 
+  <!--
+    Ship MSBuild props/targets so a consuming test project gets the PUnitGenerateProgram default,
+    exposes it to the generator (CompilerVisibleProperty), and suppresses the SDK's own entry points
+    when PUnit emits one. buildTransitive flows these through project-to-project references too.
+  -->
+  <ItemGroup>
+    <None Include="buildTransitive\PUnit.Mtp.props" Pack="true" PackagePath="buildTransitive\" />
+    <None Include="buildTransitive\PUnit.Mtp.targets" Pack="true" PackagePath="buildTransitive\" />
+  </ItemGroup>
+
   <Target Name="_IncludePUnitGenerator">
     <!-- Pin the analyzer TFM so this net10.0 project's TargetFramework doesn't flow to the
          netstandard2.0 generator via the MSBuild task's inherited global properties. -->

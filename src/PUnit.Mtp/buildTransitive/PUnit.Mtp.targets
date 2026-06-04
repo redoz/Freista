@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <!--
+    When PUnit generates the entry point, suppress the SDK-provided ones so there is exactly one
+    Main: Microsoft.NET.Test.Sdk's GenerateProgramFile and Microsoft.Testing.Platform.MSBuild's
+    GenerateTestingPlatformEntryPoint. A consumer who sets PUnitGenerateProgram=false keeps whatever
+    entry point they configure.
+  -->
+  <PropertyGroup Condition="'$(PUnitGenerateProgram)' != 'false'">
+    <GenerateProgramFile Condition="'$(GenerateProgramFile)' == ''">false</GenerateProgramFile>
+    <GenerateTestingPlatformEntryPoint Condition="'$(GenerateTestingPlatformEntryPoint)' == ''">false</GenerateTestingPlatformEntryPoint>
+  </PropertyGroup>
+
+</Project>

@@ -5,7 +5,14 @@
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <!-- This is an xUnit project that TESTS PUnit.Mtp; it uses the Test SDK's own entry point, so
+         opt out of the generator's auto-emitted Program.cs (would clash with that Main). -->
+    <PUnitGenerateProgram>false</PUnitGenerateProgram>
   </PropertyGroup>
+
+  <ItemGroup>
+    <CompilerVisibleProperty Include="PUnitGenerateProgram" />
+  </ItemGroup>
 
   <!-- Behavioral tests for PUnit's MTP test framework: discovery emits one node per step,
        the IStepObserver reporter maps each StepStatus onto MTP node states, and the run loop

@@ -5,7 +5,14 @@
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <!-- Still the xUnit-hosted sample (Phase 7 migrates it to PUnit.Mtp). Until then, opt out of the
+         generator's auto-emitted MTP Program.cs so it doesn't clash with the xUnit entry point. -->
+    <PUnitGenerateProgram>false</PUnitGenerateProgram>
   </PropertyGroup>
+
+  <ItemGroup>
+    <CompilerVisibleProperty Include="PUnitGenerateProgram" />
+  </ItemGroup>
 
   <!-- The canonical end-to-end sample: authoring scenarios with the Given/When/Then DSL, run by
        the xUnit v3 runner with each business step reported as its own test. A real consumer would
