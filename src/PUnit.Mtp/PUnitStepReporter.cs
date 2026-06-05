@@ -80,8 +80,13 @@ internal sealed class PUnitStepReporter : IStepObserver
         var testNode = BuildNode(node, result.DisplayName);
 
         testNode.Properties.Add(MapState(result));
+
+        // Take a single "now" so the reported start/finish are exactly Duration apart (calling UtcNow
+        // twice would make finish slightly later than start + Duration). The scheduler reports a
+        // wall-clock duration but not absolute timestamps, so we anchor the window at the finish.
+        var finish = DateTimeOffset.UtcNow;
         testNode.Properties.Add(new TimingProperty(
-            new TimingInfo(DateTimeOffset.UtcNow - result.Duration, DateTimeOffset.UtcNow, result.Duration)));
+            new TimingInfo(finish - result.Duration, finish, result.Duration)));
 
         AddOutput(testNode, result);
         AddAttachments(testNode, result);

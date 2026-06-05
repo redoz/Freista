@@ -115,9 +115,21 @@ internal sealed class PUnitRunLoop
         // v1: sequential cross-scenario execution. The scheduler already parallelizes steps WITHIN a
         // scenario; bounding concurrency ACROSS scenarios is a future enhancement — this foreach is
         // the seam where a SemaphoreSlim / Parallel.ForEachAsync with a bounded degree would slot in.
+        var started = false;
         foreach (var definition in selected)
         {
+            // Honor platform cancellation between scenarios: once cancellation is observed after a
+            // scenario has run, stop launching scenarios that have not started, rather than reporting
+            // every remaining one as all-skipped (which would flood the runner with skip updates for
+            // work the user never started). The first selected scenario always runs so that a run
+            // canceled up-front still reports its (skipped) steps via the scheduler's skip path.
+            if (started && cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+
             await RunOneAsync(definition, sessionUid, messageBus, producer, cancellationToken).ConfigureAwait(false);
+            started = true;
         }
     }
 

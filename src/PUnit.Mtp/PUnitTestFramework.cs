@@ -174,6 +174,11 @@ public class PUnitTestFramework :
         Action operationComplete,
         CancellationToken cancellationToken)
     {
+        // A null/no-op filter discovers everything (so --list-tests enumerates every step); a
+        // TestNodeUidListFilter restricts discovery to the named nodes, matching xUnit's discovery
+        // sink. The same parsing backs both discover and run so a single-step uid resolves identically.
+        var uids = ReadUidFilter(filter);
+
         foreach (var methodName in ScenarioRegistry.RegisteredMethods)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -186,6 +191,11 @@ public class PUnitTestFramework :
             var definition = factory();
             foreach (var node in PUnitDiscoverer.BuildNodes(definition))
             {
+                if (uids is not null && !uids.Contains(node.Uid.Value))
+                {
+                    continue;
+                }
+
                 await messageBus
                     .PublishAsync(this, new TestNodeUpdateMessage(sessionUid, node))
                     .ConfigureAwait(false);

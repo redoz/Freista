@@ -1,5 +1,6 @@
 using Microsoft.Testing.Platform.Extensions.Messages;
 using Microsoft.Testing.Platform.Messages;
+using Microsoft.Testing.Platform.Requests;
 using Microsoft.Testing.Platform.TestHost;
 using PUnit.Mtp;
 using PUnit.Model;
@@ -83,6 +84,29 @@ public class DiscoveryRequestTests
         var location = Assert.Single(node.Properties.OfType<TestFileLocationProperty>());
         Assert.Equal(@"C:\src\S.cs", location.FilePath);
         Assert.Equal(1, location.LineSpan.Start.Line);
+    }
+
+    [Fact]
+    public async Task Discovery_honors_a_uid_filter_and_emits_only_matching_nodes()
+    {
+        // An IDE can issue a *filtered* discovery (e.g. to refresh specific nodes). When a
+        // TestNodeUidListFilter is present, discovery must emit only the named nodes — matching how
+        // xUnit's MTP discovery sink applies its filter — not the whole scenario.
+        RegisterScenario("filt-scn", "filtered scenario",
+            Node(0, "a", "step a"),
+            Node(1, "b", "step b"),
+            Node(2, "c", "step c"));
+
+        var framework = new PUnitTestFramework();
+        var uid = new SessionUid("disc-filter");
+        await framework.CreateTestSession(uid);
+
+        var bus = new RecordingMessageBus();
+        var filter = new TestNodeUidListFilter([new TestNodeUid("filt-scn:b")]);
+        await framework.OnDiscover(uid, filter, bus, () => { }, CancellationToken.None);
+
+        var node = Assert.Single(bus.NodesFor("filt-scn"));
+        Assert.Equal("filt-scn:b", node.Uid.Value);
     }
 
     [Fact]

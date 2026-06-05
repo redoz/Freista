@@ -246,6 +246,31 @@ public class RunLoopTests
     }
 
     [Fact]
+    public async Task Cancellation_mid_run_stops_launching_further_scenarios()
+    {
+        // When the platform cancels mid-run, the loop must stop launching scenarios it has not yet
+        // started — rather than iterating every remaining scenario only to report all-skipped (which
+        // would flood the runner with skipped updates for work the user never started). The first
+        // scenario cancels the platform token from inside its body; the second must never run.
+        using var cts = new CancellationTokenSource();
+        var secondRan = false;
+
+        var first = Definition("first", "first",
+            Node(0, "a", "a", invoke: (_, _) => { cts.Cancel(); return Task.FromResult<object?>(null); }));
+        var second = Definition("second", "second",
+            Node(0, "b", "b", invoke: (_, _) => { secondRan = true; return Task.FromResult<object?>(null); }));
+
+        var loop = new PUnitRunLoop(() => [first, second]);
+
+        var bus = new RecordingBus();
+        await loop.RunAsync(new SessionUid("s"), uids: null, bus, new StubProducer(), cts.Token);
+
+        Assert.False(secondRan);
+        // The second scenario's node was never published at all (not even as skipped).
+        Assert.DoesNotContain(Uid("second", "b"), bus.Nodes.Select(n => n.Uid.Value));
+    }
+
+    [Fact]
     public async Task Through_the_framework_run_request_executes_the_registered_scenario()
     {
         // End-to-end through PUnitTestFramework.OnExecute (registry-backed), proving the framework
