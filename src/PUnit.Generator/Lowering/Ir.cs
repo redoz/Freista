@@ -14,6 +14,7 @@ internal sealed record ParsedScenario
     public string SafeName { get; init; } = "";        // identifier-safe form for generated members
     public string ScenarioId { get; init; } = "";
     public string DisplayName { get; init; } = "";
+    public string? ClassDisplayName { get; init; }
     public string? SourceFile { get; init; }
     public int SourceLine { get; init; }
     public int TimeoutMs { get; init; }

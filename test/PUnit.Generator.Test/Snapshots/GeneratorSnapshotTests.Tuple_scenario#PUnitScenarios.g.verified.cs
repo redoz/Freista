@@ -140,6 +140,7 @@ namespace PUnit.Generated
                 ScenarioId = "c437082da1b43ab4",
                 DisplayName = "tuple booking",
                 MethodName = "Demo.TupleScenarios.Booking",
+                ClassDisplayName = null,
                 SourceFile = "",
                 SourceLine = 74,
                 Timeout = null,

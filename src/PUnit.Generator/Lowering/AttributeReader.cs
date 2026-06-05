@@ -39,6 +39,17 @@ internal static class AttributeReader
         return null;
     }
 
+    public static string? ClassDisplayName(INamedTypeSymbol type)
+    {
+        var attr = type.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "DisplayNameAttribute");
+        if (attr is { ConstructorArguments.Length: > 0 } && attr.ConstructorArguments[0].Value is string name)
+        {
+            return name;
+        }
+
+        return null;
+    }
+
     static int TimeoutMs(AttributeData? attr, string namedArgument)
     {
         if (attr is null)

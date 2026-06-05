@@ -82,6 +82,7 @@ internal sealed class ScenarioParser
             SafeName = SafeName(methodFullName),
             ScenarioId = _scenarioId,
             DisplayName = AttributeReader.ScenarioDisplayName(_method) ?? _method.Name,
+            ClassDisplayName = AttributeReader.ClassDisplayName(_method.ContainingType),
             TimeoutMs = AttributeReader.ScenarioTimeout(_method),
             SourceFile = Location(_syntax.Identifier, out var line),
             SourceLine = line,

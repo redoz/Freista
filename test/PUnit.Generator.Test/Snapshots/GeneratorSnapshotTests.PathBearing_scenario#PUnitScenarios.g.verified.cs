@@ -122,6 +122,7 @@ namespace PUnit.Generated
                 ScenarioId = "3907d8692f8a5dab",
                 DisplayName = "booking",
                 MethodName = "Demo.BookingScenarios.Booking",
+                ClassDisplayName = null,
                 SourceFile = "Scenario.cs",
                 SourceLine = 74,
                 Timeout = null,

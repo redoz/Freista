@@ -119,6 +119,7 @@ namespace PUnit.Generated
                 ScenarioId = "903e3e1cb803db83",
                 DisplayName = "array import",
                 MethodName = "Demo.ArrayScenarios.Import",
+                ClassDisplayName = null,
                 SourceFile = "",
                 SourceLine = 74,
                 Timeout = null,
