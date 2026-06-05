@@ -1,3 +1,4 @@
+using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -12,7 +13,8 @@ internal static class SymbolHelpers
 
     public const string ScenarioContextFullName = "PUnit.ScenarioContext";
 
-    /// <summary>Returns "Given"/"When"/"Then" if the receiver is one of the PUnit phase markers.</summary>
+    /// <summary>Returns the receiver type's name if it implements <c>PUnit.IPhase</c> (the built-in
+    /// Given/When/Then markers do; so does any user-defined marker), else null.</summary>
     public static string? PhaseOf(ExpressionSyntax receiver, SemanticModel model)
     {
         if (model.GetSymbolInfo(receiver).Symbol is not INamedTypeSymbol type)
@@ -20,12 +22,11 @@ internal static class SymbolHelpers
             return null;
         }
 
-        if (type.ContainingNamespace?.ToDisplayString(NoGlobal) != "PUnit")
-        {
-            return null;
-        }
+        var isPhase = type.AllInterfaces.Any(i =>
+            i.Name == "IPhase"
+            && i.ContainingNamespace?.ToDisplayString(NoGlobal) == "PUnit");
 
-        return type.Name is "Given" or "When" or "Then" ? type.Name : null;
+        return isPhase ? type.Name : null;
     }
 
     /// <summary>Unwraps Task/ValueTask return types; out result type is null when there is none.</summary>

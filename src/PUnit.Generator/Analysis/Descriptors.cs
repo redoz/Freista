@@ -18,7 +18,7 @@ internal static class Descriptors
     public static readonly DiagnosticDescriptor UnsupportedStatement = new(
         "PUNIT002",
         "Unsupported scenario statement",
-        "Scenario statements must be an awaited Given/When/Then call, an awaited tuple, or an awaited array of such calls",
+        "Scenario statements must be an awaited phase-marker call (Given/When/Then, or any type implementing PUnit.IPhase), an awaited tuple, or an awaited array of such calls",
         Category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -33,8 +33,8 @@ internal static class Descriptors
 
     public static readonly DiagnosticDescriptor NotADslCall = new(
         "PUNIT004",
-        "Scenario step must be a Given/When/Then call",
-        "Scenario steps must call a static extension member on Given, When, or Then",
+        "Scenario step must be a phase-marker call",
+        "Scenario steps must call a static extension member on a phase marker (Given/When/Then, or any type implementing PUnit.IPhase)",
         Category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -49,8 +49,8 @@ internal static class Descriptors
 
     public static readonly DiagnosticDescriptor InvalidGroupElement = new(
         "PUNIT006",
-        "Parallel group element must be a Given/When/Then call",
-        "Every element of a tuple/array parallel group must be a Given/When/Then call",
+        "Parallel group element must be a phase-marker call",
+        "Every element of a tuple/array parallel group must be a phase-marker call (Given/When/Then, or any type implementing PUnit.IPhase)",
         Category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
