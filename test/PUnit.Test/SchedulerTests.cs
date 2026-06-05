@@ -268,9 +268,9 @@ public class SchedulerTests
         public List<(ScenarioNode Node, string Name)> Started { get; } = [];
         public List<StepResult> Finished { get; } = [];
 
-        public Task OnStepStartingAsync(ScenarioNode node, string displayName)
+        public Task OnStepStartingAsync(StepContext context)
         {
-            lock (_sync) Started.Add((node, displayName));
+            lock (_sync) Started.Add((context.Node, context.DisplayName));
             return Task.CompletedTask;
         }
 

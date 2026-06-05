@@ -14,7 +14,7 @@ namespace PUnit.Scheduling;
 public interface IStepObserver
 {
     /// <summary>Raised when a step is about to run (or, for skipped steps, immediately before its finish).</summary>
-    Task OnStepStartingAsync(ScenarioNode node, string displayName);
+    Task OnStepStartingAsync(StepContext context);
 
     /// <summary>Raised once a step has reached a terminal status.</summary>
     Task OnStepFinishedAsync(StepResult result);

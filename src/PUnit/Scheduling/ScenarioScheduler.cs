@@ -102,7 +102,9 @@ public sealed class ScenarioScheduler
                         var displayName = FormatName(node, inputs);
                         if (observer is not null)
                         {
-                            await observer.OnStepStartingAsync(node, displayName).ConfigureAwait(false);
+                            await observer.OnStepStartingAsync(
+                                new StepContext { Node = node, DisplayName = displayName })
+                                .ConfigureAwait(false);
                         }
 
                         running[RunNodeAsync(node, inputs, services, displayName, cancellationToken)] = i;
@@ -156,7 +158,9 @@ public sealed class ScenarioScheduler
             var name = FormatName(node, inputs);
             if (observer is not null)
             {
-                await observer.OnStepStartingAsync(node, name).ConfigureAwait(false);
+                await observer.OnStepStartingAsync(
+                    new StepContext { Node = node, DisplayName = name })
+                    .ConfigureAwait(false);
             }
 
             var result = new StepResult

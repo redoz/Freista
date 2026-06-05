@@ -196,6 +196,7 @@ public class PUnitTestFramework :
                     continue;
                 }
 
+                NodeDiagnostics.Log("discover", node);
                 await messageBus
                     .PublishAsync(this, new TestNodeUpdateMessage(sessionUid, node))
                     .ConfigureAwait(false);

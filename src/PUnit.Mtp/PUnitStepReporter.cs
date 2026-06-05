@@ -64,11 +64,11 @@ internal sealed class PUnitStepReporter : IStepObserver
         this.producer = producer;
     }
 
-    public Task OnStepStartingAsync(ScenarioNode node, string displayName)
+    public Task OnStepStartingAsync(StepContext context)
     {
-        ArgumentNullException.ThrowIfNull(node);
+        ArgumentNullException.ThrowIfNull(context);
 
-        var testNode = BuildNode(node, displayName);
+        var testNode = BuildNode(context.Node, context.DisplayName);
         testNode.Properties.Add(InProgressTestNodeStateProperty.CachedInstance);
         return Publish(testNode);
     }
@@ -158,6 +158,8 @@ internal sealed class PUnitStepReporter : IStepObserver
             DisplayName = definition.DisplayName + PUnitDiscoverer.DisplayNameSeparator + displayName,
         };
 
+        testNode.Properties.Add(ScenarioTestIdentity.Create(definition.MethodName));
+
         if (!string.IsNullOrEmpty(node.SourceFile) && node.SourceLine > 0)
         {
             var position = new LinePosition(node.SourceLine, 0);
@@ -239,5 +241,8 @@ internal sealed class PUnitStepReporter : IStepObserver
     }
 
     Task Publish(TestNode testNode)
-        => messageBus.PublishAsync(producer, new TestNodeUpdateMessage(sessionUid, testNode));
+    {
+        NodeDiagnostics.Log("run", testNode);
+        return messageBus.PublishAsync(producer, new TestNodeUpdateMessage(sessionUid, testNode));
+    }
 }

@@ -11,9 +11,11 @@
     <PackageVersion Include="xunit.v3.extensibility.core" Version="3.2.2" />
 
     <!--
-      Microsoft.Testing.Platform: PUnit.Mtp is its own MTP ITestFramework (replacing the
-      xUnit extension). 1.9.1 is the v1 line xunit.v3 itself references transitively
-      (vendor/xunit @ v3-3.2.2: src/Versions.props Microsoft_Testing_v1_Version).
+      Microsoft.Testing.Platform: pinned to the v1 line (1.9.1) because the xunit-based test
+      projects run on xunit.v3 3.2.2, whose MTP runner is v1-only. Tried 2.0.2: PUnit.Mtp + the
+      sample build/run fine, but any test project that references PUnit.Mtp then unifies MTP to
+      2.0.2 and xunit's v1 runner fails to load (TypeLoadException on IDataConsumer). Moving to
+      2.x needs a v2-capable xunit.v3 (unreleased) or PUnit.Mtp's test projects off the xunit runner.
     -->
     <PackageVersion Include="Microsoft.Testing.Platform" Version="1.9.1" />
 

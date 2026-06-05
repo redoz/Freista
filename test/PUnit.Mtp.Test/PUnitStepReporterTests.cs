@@ -56,11 +56,47 @@ public class PUnitStepReporterTests
         var def = Definition(id: "s", nodes: [Node(0, "a", "step a")]);
         var (reporter, bus) = NewReporter(def);
 
-        await reporter.OnStepStartingAsync(def.Nodes[0], "step a");
+        await reporter.OnStepStartingAsync(new StepContext { Node = def.Nodes[0], DisplayName = "step a" });
 
         var node = Assert.Single(bus.Nodes);
         Assert.Equal("s:a", node.Uid.Value);
         Assert.NotEmpty(node.Properties.OfType<InProgressTestNodeStateProperty>());
+    }
+
+    [Fact]
+    public async Task Published_node_carries_method_identity_for_grouping()
+    {
+        // Run updates must carry the same namespace/class/method identity discovery emits, so the
+        // runner keeps the step nodes grouped under their scenario method rather than re-bucketing
+        // them under "<Empty Namespace>" when results arrive.
+        var def = Definition(id: "s", nodes: [Node(0, "a", "step a")]);
+        var (reporter, bus) = NewReporter(def);
+
+        await reporter.OnStepStartingAsync(new StepContext { Node = def.Nodes[0], DisplayName = "step a" });
+
+        var node = Assert.Single(bus.Nodes);
+        Assert.NotEmpty(node.Properties.OfType<TestMethodIdentifierProperty>());
+    }
+
+    [Fact]
+    public async Task Finished_node_carries_method_identity_for_grouping()
+    {
+        // The finish update is what the runner settles on when a step completes. If it lacked the
+        // method identity, the node would collapse back under "<Empty Namespace>" the instant it
+        // passed — grouped while running, nameless once done. So the terminal node must carry it too.
+        var def = Definition(id: "s", nodes: [Node(0, "a", "step a")]);
+        var (reporter, bus) = NewReporter(def);
+
+        await reporter.OnStepFinishedAsync(new StepResult
+        {
+            Node = def.Nodes[0],
+            DisplayName = "step a",
+            Status = StepStatus.Passed,
+            Duration = TimeSpan.FromMilliseconds(1),
+        });
+
+        var node = Assert.Single(bus.Nodes);
+        Assert.NotEmpty(node.Properties.OfType<TestMethodIdentifierProperty>());
     }
 
     [Fact]
@@ -71,7 +107,7 @@ public class PUnitStepReporterTests
 
         // The scheduler computes the formatted name at run time (placeholders resolved); the
         // reporter must surface that, not the static template.
-        await reporter.OnStepStartingAsync(def.Nodes[0], "patient Jane exists");
+        await reporter.OnStepStartingAsync(new StepContext { Node = def.Nodes[0], DisplayName = "patient Jane exists" });
 
         var node = Assert.Single(bus.Nodes);
         Assert.Equal("patient booking ▸ patient Jane exists", node.DisplayName);
@@ -188,7 +224,7 @@ public class PUnitStepReporterTests
         var def = Definition(id: "s", nodes: [Node(0, "a", "step a")]);
         var (reporter, bus) = NewReporter(def);
 
-        await reporter.OnStepStartingAsync(def.Nodes[0], "step a");
+        await reporter.OnStepStartingAsync(new StepContext { Node = def.Nodes[0], DisplayName = "step a" });
         await reporter.OnStepFinishedAsync(new StepResult
         {
             Node = def.Nodes[0],
@@ -267,7 +303,7 @@ public class PUnitStepReporterTests
         var bus = new RecordingMessageBus();
         var reporter = new PUnitStepReporter(def, new SessionUid("the-session"), bus, new StubProducer());
 
-        await reporter.OnStepStartingAsync(def.Nodes[0], "step a");
+        await reporter.OnStepStartingAsync(new StepContext { Node = def.Nodes[0], DisplayName = "step a" });
 
         var update = Assert.Single(bus.Updates);
         Assert.Equal("the-session", update.SessionUid.Value);

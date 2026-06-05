@@ -28,11 +28,11 @@ public class PUnitDiscovererTests
         Invoke = (_, _) => Task.FromResult<object?>(null),
     };
 
-    static ScenarioDefinition Definition(string id = "scn", string display = "my scenario", params ScenarioNode[] nodes) => new()
+    static ScenarioDefinition Definition(string id = "scn", string display = "my scenario", string method = "Ns.Scn", params ScenarioNode[] nodes) => new()
     {
         ScenarioId = id,
         DisplayName = display,
-        MethodName = "Ns.Scn",
+        MethodName = method,
         Nodes = nodes,
     };
 
@@ -103,6 +103,25 @@ public class PUnitDiscovererTests
         Assert.Equal(@"C:\src\Booking.cs", location.FilePath);
         Assert.Equal(42, location.LineSpan.Start.Line);
         Assert.Equal(42, location.LineSpan.End.Line);
+    }
+
+    [Fact]
+    public void Node_carries_method_identity_for_namespace_class_method_grouping()
+    {
+        // The generator emits MethodName as the scenario method's FQN. Runners (VS Test Explorer,
+        // the VSTest bridge) build their namespace -> class -> method tree from a
+        // TestMethodIdentifierProperty; without it the step nodes fall under "<Empty Namespace>" /
+        // "<Empty Class>". The FQN's last segment is the method, the one before it the class.
+        var definition = Definition(
+            method: "MyApp.Booking.Scenarios.BookAppointment",
+            nodes: [Node(0, "a", "step a")]);
+
+        var node = Assert.Single(PUnitDiscoverer.BuildNodes(definition));
+
+        var id = Assert.Single(node.Properties.OfType<TestMethodIdentifierProperty>());
+        Assert.Equal("MyApp.Booking", id.Namespace);
+        Assert.Equal("Scenarios", id.TypeName);
+        Assert.Equal("BookAppointment", id.MethodName);
     }
 
     [Fact]
