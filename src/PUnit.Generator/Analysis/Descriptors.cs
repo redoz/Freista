@@ -7,6 +7,14 @@ internal static class Descriptors
 {
     const string Category = "PUnit.Usage";
 
+    public static readonly DiagnosticDescriptor UnhandledException = new(
+        "PUNIT000",
+        "Unhandled exception in PUnit generator",
+        "PUnit failed to process a scenario: {0}",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     public static readonly DiagnosticDescriptor MustBeAsyncTask = new(
         "PUNIT001",
         "Scenario method must be async Task or async ValueTask",

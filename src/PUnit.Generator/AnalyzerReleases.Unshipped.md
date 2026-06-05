@@ -5,6 +5,7 @@
 
 Rule ID | Category | Severity | Notes
 --------|----------|----------|-------
+PUNIT000 | PUnit.Usage | Error | Unhandled exception in PUnit generator
 PUNIT001 | PUnit.Usage | Error | Scenario method must be async Task or async ValueTask
 PUNIT002 | PUnit.Usage | Error | Unsupported scenario statement
 PUNIT003 | PUnit.Usage | Error | Unsupported control flow in scenario

@@ -19,6 +19,10 @@
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="PUnit.Generator.Test" />
+  </ItemGroup>
+
   <!-- Analyzer release tracking (RS2008) for the shipped PUNIT diagnostics. -->
   <ItemGroup>
     <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
