@@ -50,7 +50,7 @@ public sealed class ScenarioScheduler
             {
                 if (cancellationToken.IsCancellationRequested)
                 {
-                    ApplySkip(i, "scenario canceled");
+                    await ApplySkipAsync(i, "scenario canceled").ConfigureAwait(false);
                     progressed = true;
                     continue;
                 }
@@ -79,7 +79,7 @@ public sealed class ScenarioScheduler
 
                 if (!anyUnresolved && (failed is not null || skipped is not null))
                 {
-                    ApplySkip(i, BuildSkipReason(failed, skipped));
+                    await ApplySkipAsync(i, BuildSkipReason(failed, skipped)).ConfigureAwait(false);
                     progressed = true;
                 }
             }
@@ -100,7 +100,11 @@ public sealed class ScenarioScheduler
                         pending.Remove(i);
                         status[i] = StepStatus.Running;
                         var displayName = FormatName(node, inputs);
-                        observer?.OnStepStarting(node, displayName);
+                        if (observer is not null)
+                        {
+                            await observer.OnStepStartingAsync(node, displayName).ConfigureAwait(false);
+                        }
+
                         running[RunNodeAsync(node, inputs, services, displayName, cancellationToken)] = i;
                         progressed = true;
                     }
@@ -136,18 +140,25 @@ public sealed class ScenarioScheduler
             }
 
             results[index] = outcome.Result;
-            observer?.OnStepFinished(outcome.Result);
+            if (observer is not null)
+            {
+                await observer.OnStepFinishedAsync(outcome.Result).ConfigureAwait(false);
+            }
         }
 
         return results.Select(r => r!).ToList();
 
-        void ApplySkip(int i, string reason)
+        async Task ApplySkipAsync(int i, string reason)
         {
             pending.Remove(i);
             status[i] = StepStatus.Skipped;
             var node = nodes[i];
             var name = FormatName(node, inputs);
-            observer?.OnStepStarting(node, name);
+            if (observer is not null)
+            {
+                await observer.OnStepStartingAsync(node, name).ConfigureAwait(false);
+            }
+
             var result = new StepResult
             {
                 Node = node,
@@ -156,7 +167,10 @@ public sealed class ScenarioScheduler
                 SkipReason = reason,
             };
             results[i] = result;
-            observer?.OnStepFinished(result);
+            if (observer is not null)
+            {
+                await observer.OnStepFinishedAsync(result).ConfigureAwait(false);
+            }
         }
     }
 

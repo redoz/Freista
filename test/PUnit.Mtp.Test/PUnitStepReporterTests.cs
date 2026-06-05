@@ -15,7 +15,9 @@ namespace PUnit.Mtp.Test;
 /// <see cref="StepStatus.Failed"/> splits by exception kind into Failed/Timeout/Error;
 /// <see cref="StepStatus.Skipped"/> -> <see cref="SkippedTestNodeStateProperty"/>. Finished updates
 /// carry <see cref="TimingProperty"/>, the step's <see cref="TestFileLocationProperty"/>, and the
-/// runtime-formatted display name; logs surface as standard output.
+/// runtime-formatted display name; logs surface as standard output. The observer contract is async:
+/// the reporter awaits the platform's <see cref="IMessageBus.PublishAsync"/> directly rather than
+/// blocking on it.
 /// </summary>
 public class PUnitStepReporterTests
 {
@@ -49,12 +51,12 @@ public class PUnitStepReporterTests
     }
 
     [Fact]
-    public void Start_publishes_in_progress_update_for_the_step_node()
+    public async Task Start_publishes_in_progress_update_for_the_step_node()
     {
         var def = Definition(id: "s", nodes: [Node(0, "a", "step a")]);
         var (reporter, bus) = NewReporter(def);
 
-        reporter.OnStepStarting(def.Nodes[0], "step a");
+        await reporter.OnStepStartingAsync(def.Nodes[0], "step a");
 
         var node = Assert.Single(bus.Nodes);
         Assert.Equal("s:a", node.Uid.Value);
@@ -62,26 +64,26 @@ public class PUnitStepReporterTests
     }
 
     [Fact]
-    public void Start_uses_runtime_formatted_display_name_with_scenario_prefix()
+    public async Task Start_uses_runtime_formatted_display_name_with_scenario_prefix()
     {
         var def = Definition(id: "s", display: "patient booking", nodes: [Node(0, "a", "patient exists")]);
         var (reporter, bus) = NewReporter(def);
 
         // The scheduler computes the formatted name at run time (placeholders resolved); the
         // reporter must surface that, not the static template.
-        reporter.OnStepStarting(def.Nodes[0], "patient Jane exists");
+        await reporter.OnStepStartingAsync(def.Nodes[0], "patient Jane exists");
 
         var node = Assert.Single(bus.Nodes);
         Assert.Equal("patient booking ▸ patient Jane exists", node.DisplayName);
     }
 
     [Fact]
-    public void Passed_step_publishes_passed_state()
+    public async Task Passed_step_publishes_passed_state()
     {
         var def = Definition(id: "s", nodes: [Node(0, "a", "step a")]);
         var (reporter, bus) = NewReporter(def);
 
-        reporter.OnStepFinished(new StepResult
+        await reporter.OnStepFinishedAsync(new StepResult
         {
             Node = def.Nodes[0],
             DisplayName = "step a",
@@ -94,7 +96,7 @@ public class PUnitStepReporterTests
     }
 
     [Fact]
-    public void Failed_assertion_publishes_failed_state_carrying_the_exception()
+    public async Task Failed_assertion_publishes_failed_state_carrying_the_exception()
     {
         var def = Definition(id: "s", nodes: [Node(0, "a", "step a")]);
         var (reporter, bus) = NewReporter(def);
@@ -103,7 +105,7 @@ public class PUnitStepReporterTests
         // reporter must recognize as an assertion (Failed), not a generic Error.
         var ex = Assert.ThrowsAny<Exception>(() => Assert.Equal(1, 2));
 
-        reporter.OnStepFinished(new StepResult
+        await reporter.OnStepFinishedAsync(new StepResult
         {
             Node = def.Nodes[0],
             DisplayName = "step a",
@@ -119,13 +121,13 @@ public class PUnitStepReporterTests
     }
 
     [Fact]
-    public void Failed_timeout_publishes_timeout_state()
+    public async Task Failed_timeout_publishes_timeout_state()
     {
         var def = Definition(id: "s", nodes: [Node(0, "a", "step a")]);
         var (reporter, bus) = NewReporter(def);
         var ex = new TimeoutException("step timed out");
 
-        reporter.OnStepFinished(new StepResult
+        await reporter.OnStepFinishedAsync(new StepResult
         {
             Node = def.Nodes[0],
             DisplayName = "step a",
@@ -140,13 +142,13 @@ public class PUnitStepReporterTests
     }
 
     [Fact]
-    public void Failed_other_exception_publishes_error_state()
+    public async Task Failed_other_exception_publishes_error_state()
     {
         var def = Definition(id: "s", nodes: [Node(0, "a", "step a")]);
         var (reporter, bus) = NewReporter(def);
         var ex = new InvalidOperationException("boom");
 
-        reporter.OnStepFinished(new StepResult
+        await reporter.OnStepFinishedAsync(new StepResult
         {
             Node = def.Nodes[0],
             DisplayName = "step a",
@@ -162,12 +164,12 @@ public class PUnitStepReporterTests
     }
 
     [Fact]
-    public void Skipped_step_publishes_skipped_state_with_reason()
+    public async Task Skipped_step_publishes_skipped_state_with_reason()
     {
         var def = Definition(id: "s", nodes: [Node(0, "a", "step a")]);
         var (reporter, bus) = NewReporter(def);
 
-        reporter.OnStepFinished(new StepResult
+        await reporter.OnStepFinishedAsync(new StepResult
         {
             Node = def.Nodes[0],
             DisplayName = "step a",
@@ -181,13 +183,13 @@ public class PUnitStepReporterTests
     }
 
     [Fact]
-    public void Finished_update_carries_timing_property()
+    public async Task Finished_update_carries_timing_property()
     {
         var def = Definition(id: "s", nodes: [Node(0, "a", "step a")]);
         var (reporter, bus) = NewReporter(def);
 
-        reporter.OnStepStarting(def.Nodes[0], "step a");
-        reporter.OnStepFinished(new StepResult
+        await reporter.OnStepStartingAsync(def.Nodes[0], "step a");
+        await reporter.OnStepFinishedAsync(new StepResult
         {
             Node = def.Nodes[0],
             DisplayName = "step a",
@@ -201,12 +203,12 @@ public class PUnitStepReporterTests
     }
 
     [Fact]
-    public void Finished_update_carries_file_location_when_source_is_known()
+    public async Task Finished_update_carries_file_location_when_source_is_known()
     {
         var def = Definition(id: "s", nodes: [Node(0, "a", "step a", file: @"C:\src\B.cs", line: 12)]);
         var (reporter, bus) = NewReporter(def);
 
-        reporter.OnStepFinished(new StepResult
+        await reporter.OnStepFinishedAsync(new StepResult
         {
             Node = def.Nodes[0],
             DisplayName = "step a",
@@ -220,12 +222,12 @@ public class PUnitStepReporterTests
     }
 
     [Fact]
-    public void Finished_update_uses_the_results_formatted_display_name()
+    public async Task Finished_update_uses_the_results_formatted_display_name()
     {
         var def = Definition(id: "s", display: "booking", nodes: [Node(0, "a", "patient exists")]);
         var (reporter, bus) = NewReporter(def);
 
-        reporter.OnStepFinished(new StepResult
+        await reporter.OnStepFinishedAsync(new StepResult
         {
             Node = def.Nodes[0],
             DisplayName = "patient Jane exists",
@@ -237,12 +239,12 @@ public class PUnitStepReporterTests
     }
 
     [Fact]
-    public void Logs_surface_as_standard_output_on_the_finished_update()
+    public async Task Logs_surface_as_standard_output_on_the_finished_update()
     {
         var def = Definition(id: "s", nodes: [Node(0, "a", "step a")]);
         var (reporter, bus) = NewReporter(def);
 
-        reporter.OnStepFinished(new StepResult
+        await reporter.OnStepFinishedAsync(new StepResult
         {
             Node = def.Nodes[0],
             DisplayName = "step a",
@@ -259,16 +261,39 @@ public class PUnitStepReporterTests
     }
 
     [Fact]
-    public void Each_published_update_carries_the_session_uid()
+    public async Task Each_published_update_carries_the_session_uid()
     {
         var def = Definition(id: "s", nodes: [Node(0, "a", "step a")]);
         var bus = new RecordingMessageBus();
         var reporter = new PUnitStepReporter(def, new SessionUid("the-session"), bus, new StubProducer());
 
-        reporter.OnStepStarting(def.Nodes[0], "step a");
+        await reporter.OnStepStartingAsync(def.Nodes[0], "step a");
 
         var update = Assert.Single(bus.Updates);
         Assert.Equal("the-session", update.SessionUid.Value);
+    }
+
+    [Fact]
+    public async Task OnStepFinishedAsync_awaits_the_publish_instead_of_blocking()
+    {
+        // Proves the reporter is genuinely async rather than sync-over-async: against a publish that
+        // has not completed yet, the returned task must still be pending. A
+        // `.GetAwaiter().GetResult()` implementation would block the calling thread at the call and
+        // never return this task (hanging the test) — which is exactly the hazard this guards against.
+        var def = Definition(id: "s", nodes: [Node(0, "a", "step a")]);
+        var gate = new TaskCompletionSource();
+        var reporter = new PUnitStepReporter(def, new SessionUid("sess"), new GatedMessageBus(gate.Task), new StubProducer());
+
+        var finished = reporter.OnStepFinishedAsync(new StepResult
+        {
+            Node = def.Nodes[0],
+            DisplayName = "step a",
+            Status = StepStatus.Passed,
+        });
+
+        Assert.False(finished.IsCompleted);
+        gate.SetResult();
+        await finished;
     }
 
     sealed class StubProducer : IDataProducer
@@ -304,5 +329,12 @@ public class PUnitStepReporterTests
 
             return Task.CompletedTask;
         }
+    }
+
+    // A bus whose publish completes only when the supplied gate task completes — lets a test observe
+    // that the reporter awaits the publish rather than blocking on it.
+    sealed class GatedMessageBus(Task gate) : IMessageBus
+    {
+        public Task PublishAsync(IDataProducer dataProducer, IData data) => gate;
     }
 }

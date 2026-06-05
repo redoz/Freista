@@ -56,7 +56,13 @@ internal sealed class ScenarioStepReporter : IStepObserver
         _caseDisplayName = caseDisplayName;
     }
 
-    public void OnStepStarting(ScenarioNode node, string displayName)
+    public Task OnStepStartingAsync(ScenarioNode node, string displayName)
+    {
+        EmitStarting(node, displayName);
+        return Task.CompletedTask;
+    }
+
+    void EmitStarting(ScenarioNode node, string displayName)
         => _bus.QueueMessage(new TestStarting
         {
             AssemblyUniqueID = _assemblyId,
@@ -72,7 +78,7 @@ internal sealed class ScenarioStepReporter : IStepObserver
             Traits = EmptyTraits,
         });
 
-    public void OnStepFinished(StepResult result)
+    public Task OnStepFinishedAsync(StepResult result)
     {
         var testId = TestId(result.Node.Index);
         var executionTime = (decimal)result.Duration.TotalSeconds;
@@ -86,12 +92,13 @@ internal sealed class ScenarioStepReporter : IStepObserver
         });
 
         _bus.QueueMessage(Finished(testId, executionTime, finishTime));
+        return Task.CompletedTask;
     }
 
     /// <summary>Reports a single failed test for a whole-scenario error (e.g. missing generated graph).</summary>
     public void ReportScenarioError(string displayName, Exception exception)
     {
-        OnStepStarting(SyntheticNode, displayName);
+        EmitStarting(SyntheticNode, displayName);
         var testId = TestId(0);
         var now = DateTimeOffset.UtcNow;
         _bus.QueueMessage(Failed(testId, exception, executionTime: 0m, now));

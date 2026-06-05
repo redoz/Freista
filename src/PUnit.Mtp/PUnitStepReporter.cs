@@ -35,9 +35,10 @@ namespace PUnit.Mtp;
 /// captured logs (as standard output) and attachments (as file artifacts).
 /// </para>
 /// <para>
-/// <see cref="IStepObserver"/> callbacks are synchronous and may arrive from arbitrary scheduler
-/// threads; the underlying <see cref="IMessageBus"/> is itself thread-safe, so this type holds no
-/// mutable state and is safe to share across concurrently-running steps of one scenario.
+/// The <see cref="IStepObserver"/> callbacks are asynchronous: each awaits the platform's
+/// <see cref="IMessageBus.PublishAsync"/> directly instead of blocking on it. The scheduler raises
+/// them serially, and this type holds no mutable state, so it is safe to share across a scenario's
+/// concurrently-running steps.
 /// </para>
 /// </remarks>
 internal sealed class PUnitStepReporter : IStepObserver
@@ -63,16 +64,16 @@ internal sealed class PUnitStepReporter : IStepObserver
         this.producer = producer;
     }
 
-    public void OnStepStarting(ScenarioNode node, string displayName)
+    public Task OnStepStartingAsync(ScenarioNode node, string displayName)
     {
         ArgumentNullException.ThrowIfNull(node);
 
         var testNode = BuildNode(node, displayName);
         testNode.Properties.Add(InProgressTestNodeStateProperty.CachedInstance);
-        Publish(testNode);
+        return Publish(testNode);
     }
 
-    public void OnStepFinished(StepResult result)
+    public Task OnStepFinishedAsync(StepResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
 
@@ -91,7 +92,7 @@ internal sealed class PUnitStepReporter : IStepObserver
         AddOutput(testNode, result);
         AddAttachments(testNode, result);
 
-        Publish(testNode);
+        return Publish(testNode);
     }
 
     /// <summary>Maps a terminal <see cref="StepResult"/> onto its MTP node-state property (design §6).</summary>
@@ -237,9 +238,6 @@ internal sealed class PUnitStepReporter : IStepObserver
         return builder.ToString();
     }
 
-    void Publish(TestNode testNode)
-        => messageBus
-            .PublishAsync(producer, new TestNodeUpdateMessage(sessionUid, testNode))
-            .GetAwaiter()
-            .GetResult();
+    Task Publish(TestNode testNode)
+        => messageBus.PublishAsync(producer, new TestNodeUpdateMessage(sessionUid, testNode));
 }
