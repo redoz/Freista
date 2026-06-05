@@ -14,6 +14,14 @@ public class AnalyzerTests
         Assert.Contains(diagnostics, d => d.Id == id);
 
     [Fact]
+    public void PUNIT000_is_a_supported_diagnostic()
+    {
+        var analyzer = new PUnit.Generator.Analysis.ScenarioAnalyzer();
+
+        Assert.Contains(analyzer.SupportedDiagnostics, d => d.Id == "PUNIT000");
+    }
+
+    [Fact]
     public async Task Valid_scenarios_produce_no_diagnostics()
     {
         Assert.Empty(await Analyze(SampleSources.LinearScenario));

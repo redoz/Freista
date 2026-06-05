@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
@@ -5,6 +6,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
+using PUnit.Generator;
 using PUnit.Generator.Lowering;
 
 namespace PUnit.Generator.Analysis;
@@ -18,6 +20,7 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
 {
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
+        Descriptors.UnhandledException,
         Descriptors.MustBeAsyncTask,
         Descriptors.UnsupportedStatement,
         Descriptors.UnsupportedControlFlow,
@@ -36,6 +39,20 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
     }
 
     static void AnalyzeMethod(SyntaxNodeAnalysisContext context)
+    {
+        try
+        {
+            AnalyzeMethodCore(context);
+        }
+        catch (Exception ex)
+        {
+            var location = ((MethodDeclarationSyntax)context.Node).Identifier.GetLocation();
+            context.ReportDiagnostic(Diagnostic.Create(
+                Descriptors.UnhandledException, location, GeneratorSafety.Describe(ex)));
+        }
+    }
+
+    static void AnalyzeMethodCore(SyntaxNodeAnalysisContext context)
     {
         var method = (MethodDeclarationSyntax)context.Node;
         if (context.SemanticModel.GetDeclaredSymbol(method) is not IMethodSymbol symbol)
