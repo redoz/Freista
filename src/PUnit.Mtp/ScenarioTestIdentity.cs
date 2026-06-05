@@ -33,10 +33,15 @@ internal static class ScenarioTestIdentity
     /// <summary>The VSTest spelling of a <see langword="void"/> return type (matches xunit.v3's MTP bridge).</summary>
     const string VoidReturnTypeName = "System.Void";
 
-    /// <summary>Builds the method-identity property for a scenario's <paramref name="methodFullName"/>.</summary>
-    public static TestMethodIdentifierProperty Create(string methodFullName)
+    /// <summary>
+    /// Builds the method-identity property for a scenario: namespace and type are derived from
+    /// <paramref name="methodFullName"/> (the scenario method's FQN), but the method node is the human
+    /// <paramref name="scenarioDisplayName"/> so a runner groups steps under the scenario name.
+    /// </summary>
+    public static TestMethodIdentifierProperty Create(string methodFullName, string scenarioDisplayName)
     {
-        Split(methodFullName, out var @namespace, out var typeName, out var methodName);
+        ArgumentNullException.ThrowIfNull(scenarioDisplayName);
+        Split(methodFullName, out var @namespace, out var typeName, out _);
 
         // Positional ctor args (assembly, namespace, type, method, method-arity, parameter-types,
         // return-type) — matching xunit.v3's MTP bridge. Scenarios are non-generic, parameterless
@@ -45,7 +50,7 @@ internal static class ScenarioTestIdentity
             AssemblyFullName,
             @namespace,
             typeName,
-            methodName,
+            scenarioDisplayName,
             0,
             [],
             VoidReturnTypeName);

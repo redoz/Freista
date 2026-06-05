@@ -25,13 +25,13 @@ public class ScenarioTestIdentityTests
     }
 
     [Fact]
-    public void Create_maps_the_parts_onto_the_identity_property()
+    public void Create_uses_scenario_display_name_as_method_and_derives_namespace_type_from_fqn()
     {
-        var id = ScenarioTestIdentity.Create("MyApp.Bookings.Book");
+        var id = ScenarioTestIdentity.Create("MyApp.Bookings.Book", "customer books an appointment");
 
         Assert.Equal("MyApp", id.Namespace);
         Assert.Equal("Bookings", id.TypeName);
-        Assert.Equal("Book", id.MethodName);
+        Assert.Equal("customer books an appointment", id.MethodName);
         Assert.Equal("System.Void", id.ReturnTypeFullName);
         Assert.Empty(id.ParameterTypeFullNames);
     }

@@ -21,7 +21,7 @@ namespace PUnit.Mtp.Test;
 /// </summary>
 public class PUnitStepReporterTests
 {
-    static ScenarioNode Node(int index, string stepId, string template, string? file = null, int line = 0) => new()
+    static ScenarioNode Node(int index, string stepId, string template, string? file = null, int line = 0, string? group = null) => new()
     {
         Index = index,
         StepId = stepId,
@@ -31,6 +31,7 @@ public class PUnitStepReporterTests
         SourceFile = file,
         SourceLine = line,
         DependsOn = [],
+        GroupId = group,
         Invoke = (_, _) => Task.FromResult<object?>(null),
     };
 
@@ -100,17 +101,17 @@ public class PUnitStepReporterTests
     }
 
     [Fact]
-    public async Task Start_uses_runtime_formatted_display_name_with_scenario_prefix()
+    public async Task Start_uses_numbered_runtime_formatted_display_name_without_prefix()
     {
         var def = Definition(id: "s", display: "patient booking", nodes: [Node(0, "a", "patient exists")]);
         var (reporter, bus) = NewReporter(def);
 
-        // The scheduler computes the formatted name at run time (placeholders resolved); the
-        // reporter must surface that, not the static template.
+        // The scheduler computes the formatted name at run time (placeholders resolved); the reporter
+        // surfaces that, numbered and without the old scenario prefix.
         await reporter.OnStepStartingAsync(new StepContext { Node = def.Nodes[0], DisplayName = "patient Jane exists" });
 
         var node = Assert.Single(bus.Nodes);
-        Assert.Equal("patient booking ▸ patient Jane exists", node.DisplayName);
+        Assert.Equal("1. patient Jane exists", node.DisplayName);
     }
 
     [Fact]
@@ -258,7 +259,7 @@ public class PUnitStepReporterTests
     }
 
     [Fact]
-    public async Task Finished_update_uses_the_results_formatted_display_name()
+    public async Task Finished_update_uses_the_numbered_results_formatted_display_name()
     {
         var def = Definition(id: "s", display: "booking", nodes: [Node(0, "a", "patient exists")]);
         var (reporter, bus) = NewReporter(def);
@@ -271,7 +272,26 @@ public class PUnitStepReporterTests
         });
 
         var node = Assert.Single(bus.Nodes);
-        Assert.Equal("booking ▸ patient Jane exists", node.DisplayName);
+        Assert.Equal("1. patient Jane exists", node.DisplayName);
+    }
+
+    [Fact]
+    public async Task Group_member_step_is_numbered_with_sub_index()
+    {
+        var def = Definition(
+            id: "s",
+            nodes:
+            [
+                Node(0, "clean", "the database is clean"),
+                Node(1, "p", "patient exists", group: "g1"),
+                Node(2, "slot", "slot exists", group: "g1"),
+            ]);
+        var (reporter, bus) = NewReporter(def);
+
+        await reporter.OnStepStartingAsync(new StepContext { Node = def.Nodes[1], DisplayName = "patient Jane exists" });
+
+        var node = Assert.Single(bus.Nodes);
+        Assert.Equal("2.1 patient Jane exists", node.DisplayName);
     }
 
     [Fact]

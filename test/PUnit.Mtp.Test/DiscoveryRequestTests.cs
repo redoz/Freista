@@ -79,7 +79,7 @@ public class DiscoveryRequestTests
 
         var node = Assert.Single(bus.NodesFor("meta-scn"));
         Assert.Equal("meta-scn:only", node.Uid.Value);
-        Assert.Equal("meta scenario ▸ the only step", node.DisplayName);
+        Assert.Equal("1. the only step", node.DisplayName);
         Assert.NotEmpty(node.Properties.OfType<DiscoveredTestNodeStateProperty>());
         var location = Assert.Single(node.Properties.OfType<TestFileLocationProperty>());
         Assert.Equal(@"C:\src\S.cs", location.FilePath);

@@ -44,6 +44,7 @@ namespace PUnit.Mtp;
 internal sealed class PUnitStepReporter : IStepObserver
 {
     readonly ScenarioDefinition definition;
+    readonly IReadOnlyDictionary<int, string> labels;
     readonly SessionUid sessionUid;
     readonly IMessageBus messageBus;
     readonly IDataProducer producer;
@@ -59,6 +60,7 @@ internal sealed class PUnitStepReporter : IStepObserver
         ArgumentNullException.ThrowIfNull(producer);
 
         this.definition = definition;
+        this.labels = ScenarioStepNumbering.Compute(definition);
         this.sessionUid = sessionUid;
         this.messageBus = messageBus;
         this.producer = producer;
@@ -147,18 +149,18 @@ internal sealed class PUnitStepReporter : IStepObserver
 
     /// <summary>
     /// Builds the per-step <see cref="TestNode"/>: the stable <c>{ScenarioId}:{StepId}</c> uid (so a
-    /// run update lands on the same node discovery emitted), the runtime-formatted display name with
-    /// the scenario prefix, and the file location when the step's source is known.
+    /// run update lands on the same node discovery emitted), the numbered, runtime-formatted display
+    /// name, and the file location when the step's source is known.
     /// </summary>
     TestNode BuildNode(ScenarioNode node, string displayName)
     {
         var testNode = new TestNode
         {
             Uid = PUnitDiscoverer.MakeUid(definition.ScenarioId, node.StepId),
-            DisplayName = definition.DisplayName + PUnitDiscoverer.DisplayNameSeparator + displayName,
+            DisplayName = ScenarioStepNumbering.Format(labels, node, displayName),
         };
 
-        testNode.Properties.Add(ScenarioTestIdentity.Create(definition.MethodName));
+        testNode.Properties.Add(ScenarioTestIdentity.Create(definition.MethodName, definition.DisplayName));
 
         if (!string.IsNullOrEmpty(node.SourceFile) && node.SourceLine > 0)
         {

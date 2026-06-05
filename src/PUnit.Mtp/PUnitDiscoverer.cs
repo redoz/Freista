@@ -14,8 +14,8 @@ namespace PUnit.Mtp;
 /// <list type="bullet">
 ///   <item>a stable <c>{ScenarioId}:{StepId}</c> uid so single-step run filters resolve to the
 ///   same node that discovery emitted;</item>
-///   <item>a <c>{scenario} ▸ {step template}</c> display name (the template; the reporter refines
-///   runtime-bound names at execution time);</item>
+///   <item>a numbered leaf display name (<c>"1. {step}"</c>, group member <c>"2.1 {step}"</c>) from
+///   <see cref="ScenarioStepNumbering"/>; the reporter refines runtime-bound names at execution time;</item>
 ///   <item>a <see cref="TestFileLocationProperty"/> for "go to source" when the step's source is
 ///   known;</item>
 ///   <item>the <see cref="DiscoveredTestNodeStateProperty"/>.</item>
@@ -25,37 +25,36 @@ namespace PUnit.Mtp;
 /// </remarks>
 internal static class PUnitDiscoverer
 {
-    /// <summary>The scenario/step separator used in display names (matches the xUnit reporter).</summary>
-    internal const string DisplayNameSeparator = " ▸ ";
-
     /// <summary>Builds the per-step <see cref="TestNode"/> list for one scenario.</summary>
     public static IReadOnlyList<TestNode> BuildNodes(ScenarioDefinition definition)
     {
         ArgumentNullException.ThrowIfNull(definition);
 
+        var labels = ScenarioStepNumbering.Compute(definition);
         var nodes = new List<TestNode>(definition.Nodes.Count);
         foreach (var step in definition.Nodes)
         {
-            nodes.Add(BuildNode(definition, step));
+            nodes.Add(BuildNode(definition, step, labels));
         }
 
         return nodes;
     }
 
     /// <summary>Builds the <see cref="TestNode"/> for a single scenario step.</summary>
-    public static TestNode BuildNode(ScenarioDefinition definition, ScenarioNode step)
+    public static TestNode BuildNode(ScenarioDefinition definition, ScenarioNode step, IReadOnlyDictionary<int, string> labels)
     {
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(step);
+        ArgumentNullException.ThrowIfNull(labels);
 
         var node = new TestNode
         {
             Uid = MakeUid(definition.ScenarioId, step.StepId),
-            DisplayName = definition.DisplayName + DisplayNameSeparator + step.DisplayNameTemplate,
+            DisplayName = ScenarioStepNumbering.Format(labels, step, step.DisplayNameTemplate),
         };
 
         node.Properties.Add(DiscoveredTestNodeStateProperty.CachedInstance);
-        node.Properties.Add(ScenarioTestIdentity.Create(definition.MethodName));
+        node.Properties.Add(ScenarioTestIdentity.Create(definition.MethodName, definition.DisplayName));
 
         if (TryMakeFileLocation(step, out var location))
         {
