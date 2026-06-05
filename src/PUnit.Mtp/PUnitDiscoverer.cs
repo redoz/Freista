@@ -54,7 +54,7 @@ internal static class PUnitDiscoverer
         };
 
         node.Properties.Add(DiscoveredTestNodeStateProperty.CachedInstance);
-        node.Properties.Add(ScenarioTestIdentity.Create(definition.MethodName, definition.DisplayName));
+        node.Properties.Add(ScenarioTestIdentity.Create(definition.MethodName, definition.DisplayName, definition.ClassDisplayName));
 
         if (TryMakeFileLocation(step, out var location))
         {

@@ -36,12 +36,16 @@ internal static class ScenarioTestIdentity
     /// <summary>
     /// Builds the method-identity property for a scenario: namespace and type are derived from
     /// <paramref name="methodFullName"/> (the scenario method's FQN), but the method node is the human
-    /// <paramref name="scenarioDisplayName"/> so a runner groups steps under the scenario name.
+    /// <paramref name="scenarioDisplayName"/> so a runner groups steps under the scenario name. When
+    /// <paramref name="classDisplayName"/> is non-empty it overrides the derived type name.
     /// </summary>
-    public static TestMethodIdentifierProperty Create(string methodFullName, string scenarioDisplayName)
+    public static TestMethodIdentifierProperty Create(
+        string methodFullName, string scenarioDisplayName, string? classDisplayName = null)
     {
         ArgumentNullException.ThrowIfNull(scenarioDisplayName);
         Split(methodFullName, out var @namespace, out var typeName, out _);
+
+        var type = string.IsNullOrEmpty(classDisplayName) ? typeName : classDisplayName!;
 
         // Positional ctor args (assembly, namespace, type, method, method-arity, parameter-types,
         // return-type) — matching xunit.v3's MTP bridge. Scenarios are non-generic, parameterless
@@ -49,7 +53,7 @@ internal static class ScenarioTestIdentity
         return new TestMethodIdentifierProperty(
             AssemblyFullName,
             @namespace,
-            typeName,
+            type,
             scenarioDisplayName,
             0,
             [],

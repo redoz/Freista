@@ -160,7 +160,7 @@ internal sealed class PUnitStepReporter : IStepObserver
             DisplayName = ScenarioStepNumbering.Format(labels, node, displayName),
         };
 
-        testNode.Properties.Add(ScenarioTestIdentity.Create(definition.MethodName, definition.DisplayName));
+        testNode.Properties.Add(ScenarioTestIdentity.Create(definition.MethodName, definition.DisplayName, definition.ClassDisplayName));
 
         if (!string.IsNullOrEmpty(node.SourceFile) && node.SourceLine > 0)
         {

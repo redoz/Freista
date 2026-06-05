@@ -35,4 +35,25 @@ public class ScenarioTestIdentityTests
         Assert.Equal("System.Void", id.ReturnTypeFullName);
         Assert.Empty(id.ParameterTypeFullNames);
     }
+
+    [Fact]
+    public void Create_uses_the_class_display_name_as_the_type_when_provided()
+    {
+        var id = ScenarioTestIdentity.Create(
+            "MyApp.Bookings.Book", "customer books an appointment", "Appointment booking");
+
+        Assert.Equal("MyApp", id.Namespace);
+        Assert.Equal("Appointment booking", id.TypeName);
+        Assert.Equal("customer books an appointment", id.MethodName);
+    }
+
+    [Fact]
+    public void Create_falls_back_to_the_fqn_type_when_class_display_name_is_null_or_empty()
+    {
+        var nullName = ScenarioTestIdentity.Create("MyApp.Bookings.Book", "scenario", null);
+        var emptyName = ScenarioTestIdentity.Create("MyApp.Bookings.Book", "scenario", "");
+
+        Assert.Equal("Bookings", nullName.TypeName);
+        Assert.Equal("Bookings", emptyName.TypeName);
+    }
 }

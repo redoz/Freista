@@ -15,6 +15,10 @@ public sealed class ScenarioDefinition
     /// <summary>Fully-qualified name of the originating <c>[Scenario]</c> method.</summary>
     public required string MethodName { get; init; }
 
+    /// <summary>Optional display name for the scenario's declaring class (from a <c>[DisplayName]</c>
+    /// attribute); when null the runner uses the real type name.</summary>
+    public string? ClassDisplayName { get; init; }
+
     /// <summary>Source file of the scenario method, if known.</summary>
     public string? SourceFile { get; init; }
 
