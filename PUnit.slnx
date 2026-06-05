@@ -1,14 +1,12 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/PUnit/PUnit.csproj" />
-    <Project Path="src/PUnit.Xunit/PUnit.Xunit.csproj" />
     <Project Path="src/PUnit.Mtp/PUnit.Mtp.csproj" />
     <Project Path="src/PUnit.Generator/PUnit.Generator.csproj" />
   </Folder>
   <Folder Name="/test/">
     <Project Path="test/PUnit.Test/PUnit.Test.csproj" />
     <Project Path="test/PUnit.Generator.Test/PUnit.Generator.Test.csproj" />
-    <Project Path="test/PUnit.Xunit.Test/PUnit.Xunit.Test.csproj" />
     <Project Path="test/PUnit.Mtp.Test/PUnit.Mtp.Test.csproj" />
   </Folder>
   <Folder Name="/samples/">

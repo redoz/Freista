@@ -33,7 +33,6 @@
     dependency), then drop its dll into the package's analyzers path. The PUnit core reference
     becomes an ordinary package dependency. Add a higher Roslyn variant later by recompiling the
     generator's sources against it (see Directory.Build.props) and packing it under its own folder.
-    Mirrors src/PUnit.Xunit/PUnit.Xunit.csproj.
   -->
   <ItemGroup>
     <ProjectReference Include="..\PUnit.Generator\PUnit.Generator.csproj"

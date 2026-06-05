@@ -59,9 +59,9 @@ independent ready branches keep running.
 | --- | --- |
 | `src/PUnit` | Runner-neutral core: phase markers, parallel awaiters, `ScenarioContext`, the graph model, and the DAG scheduler. No xUnit dependency. |
 | `src/PUnit.Generator` | Roslyn incremental generator + analyzer (PUNIT001–008). netstandard2.0. |
-| `src/PUnit.Xunit` | xUnit v3 adapter: `[Scenario]`, discoverer, self-executing test case, per-step reporter. |
+| `src/PUnit.Mtp` | Microsoft.Testing.Platform test framework: `[Scenario]`, discovery, run loop, per-step node reporter. |
 | `samples/AppointmentTests` | End-to-end sample (linear / tuple / array / LINQ). |
-| `test/*` | Scheduler tests (xUnit-free), generator/analyzer tests (behavioral + Verify snapshots), and xUnit acceptance tests. |
+| `test/*` | Scheduler tests (xUnit-free), generator/analyzer tests (behavioral + Verify snapshots), and MTP acceptance tests. |
 
 ## Run it
 
