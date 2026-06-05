@@ -20,24 +20,24 @@ public static class AppointmentDsl
 {
     extension(Given)
     {
-        [StepName("the database is clean")]
+        [StepName("Given the database is clean")]
         public static Task DatabaseIsClean() => Task.CompletedTask;
 
-        [StepName("patient {name} exists")]
+        [StepName("Given patient {name} exists")]
         public static async Task<Patient> PatientExists(string name)
         {
             await Task.Yield();
             return new Patient(name);
         }
 
-        [StepName("an available slot exists")]
+        [StepName("Given an available slot exists")]
         public static async Task<Slot> AvailableSlot()
         {
             await Task.Yield();
             return new Slot(1);
         }
 
-        [StepName("user {name} exists")]
+        [StepName("Given user {name} exists")]
         public static async Task<User> UserExists(string name)
         {
             await Task.Yield();
@@ -47,14 +47,14 @@ public static class AppointmentDsl
 
     extension(When)
     {
-        [StepName("creating an appointment")]
+        [StepName("When creating an appointment")]
         public static async Task<Appointment> CreateAppointment(Patient patient, Slot slot)
         {
             await Task.Yield();
             return new Appointment(patient, slot);
         }
 
-        [StepName("importing the users")]
+        [StepName("When importing the users")]
         public static async Task<ImportResult> ImportUsers(User[] users)
         {
             await Task.Yield();
@@ -64,7 +64,7 @@ public static class AppointmentDsl
 
     extension(Then)
     {
-        [StepName("the appointment should exist")]
+        [StepName("Then the appointment should exist")]
         public static Task AppointmentExists(Appointment appointment)
         {
             Assert.NotNull(appointment.Patient);
@@ -72,7 +72,7 @@ public static class AppointmentDsl
             return Task.CompletedTask;
         }
 
-        [StepName("the import should contain {expected} users")]
+        [StepName("Then the import should contain {expected} users")]
         public static Task ImportShouldContainUsers(ImportResult import, int expected)
         {
             Assert.Equal(expected, import.Count);

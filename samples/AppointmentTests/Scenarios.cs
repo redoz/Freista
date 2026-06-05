@@ -1,4 +1,5 @@
 using PUnit;
+using System.ComponentModel;
 
 namespace AppointmentTests;
 
@@ -7,6 +8,7 @@ namespace AppointmentTests;
 /// reporting every Given/When/Then step as its own xUnit test. xUnit never executes these bodies
 /// directly — they are source for the generator.
 /// </summary>
+[DisplayName("Appointment booking")]
 public static class Scenarios
 {
     // Linear: statements run in source order. CreateAppointment depends on both arrange steps.
