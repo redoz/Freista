@@ -34,10 +34,14 @@ public sealed class ScenarioContext
         StepDisplayName = stepDisplayName;
         CancellationToken = cancellationToken;
         Services = services;
+        var effectiveResolver =
+            resolver
+            ?? services?.GetService(typeof(ResourceIdentityResolver)) as ResourceIdentityResolver
+            ?? new ResourceIdentityResolver();
         Resources = new ResourceContext(
             stepId,
             stepDisplayName,
-            resolver ?? new ResourceIdentityResolver(),
+            effectiveResolver,
             timeProvider ?? TimeProvider.System);
     }
 
@@ -56,7 +60,10 @@ public sealed class ScenarioContext
     /// <summary>
     /// The resource surface for this step: lifecycle verbs (<c>Create</c>/<c>Load</c>/<c>Read</c>/
     /// <c>Edit</c>/<c>Delete</c>) that record <see cref="Model.ResourceEffect"/>s for the report's
-    /// resource lane. In C1 this is a pure tracer with no locking.
+    /// resource lane. In C1 this is a pure tracer with no locking. The
+    /// <see cref="ResourceIdentityResolver"/> is selected with the following precedence: an explicit
+    /// resolver passed to the 6-arg constructor, then a <see cref="ResourceIdentityResolver"/>
+    /// registered in <see cref="Services"/>, then a fresh default instance.
     /// </summary>
     public ResourceContext Resources { get; }
 

@@ -62,8 +62,39 @@ public class ScenarioContextTests
         Assert.Equal(1000, ctx.Logs.Count);
     }
 
+    /// <summary>
+    /// When a <see cref="ResourceIdentityResolver"/> is registered in the service provider,
+    /// <see cref="ScenarioContext.Resources"/> must use it so that selectors registered on that
+    /// resolver (chain link 2) are honoured.
+    /// </summary>
+    [Fact]
+    public async Task Resources_uses_resolver_from_Services_when_registered()
+    {
+        // A plain record that is NOT IResource<> / IResourceIdentity — without a registered
+        // selector the resolver falls back to whole-record value-equality (chain link 4).
+        var resolver = new ResourceIdentityResolver();
+        resolver.Identify<PlainWidget>(w => w.Name);
+
+        var provider = new ResolverStubProvider(resolver);
+        var ctx = new ScenarioContext("s", "n", provider, CancellationToken.None);
+
+        await ctx.Resources.Read(new PlainWidget("widget"));
+
+        var effect = Assert.Single(ctx.Resources.Effects);
+        Assert.Equal(new ResourceIdentity(typeof(PlainWidget), "widget"), effect.Identity);
+    }
+
+    private sealed record PlainWidget(string Name);
+
     private sealed class StubProvider(object value) : IServiceProvider
     {
         public object? GetService(Type serviceType) => value;
+    }
+
+    /// <summary>Returns a <see cref="ResourceIdentityResolver"/> for that exact type, null otherwise.</summary>
+    private sealed class ResolverStubProvider(ResourceIdentityResolver resolver) : IServiceProvider
+    {
+        public object? GetService(Type serviceType)
+            => serviceType == typeof(ResourceIdentityResolver) ? resolver : null;
     }
 }
