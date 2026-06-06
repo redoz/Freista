@@ -36,4 +36,9 @@ public class GeneratorSnapshotTests
         Verify(GeneratorHarness.RunGeneratedFiles(
                 SampleSources.Dsl + SampleSources.LinearScenario)["PUnitProgram.g.cs"])
             .UseDirectory("Snapshots");
+
+    [Fact]
+    public Task Resource_scenario() =>
+        Verify(GeneratorHarness.RunDriver(SampleSources.ResourceDsl + SampleSources.ResourceScenario))
+            .UseDirectory("Snapshots");
 }
