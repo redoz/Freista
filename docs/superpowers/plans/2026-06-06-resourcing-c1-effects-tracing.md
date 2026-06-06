@@ -1336,7 +1336,7 @@ In `src/PUnit.Generator/Lowering/ScenarioParser.cs`, inside `BuildStep`, after `
     //   var resourceClaims = BuildResourceClaims(invocation, method, replacements);
     // and set `ResourceClaims = resourceClaims,` in the initializer.
 
-    List<ResourceClaim> BuildResourceClaims(
+    static List<ResourceClaim> BuildResourceClaims(
         InvocationExpressionSyntax invocation,
         IMethodSymbol method,
         Dictionary<string, string> replacements)

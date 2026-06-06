@@ -18,11 +18,27 @@ public sealed class ScenarioContext
         string stepDisplayName,
         IServiceProvider? services,
         CancellationToken cancellationToken)
+        : this(stepId, stepDisplayName, services, resolver: null, timeProvider: null, cancellationToken)
+    {
+    }
+
+    public ScenarioContext(
+        string stepId,
+        string stepDisplayName,
+        IServiceProvider? services,
+        ResourceIdentityResolver? resolver,
+        TimeProvider? timeProvider,
+        CancellationToken cancellationToken)
     {
         StepId = stepId;
         StepDisplayName = stepDisplayName;
         CancellationToken = cancellationToken;
         Services = services;
+        Resources = new ResourceContext(
+            stepId,
+            stepDisplayName,
+            resolver ?? new ResourceIdentityResolver(),
+            timeProvider ?? TimeProvider.System);
     }
 
     /// <summary>Stable id of the step this context belongs to.</summary>
@@ -36,6 +52,13 @@ public sealed class ScenarioContext
 
     /// <summary>Optional per-scenario service provider for DI; may be null.</summary>
     public IServiceProvider? Services { get; }
+
+    /// <summary>
+    /// The resource surface for this step: lifecycle verbs (<c>Create</c>/<c>Load</c>/<c>Read</c>/
+    /// <c>Edit</c>/<c>Delete</c>) that record <see cref="Model.ResourceEffect"/>s for the report's
+    /// resource lane. In C1 this is a pure tracer with no locking.
+    /// </summary>
+    public ResourceContext Resources { get; }
 
     /// <summary>Appends a log line associated with the current step.</summary>
     public void Log(string message) => _logs.Enqueue(message);
