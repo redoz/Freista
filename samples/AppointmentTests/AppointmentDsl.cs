@@ -1,13 +1,32 @@
+using System.Globalization;
 using PUnit;
 using Xunit;
 
 namespace AppointmentTests;
 
-// Domain values flow between steps as ordinary types — each `await` unwraps Task<T> into T.
-public sealed record Patient(string Name);
-public sealed record Slot(int Id);
-public sealed record Appointment(Patient Patient, Slot Slot);
-public sealed record User(string Name);
+// Domain entities flow between steps as ordinary types — each `await` unwraps Task<T> into T. The
+// shared identities (Patient/Slot/Appointment/User) are CRTP resources so steps can declare what they
+// do to them; ImportResult is a pure count DTO, not a shared identity, so it stays a plain record.
+public sealed record Patient(string Name) : IResource<Patient>
+{
+    public static ResourceKey KeyFor(Patient instance) => instance.Name;
+}
+
+public sealed record Slot(int Id) : IResource<Slot>
+{
+    public static ResourceKey KeyFor(Slot instance) => instance.Id.ToString(CultureInfo.InvariantCulture);
+}
+
+public sealed record Appointment(Patient Patient, Slot Slot) : IResource<Appointment>
+{
+    public static ResourceKey KeyFor(Appointment instance) => $"{instance.Patient.Name}@{instance.Slot.Id}";
+}
+
+public sealed record User(string Name) : IResource<User>
+{
+    public static ResourceKey KeyFor(User instance) => instance.Name;
+}
+
 public sealed record ImportResult(int Count);
 
 /// <summary>
@@ -24,6 +43,7 @@ public static class AppointmentDsl
         public static Task DatabaseIsClean() => Task.CompletedTask;
 
         [StepName("Given patient {name} exists")]
+        [return: Creates]
         public static async Task<Patient> PatientExists(string name)
         {
             await Task.Yield();
@@ -31,6 +51,7 @@ public static class AppointmentDsl
         }
 
         [StepName("Given an available slot exists")]
+        [return: Creates]
         public static async Task<Slot> AvailableSlot()
         {
             await Task.Yield();
@@ -38,6 +59,7 @@ public static class AppointmentDsl
         }
 
         [StepName("Given user {name} exists")]
+        [return: Creates]
         public static async Task<User> UserExists(string name)
         {
             await Task.Yield();
@@ -48,7 +70,8 @@ public static class AppointmentDsl
     extension(When)
     {
         [StepName("When creating an appointment")]
-        public static async Task<Appointment> CreateAppointment(Patient patient, Slot slot)
+        [return: Creates]
+        public static async Task<Appointment> CreateAppointment([Reads] Patient patient, [Reads] Slot slot)
         {
             await Task.Yield();
             return new Appointment(patient, slot);
@@ -65,7 +88,7 @@ public static class AppointmentDsl
     extension(Then)
     {
         [StepName("Then the appointment should exist")]
-        public static Task AppointmentExists(Appointment appointment)
+        public static Task AppointmentExists([Reads] Appointment appointment)
         {
             Assert.NotNull(appointment.Patient);
             Assert.NotNull(appointment.Slot);

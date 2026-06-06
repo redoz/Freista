@@ -317,6 +317,36 @@ public class PUnitStepReporterTests
     }
 
     [Fact]
+    public async Task Resource_effects_surface_as_standard_output_on_the_finished_update()
+    {
+        var def = Definition(id: "s", nodes: [Node(0, "a", "step a")]);
+        var (reporter, bus) = NewReporter(def);
+
+        await reporter.OnStepFinishedAsync(new StepResult
+        {
+            Node = def.Nodes[0],
+            DisplayName = "step a",
+            Status = StepStatus.Passed,
+            Effects =
+            [
+                new ResourceEffect
+                {
+                    Verb = LifecycleVerb.Create,
+                    Identity = new ResourceIdentity(typeof(string), "jane"),
+                    StepId = "a",
+                    StepDisplayName = "step a",
+                },
+            ],
+        });
+
+#pragma warning disable TPEXP // StandardOutputProperty is experimental in MTP 1.9.1.
+        var node = Assert.Single(bus.Nodes);
+        var output = Assert.Single(node.Properties.OfType<StandardOutputProperty>());
+        Assert.Contains("[resource] Create String:jane", output.StandardOutput, StringComparison.Ordinal);
+#pragma warning restore TPEXP
+    }
+
+    [Fact]
     public async Task Each_published_update_carries_the_session_uid()
     {
         var def = Definition(id: "s", nodes: [Node(0, "a", "step a")]);

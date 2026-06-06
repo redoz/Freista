@@ -174,7 +174,7 @@ internal sealed class PUnitStepReporter : IStepObserver
 
     private static void AddOutput(TestNode testNode, StepResult result)
     {
-        if (result.Logs.Count == 0)
+        if (result.Logs.Count == 0 && result.Effects.Count == 0)
         {
             return;
         }
@@ -183,6 +183,14 @@ internal sealed class PUnitStepReporter : IStepObserver
         foreach (var line in result.Logs)
         {
             builder.AppendLine(line);
+        }
+
+        // Effect lines follow the logs, one per recorded resource effect, rendered as
+        // "[resource] {Verb} {Identity}" (the identity renders Type:Key, e.g. String:jane).
+        foreach (var effect in result.Effects)
+        {
+            builder.AppendLine(string.Format(
+                CultureInfo.InvariantCulture, "[resource] {0} {1}", effect.Verb, effect.Identity));
         }
 
 #pragma warning disable TPEXP // StandardOutputProperty is experimental in MTP 1.9.1 but stable enough for v1.
