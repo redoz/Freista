@@ -9,7 +9,7 @@
 
 ## Summary
 
-Let a scenario step declare that it **creates / references / edits / deletes** named resources
+Let a scenario step declare that it **creates / loads / reads / edits / deletes** named resources
 (`Given.UserExists("jane@x")` → a `User` resource). Resources are **symbolic** — identity + data
 tokens the framework uses only for *coordination* and *tracing*; it never materializes or mutates
 real state (whatever real work a step does is the step's own business). Those symbolic effects power
@@ -22,9 +22,9 @@ two things:
    HTML report's resource timeline and answers "which step deleted `User:123`?".
 
 The authoring surface is a small imperative API on the existing `ScenarioContext`
-(`ctx.Resources.*`), with declarative attributes (`[Creates]`/`[Edits]`/`[References]`, per-parameter
-and per-return-value) that the source generator lowers to that API and uses to drive a static,
-deadlock-free scheduling fast path.
+(`ctx.Resources.*`), with declarative attributes (`[Creates]`/`[Loads]`/`[Reads]`/`[Edits]`/`[Deletes]`,
+per parameter and return — **explicit and required**, no defaults) that the source generator lowers to
+that API and uses to drive a static, deadlock-free scheduling fast path.
 
 ## Goals
 
@@ -33,9 +33,9 @@ deadlock-free scheduling fast path.
   the generator already tracks.
 - **Real, async, deadlock-free** cross-scenario locking (two-phase locking + wound-wait) that never
   blocks a thread.
-- A clean authoring surface: scenario bodies carry **no** resource ceremony; DSL steps annotate only
-  the exceptions to sensible defaults; ambient resources ("the system", "the reporting api") are
-  expressible without inventing a type.
+- A clean authoring surface: scenario bodies carry **no** resource ceremony; DSL steps declare each
+  resource role **explicitly** (the analyzer errors on a missing one — no silent defaults); ambient
+  resources ("the system", "the reporting api") are expressible without inventing a type.
 - The effect stream is independently useful for tracing/reporting even with locking turned off.
 
 ## Non-goals
@@ -56,10 +56,10 @@ deadlock-free scheduling fast path.
 - `ScenarioContext` already collects per-step `Log`/`AddAttachment` and exposes `Services`; it is the
   natural home for `ctx.Resources`.
 - The generator already reads attributes via `AttributeReader`, tracks **variable dataflow** between
-  steps (so "references inferred from dataflow" reuses existing machinery), and lowers per-node
-  metadata through `Ir` → `ScenarioParser` → `ScenarioEmitter` → `ScenarioNode`. Parameter and
-  return-value attributes are reachable (`IParameterSymbol.GetAttributes()`,
-  `IMethodSymbol.GetReturnTypeAttributes()`).
+  steps (so a step's resource *identity* rides the value already flowing to it — the *role* is never
+  inferred, it stays explicit), and lowers per-node metadata through `Ir` → `ScenarioParser` →
+  `ScenarioEmitter` → `ScenarioNode`. Parameter and return-value attributes are reachable
+  (`IParameterSymbol.GetAttributes()`, `IMethodSymbol.GetReturnTypeAttributes()`).
 - C# 14 / `LangVersion=preview`: generic attributes, static abstract interface members, and CRTP are
   all available.
 
@@ -68,20 +68,17 @@ deadlock-free scheduling fast path.
 ## Core model
 
 - **Resource** = a symbolic `(type, key)` identity plus arbitrary `data` (shown in the trace).
-- **Lifecycle verb** = `Create` · `Reference` · `Edit` · `Delete`. It is both a trace label and the
-  lock-mode source: **`Reference` ⇒ shared**, **`Create`/`Edit`/`Delete` ⇒ exclusive**.
+- **Lifecycle verb** = `Create` · `Load` · `Read` · `Edit` · `Delete`. It is both a trace label and
+  the lock-mode source: **`Read`/`Load` ⇒ shared**, **`Create`/`Edit`/`Delete` ⇒ exclusive**.
 - **Scenario = the transaction and the retry unit.** Locks are held for the scenario (two-phase
   locking) and released together at the end. If a scenario is wounded mid-flight it is cancelled,
   releases its locks, and re-runs from the top.
 - **Locks are real; state is symbolic.** The scheduler genuinely serializes on the locks and does
   wound-wait + re-run; it calls no real APIs and rolls nothing back.
 
-Lock-mode mapping is the classic reader/writer rule: many concurrent `Reference`s (shared) coexist; a
-`Create`/`Edit`/`Delete` (exclusive) excludes everyone.
-
-> **Open naming point:** the shared verb is written `Reference` (imperative) / `[References]`
-> (attribute). `Read`/`[Reads]` reads naturally for the *lock-mode* intuition and is under
-> consideration as an alias. The spec uses `Reference`/`[References]` as canonical.
+Lock-mode mapping is the classic reader/writer rule: many concurrent `Read`s/`Load`s (shared) coexist;
+a `Create`/`Edit`/`Delete` (exclusive) excludes everyone. `Read` is *using* an in-scope resource;
+`Load` (a.k.a. Get) is *fetching an existing* one — both shared, but distinct lifecycles.
 
 ---
 
@@ -89,44 +86,75 @@ Lock-mode mapping is the classic reader/writer rule: many concurrent `Reference`
 
 ### 1. What the scenario author writes — nothing extra
 
-Locking is invisible; the narrative is unchanged from today. Locks come from the steps; *references*
-are inferred from the values flowing between them.
+Locking is invisible *in the scenario body* — the narrative is unchanged. The resource roles live on
+the **DSL step definitions** (next), not here: each value flowing between steps carries the resource
+*identity*, and the step's declared role carries the *access*.
 
 ```csharp
 [Scenario("a suspended user cannot sign in")]
 public static async Task SuspendedUserCannotSignIn()
 {
-    var user = await Given.UserExists("jane@acme.com");  // creates User:jane@acme.com (exclusive)
-    user      = await When.Suspend(user);                // edits it — same key, still exclusive
-    await Then.CannotSignIn(user);                       // references it (shared)
+    var user = await Given.UserExists("jane@acme.com");  // step creates User:jane@acme.com (exclusive)
+    user      = await When.Suspend(user);                // step edits it — same key, still exclusive
+    await Then.CannotSignIn(user);                       // step reads it (shared)
 }
 ```
 
-### 2. DSL step declarations — per-parameter and per-return roles
+### 2. DSL step declarations — explicit resource roles (no defaults)
 
-Each resource-typed parameter/return is an independent claim. **Defaults:** a resource-typed
-**parameter** is `[References]` (shared); a resource-typed **return** is `[Creates]` (exclusive).
-Annotate only the exceptions. Method-level `[Creates]`/`[Edits]`/`[References]` is sugar for the
-single obvious claim.
+Each resource-typed parameter and return value is an independent claim, and its **role must be stated
+explicitly**. There are **no defaults**: if a step's parameter or return is a resource type and
+carries no role, the analyzer raises **PUNIT009** and the build fails. This is deliberate — whether
+`Task<User> Foo(...)` *creates* a new user or *loads* an existing one, and whether a `User` parameter
+is *read* or *mutated*, changes both the lock mode and the trace, and must never be guessed.
+
+The role menu:
+
+| Where | Attribute | Means | Lock |
+|---|---|---|---|
+| return | `[Creates]` | a **new** resource | exclusive |
+| return | `[Loads]` | an **existing** resource (Get/Load) | shared |
+| return | `[Edits]` | the edited result of an existing resource | exclusive |
+| parameter | `[Reads]` | read-only use | shared |
+| parameter | `[Edits]` | mutates it | exclusive |
+| parameter | `[Deletes]` | removes it | exclusive |
 
 ```csharp
 [StepName("When {user} books {slot}")]
 public static async Task<Appointment> Book(
-    User user,                 // default [References] → shared lock on the user
-    [Edits] Slot slot)         // override            → exclusive; the slot is consumed
-    => new(user, slot);        // return default [Creates] → exclusive Appointment
+    [Reads] User user,         // shared lock on the user
+    [Edits] Slot slot)         // exclusive; the slot is consumed
+    => new(user, slot);        // [return: Creates] → a new Appointment (exclusive)
+
+[StepName("Given user {email} exists")]
+public static async Task<User> UserExists(string email)
+    => new(email);             // [return: Creates] (or method-level [Creates]) → new User
+
+[StepName("Given user {email} is loaded")]
+public static async Task<User> LoadUser(string email)
+    => await Db.Get(email);    // [return: Loads] → EXISTING User, shared
 
 [StepName("When {user} is suspended")]
-public static async Task<User> Suspend([Edits] User user)   // edits in place…
-    => user with { Suspended = true };                      // …returns the SAME resource (same key)
+public static async Task<User> Suspend([Edits] User user)   // exclusive on the user…
+    => user with { Suspended = true };                      // [return: Edits] → same resource
 ```
 
+(return roles are written `[return: Creates]` etc.; shown as comments above for brevity.)
+
+A resource-typed parameter or return with **no** role is a hard error:
+
+> **PUNIT009** — *Resource access must be declared.* "Parameter/return '{0}' is the resource type
+> '{1}'; declare its access with `[Reads]`, `[Edits]`, or `[Deletes]` (parameter) or `[Creates]`,
+> `[Loads]`, or `[Edits]` (return) — there is no default."
+
+Method-level `[Creates]`/`[Loads]`/`[Edits]` is allowed as an explicit shorthand when a step touches a
+single resource (it targets the return). It is *not* a default: a step with an unannotated resource
+**parameter** still errors.
+
 Claims **dedup by identity**. The same `(type, key)` is one lock — **exclusive wins over shared** —
-and one lifecycle is recorded, the strongest of **Delete > Edit > Create > Reference**. So the
-`Suspend` return (which would default to `[Creates]`) folds into the param's `[Edits]` claim on the
-same key: one exclusive lock, recorded as an `Edit`, no phantom `Create`. Annotating is therefore
-never wrong — only sometimes unnecessary. Multi-resource steps (read one, edit another, create a
-third) fall out naturally.
+and one lifecycle is recorded, the strongest of **Delete > Edit > Create > Load > Read**. So `Suspend`'s
+`[Edits]` parameter and `[return: Edits]` collapse to one exclusive claim on the user; restating it is
+harmless. Multi-resource steps (read one, edit another, create a third) fall out naturally.
 
 ### 3. Resource types — type-safe identity
 
@@ -142,7 +170,7 @@ Two equivalent ways to make a type a resource — pick per type:
 
 ```csharp
 // (a) Hand-written: CRTP + a static abstract member. Key projection lives at the TYPE level
-//     (so Reference<User>(key) and generic lock code need no instance and no reflection).
+//     (so Load<User>(key) and generic lock code need no instance and no reflection).
 public sealed record User(string Email, bool Suspended = false) : IResource<User>
 {
     public static ResourceKey KeyFor(User u) => u.Email;     // static abstract impl
@@ -154,7 +182,7 @@ public sealed partial record User(string Email, bool Suspended = false);
 ```
 
 Both yield the same compile-time **resource catalog** (every resource type + which steps
-create/edit/reference it) that powers the static scheduling fast path.
+create/load/read/edit/delete it) that powers the static scheduling fast path.
 
 ### 4. Coarse / ambient resources
 
@@ -180,11 +208,11 @@ The primary mechanism; the attributes are sugar over it. It hangs off the `Scena
 already optionally accept, is fully generic, and is **async** end to end.
 
 ```csharp
-await ctx.Resources.Create(user);                       // Create<User>, key via User.KeyFor — inferred
-await ctx.Resources.Reference(user);                    // shared
+await ctx.Resources.Create(user);                       // new, exclusive — key via User.KeyFor
+await ctx.Resources.Load<User>("admin@acme.com");       // existing, shared — by key, no instance
+await ctx.Resources.Read(user);                         // shared use of an in-scope resource
 await ctx.Resources.Edit(user with { Suspended = true });
 await ctx.Resources.Delete(user);
-await ctx.Resources.Reference<User>("admin@acme.com");  // by key, no instance
 await ctx.Resources.Exclusive<TheSystem>();             // singleton, type-checked
 ```
 
@@ -197,13 +225,13 @@ scope, so authors write no `using` for declarative effects:
 ```csharp
 // scenario runner (framework/generated), conceptually — ONE scope per scenario:
 await using var scope = ctx.Resources.BeginScenarioScope(priority);   // IAsyncDisposable
-    // each [Creates]/[Edits]/[References] across the steps acquires INTO `scope`
+    // each [Creates]/[Loads]/[Reads]/[Edits]/[Deletes] across the steps acquires INTO `scope`
     // ... run the DAG ...
 // scope.DisposeAsync() releases every held lock — on normal end, on exception, AND on wound
 // (cancellation unwinds to here). A wounded victim needs no special teardown.
 ```
 
-The lifecycle verbs (`Create`/`Reference`/`Edit`/`Delete`) **park their token in the current scenario
+The lifecycle verbs (`Create`/`Load`/`Read`/`Edit`/`Delete`) **park their token in the current scenario
 scope automatically** — you ignore the return, and they release at scenario end. `LockAsync` instead
 **hands the token back** so you can scope it yourself with a **narrower** `await using`, to release an
 expensive resource early:
@@ -298,10 +326,10 @@ New subsystem under `src/PUnit/Resources/` (core, runner-neutral), plus generato
 | `ResourceContext` (`ctx.Resources`) | Imperative API surface; `BeginScenarioScope`, `LockAsync`, the verbs. | lock manager, resolver |
 | `IResourceLockManager` + `AsyncReaderWriterGate` | Session-scoped, per-identity async RW gate; wound-wait. | — |
 | `ScenarioLockScope` | `IAsyncDisposable` bag of a scenario's held tokens; releases on dispose. | lock manager |
-| Attributes: `[Resource]`, `[ResourceKey]`, `[Creates]`, `[Edits]`, `[References]`, `[Deletes]`, `[Requires<T>]` | Declarative surface. | — |
+| Attributes: `[Resource]`, `[ResourceKey]`, `[Creates]`, `[Loads]`, `[Reads]`, `[Edits]`, `[Deletes]`, `[Requires<T>]` | Declarative surface. | — |
 | Scheduler integration (`ScenarioScheduler`) | Pre-acquire static claims; hold via scope; wound = cancel. | lock manager |
 | Session integration (`PUnit.Mtp`) | Own the lock manager; assign priorities; run scenarios concurrently. | core |
-| Generator (`PUnit.Generator`) | Read resource attributes (incl. param/return); emit identity half + catalog; lower effects to `ctx.Resources.*`; infer references from dataflow. | Roslyn |
+| Generator + analyzer (`PUnit.Generator`) | Read resource roles (incl. param/return); raise **PUNIT009** when a resource-typed param/return has no role; emit identity half + catalog; lower effects to `ctx.Resources.*`. | Roslyn |
 
 Each unit is independently testable: the lock manager and gate with no scheduler; the resolver with no
 runtime; the generator lowering via the existing `GeneratorHarness`.
@@ -318,9 +346,9 @@ runtime; the generator lowering via the existing `GeneratorHarness`.
   `await using` early-release shortens it.
 - **Identity resolver:** each chain link wins in order; value-equality fallback; `with`-edited record
   keeps its key.
-- **Generator lowering:** `[Creates]`/`[Edits]`/`[References]` on params/returns lower to the right
-  claims with the right modes; defaults applied; dataflow-inferred references; static keys produce a
-  catalog claim, runtime keys don't. (Via `GeneratorHarness`, behavioral.)
+- **Roles & PUNIT009:** a resource-typed param/return with **no** role errors (`PUNIT009`); with a
+  role, lowers to the right claim/mode (`[Creates]`/`[Loads]`/`[Reads]`/`[Edits]`/`[Deletes]`); static
+  keys produce a catalog claim, runtime keys don't. (Via `GeneratorHarness`, behavioral.)
 - **End-to-end:** two scenarios contending an exclusive resource serialize and both pass; a forced
   collision wounds and re-runs the younger; effects appear in the trace.
 
@@ -335,7 +363,10 @@ runtime; the generator lowering via the existing `GeneratorHarness`.
 2. **Re-run idempotency.** Symbolic resources mean the framework rolls nothing back; a re-run repeats
    the step's real side effects. We document the "steps must be safe to repeat" contract; do we also
    want an optional `onRollback` escape hatch later (non-breaking to add)?
-3. **Verb naming** (`Reference`/`[References]` vs `Read`/`[Reads]`) — finalize.
+3. **Flow-through return ergonomics.** Roles are explicit by design (no defaults). A return that is
+   the edited result of an `[Edits]` parameter still needs `[return: Edits]`; once usage data exists,
+   revisit whether the generator may infer *that one* same-identity case to cut ceremony — without
+   reintroducing guessed lock modes.
 4. **Determinism limits.** Wound-wait is deterministic by priority, but *which* scenarios collide can
    still vary with platform parallelism; the outcome (who wins) is stable, the timing isn't.
 5. **Scheduler stall guard.** A scenario blocked entirely on a lock (nothing in its `running` set)
