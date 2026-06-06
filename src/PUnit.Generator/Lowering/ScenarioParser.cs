@@ -17,33 +17,33 @@ namespace PUnit.Generator.Lowering;
 /// </summary>
 internal sealed class ScenarioParser
 {
-    readonly SemanticModel _model;
-    readonly IMethodSymbol _method;
-    readonly MethodDeclarationSyntax _syntax;
+    private readonly SemanticModel _model;
+    private readonly IMethodSymbol _method;
+    private readonly MethodDeclarationSyntax _syntax;
 
     // Variable name -> the step(s) that produced it.
-    readonly Dictionary<string, VarSource> _vars = [];
+    private readonly Dictionary<string, VarSource> _vars = [];
 
     // Namespaces that contain the invoked DSL extension members; imported into the generated file
     // so `Given.PatientExists(...)` resolves there too.
-    readonly HashSet<string> _dslNamespaces = [];
+    private readonly HashSet<string> _dslNamespaces = [];
 
     // Indices introduced by the previous top-level statement (source-order barrier / join target).
-    List<int> _prevFrontier = [];
+    private List<int> _prevFrontier = [];
 
-    int _nextIndex;
-    string _scenarioId = "";
+    private int _nextIndex;
+    private string _scenarioId = "";
 
-    readonly List<ParsedStep> _steps = [];
+    private readonly List<ParsedStep> _steps = [];
 
-    ScenarioParser(SemanticModel model, IMethodSymbol method, MethodDeclarationSyntax syntax)
+    private ScenarioParser(SemanticModel model, IMethodSymbol method, MethodDeclarationSyntax syntax)
     {
         _model = model;
         _method = method;
         _syntax = syntax;
     }
 
-    readonly record struct VarSource(bool IsArray, int Index, int[] Indices, string ElementType)
+    private readonly record struct VarSource(bool IsArray, int Index, int[] Indices, string ElementType)
     {
         public static VarSource Scalar(int index) => new(false, index, [], "");
         public static VarSource Array(int[] indices, string elementType) => new(true, -1, indices, elementType);
@@ -52,7 +52,7 @@ internal sealed class ScenarioParser
     public static ParsedScenario? TryParse(SemanticModel model, IMethodSymbol method, MethodDeclarationSyntax syntax)
         => new ScenarioParser(model, method, syntax).Parse();
 
-    ParsedScenario? Parse()
+    private ParsedScenario? Parse()
     {
         if (_syntax.Body is null)
         {
@@ -91,7 +91,7 @@ internal sealed class ScenarioParser
         };
     }
 
-    bool ParseStatement(StatementSyntax statement)
+    private bool ParseStatement(StatementSyntax statement)
     {
         return statement switch
         {
@@ -102,7 +102,7 @@ internal sealed class ScenarioParser
 
     }
 
-    bool ParseLocalDeclaration(LocalDeclarationStatementSyntax local)
+    private bool ParseLocalDeclaration(LocalDeclarationStatementSyntax local)
     {
         var variables = local.Declaration.Variables;
         if (variables.Count != 1 || variables[0].Initializer?.Value is not AwaitExpressionSyntax await)
@@ -113,7 +113,7 @@ internal sealed class ScenarioParser
         return ParseAwaited(await.Expression, binding: Binding.Single(variables[0].Identifier.Text));
     }
 
-    bool ParseExpressionStatement(ExpressionStatementSyntax statement)
+    private bool ParseExpressionStatement(ExpressionStatementSyntax statement)
     {
         return statement.Expression switch
         {
@@ -124,7 +124,7 @@ internal sealed class ScenarioParser
 
     }
 
-    bool ParseAwaited(ExpressionSyntax awaited, Binding? binding)
+    private bool ParseAwaited(ExpressionSyntax awaited, Binding? binding)
     {
         switch (awaited)
         {
@@ -143,7 +143,7 @@ internal sealed class ScenarioParser
         }
     }
 
-    bool ParseSingleCall(InvocationExpressionSyntax invocation, Binding? binding)
+    private bool ParseSingleCall(InvocationExpressionSyntax invocation, Binding? binding)
     {
         if (binding is { Kind: BindingKind.Tuple })
         {
@@ -165,7 +165,7 @@ internal sealed class ScenarioParser
         return true;
     }
 
-    bool ParseTuple(TupleExpressionSyntax tuple, Binding? binding)
+    private bool ParseTuple(TupleExpressionSyntax tuple, Binding? binding)
     {
         var groupId = "g" + _nextIndex;
         var frontier = new List<int>();
@@ -196,7 +196,7 @@ internal sealed class ScenarioParser
         return true;
     }
 
-    bool ParseArray(InitializerExpressionSyntax? initializer, Binding? binding)
+    private bool ParseArray(InitializerExpressionSyntax? initializer, Binding? binding)
     {
         if (initializer is null || binding is not { Kind: BindingKind.Single })
         {
@@ -229,7 +229,7 @@ internal sealed class ScenarioParser
         return true;
     }
 
-    bool ParseLinqArray(InvocationExpressionSyntax toArray, Binding? binding)
+    private bool ParseLinqArray(InvocationExpressionSyntax toArray, Binding? binding)
     {
         if (binding is not { Kind: BindingKind.Single })
         {
@@ -297,14 +297,14 @@ internal sealed class ScenarioParser
         return true;
     }
 
-    static bool IsToArray(InvocationExpressionSyntax invocation)
+    private static bool IsToArray(InvocationExpressionSyntax invocation)
         => invocation.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "ToArray" };
 
     /// <summary>
     /// Builds a step from a DSL invocation. <paramref name="semanticNode"/> is the invocation to use
     /// for semantic lookups when the emitted call has been syntactically rewritten (LINQ unroll).
     /// </summary>
-    ParsedStep? BuildStep(
+    private ParsedStep? BuildStep(
         InvocationExpressionSyntax invocation,
         string? groupId,
         List<int> sourceOrderDeps,
@@ -378,7 +378,7 @@ internal sealed class ScenarioParser
         return step;
     }
 
-    List<int> CollectDataflowDeps(InvocationExpressionSyntax invocation)
+    private List<int> CollectDataflowDeps(InvocationExpressionSyntax invocation)
     {
         var deps = new List<int>();
         foreach (var identifier in invocation.ArgumentList.DescendantNodes().OfType<IdentifierNameSyntax>())
@@ -399,7 +399,7 @@ internal sealed class ScenarioParser
         return deps;
     }
 
-    Dictionary<string, string> BuildReplacements()
+    private Dictionary<string, string> BuildReplacements()
     {
         var map = new Dictionary<string, string>();
         foreach (var pair in _vars)
@@ -419,7 +419,7 @@ internal sealed class ScenarioParser
         return map;
     }
 
-    static string BuildCallText(
+    private static string BuildCallText(
         InvocationExpressionSyntax invocation,
         MemberAccessExpressionSyntax member,
         Dictionary<string, string> replacements,
@@ -442,17 +442,17 @@ internal sealed class ScenarioParser
     }
 
     // The emitter dedupes the merged using set, so no need to dedupe here.
-    IEnumerable<string> CollectUsings()
+    private IEnumerable<string> CollectUsings()
         => _syntax.SyntaxTree.GetCompilationUnitRoot().Usings.Select(u => u.ToString().Trim());
 
-    static string? Location(SyntaxNode node, out int line)
+    private static string? Location(SyntaxNode node, out int line)
     {
         var span = node.GetLocation().GetLineSpan();
         line = span.StartLinePosition.Line + 1;
         return span.Path;
     }
 
-    static SourceSpan? SpanOf(SyntaxNode node)
+    private static SourceSpan? SpanOf(SyntaxNode node)
     {
         var s = node.GetLocation().GetLineSpan();
         if (string.IsNullOrEmpty(s.Path))
@@ -466,14 +466,14 @@ internal sealed class ScenarioParser
             s.EndLinePosition.Line, s.EndLinePosition.Character);
     }
 
-    static string? Location(SyntaxToken token, out int line)
+    private static string? Location(SyntaxToken token, out int line)
     {
         var span = token.GetLocation().GetLineSpan();
         line = span.StartLinePosition.Line + 1;
         return span.Path;
     }
 
-    static string SafeName(string methodFullName)
+    private static string SafeName(string methodFullName)
     {
         var sb = new StringBuilder();
         foreach (var c in methodFullName)

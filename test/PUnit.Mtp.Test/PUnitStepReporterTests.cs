@@ -21,7 +21,7 @@ namespace PUnit.Mtp.Test;
 /// </summary>
 public class PUnitStepReporterTests
 {
-    static ScenarioNode Node(int index, string stepId, string template, string? file = null, int line = 0, string? group = null) => new()
+    private static ScenarioNode Node(int index, string stepId, string template, string? file = null, int line = 0, string? group = null) => new()
     {
         Index = index,
         StepId = stepId,
@@ -35,7 +35,7 @@ public class PUnitStepReporterTests
         Invoke = (_, _) => Task.FromResult<object?>(null),
     };
 
-    static ScenarioDefinition Definition(string id = "scn", string display = "my scenario", params ScenarioNode[] nodes) => new()
+    private static ScenarioDefinition Definition(string id = "scn", string display = "my scenario", params ScenarioNode[] nodes) => new()
     {
         ScenarioId = id,
         DisplayName = display,
@@ -43,7 +43,7 @@ public class PUnitStepReporterTests
         Nodes = nodes.Length == 0 ? [Node(0, "a", "step a")] : nodes,
     };
 
-    static (PUnitStepReporter Reporter, RecordingMessageBus Bus) NewReporter(ScenarioDefinition definition)
+    private static (PUnitStepReporter Reporter, RecordingMessageBus Bus) NewReporter(ScenarioDefinition definition)
     {
         var bus = new RecordingMessageBus();
         var producer = new StubProducer();
@@ -352,7 +352,7 @@ public class PUnitStepReporterTests
         await finished;
     }
 
-    sealed class StubProducer : IDataProducer
+    private sealed class StubProducer : IDataProducer
     {
         public Type[] DataTypesProduced => [typeof(TestNodeUpdateMessage)];
         public string Uid => "stub.producer";
@@ -362,9 +362,9 @@ public class PUnitStepReporterTests
         public Task<bool> IsEnabledAsync() => Task.FromResult(true);
     }
 
-    sealed class RecordingMessageBus : IMessageBus
+    private sealed class RecordingMessageBus : IMessageBus
     {
-        readonly List<TestNodeUpdateMessage> updates = [];
+        private readonly List<TestNodeUpdateMessage> updates = [];
 
         public IReadOnlyList<TestNodeUpdateMessage> Updates
         {
@@ -389,7 +389,7 @@ public class PUnitStepReporterTests
 
     // A bus whose publish completes only when the supplied gate task completes — lets a test observe
     // that the reporter awaits the publish rather than blocking on it.
-    sealed class GatedMessageBus(Task gate) : IMessageBus
+    private sealed class GatedMessageBus(Task gate) : IMessageBus
     {
         public Task PublishAsync(IDataProducer dataProducer, IData data) => gate;
     }

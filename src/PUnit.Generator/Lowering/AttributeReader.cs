@@ -50,7 +50,7 @@ internal static class AttributeReader
         return null;
     }
 
-    static int TimeoutMs(AttributeData? attr, string namedArgument)
+    private static int TimeoutMs(AttributeData? attr, string namedArgument)
     {
         if (attr is null)
         {

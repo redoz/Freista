@@ -19,7 +19,7 @@ namespace PUnit.Mtp.Test;
 /// </summary>
 public class RunLoopTests
 {
-    static ScenarioNode Node(
+    private static ScenarioNode Node(
         int index,
         string stepId,
         string template,
@@ -37,7 +37,7 @@ public class RunLoopTests
             Invoke = invoke ?? ((_, _) => Task.FromResult<object?>(null)),
         };
 
-    static ScenarioDefinition Definition(string id, string display, params ScenarioNode[] nodes) => new()
+    private static ScenarioDefinition Definition(string id, string display, params ScenarioNode[] nodes) => new()
     {
         ScenarioId = id,
         DisplayName = display,
@@ -45,7 +45,7 @@ public class RunLoopTests
         Nodes = nodes,
     };
 
-    static string Uid(string scenarioId, string stepId) => scenarioId + ":" + stepId;
+    private static string Uid(string scenarioId, string stepId) => scenarioId + ":" + stepId;
 
     // -- Scenario selection (filter -> distinct scenarios) ---------------------------------------
 
@@ -293,7 +293,7 @@ public class RunLoopTests
         Assert.Contains(Uid("fw-scn", "b"), bus.PassedUids);
     }
 
-    sealed class StubProducer : IDataProducer
+    private sealed class StubProducer : IDataProducer
     {
         public Type[] DataTypesProduced => [typeof(TestNodeUpdateMessage)];
         public string Uid => "stub.producer";
@@ -303,9 +303,9 @@ public class RunLoopTests
         public Task<bool> IsEnabledAsync() => Task.FromResult(true);
     }
 
-    sealed class RecordingBus : IMessageBus
+    private sealed class RecordingBus : IMessageBus
     {
-        readonly ConcurrentQueue<TestNodeUpdateMessage> updates = new();
+        private readonly ConcurrentQueue<TestNodeUpdateMessage> updates = new();
 
         public IReadOnlyList<TestNode> Nodes => updates.Select(u => u.TestNode).ToList();
 
@@ -313,7 +313,7 @@ public class RunLoopTests
 
         public IReadOnlyList<string> SkippedUids => UidsWithState<SkippedTestNodeStateProperty>();
 
-        List<string> UidsWithState<TState>() where TState : IProperty => Nodes
+        private List<string> UidsWithState<TState>() where TState : IProperty => Nodes
             .Where(n => n.Properties.OfType<TState>().Length != 0)
             .Select(n => n.Uid.Value)
             .ToList();

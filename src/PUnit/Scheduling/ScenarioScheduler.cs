@@ -13,7 +13,7 @@ namespace PUnit.Scheduling;
 /// </summary>
 public sealed class ScenarioScheduler
 {
-    readonly int _maxParallelism;
+    private readonly int _maxParallelism;
 
     /// <param name="maxParallelism">Maximum steps running at once; 0 (default) means unbounded.</param>
     public ScenarioScheduler(int maxParallelism = 0)
@@ -178,7 +178,7 @@ public sealed class ScenarioScheduler
         }
     }
 
-    static async Task<NodeOutcome> RunNodeAsync(
+    private static async Task<NodeOutcome> RunNodeAsync(
         ScenarioNode node,
         IStepInputs inputs,
         IServiceProvider? services,
@@ -261,7 +261,7 @@ public sealed class ScenarioScheduler
                 null);
     }
 
-    static string FormatName(ScenarioNode node, IStepInputs inputs)
+    private static string FormatName(ScenarioNode node, IStepInputs inputs)
     {
         if (node.FormatDisplayName is null)
         {
@@ -280,7 +280,7 @@ public sealed class ScenarioScheduler
         }
     }
 
-    static string BuildSkipReason(List<string>? failed, List<string>? skipped)
+    private static string BuildSkipReason(List<string>? failed, List<string>? skipped)
     {
         if (failed is not null && skipped is not null)
         {
@@ -293,9 +293,9 @@ public sealed class ScenarioScheduler
             : $"dependency skipped: {string.Join(", ", skipped!)}";
     }
 
-    readonly record struct NodeOutcome(StepResult Result, object? Output);
+    private readonly record struct NodeOutcome(StepResult Result, object? Output);
 
-    sealed class StepInputs(object?[] outputs) : IStepInputs
+    private sealed class StepInputs(object?[] outputs) : IStepInputs
     {
         public T Get<T>(int producerIndex) => (T)outputs[producerIndex]!;
     }

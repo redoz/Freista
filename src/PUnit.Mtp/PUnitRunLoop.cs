@@ -38,8 +38,8 @@ internal sealed class PUnitRunLoop
         IStepObserver observer,
         CancellationToken cancellationToken);
 
-    readonly Func<IEnumerable<ScenarioDefinition>> scenarioSource;
-    readonly RunScenario runScenario;
+    private readonly Func<IEnumerable<ScenarioDefinition>> scenarioSource;
+    private readonly RunScenario runScenario;
 
     /// <param name="scenarioSource">Supplies the registered scenarios to consider for the run.</param>
     /// <param name="runScenario">
@@ -105,7 +105,7 @@ internal sealed class PUnitRunLoop
         await RunSelectedAsync(selected, sessionUid, messageBus, producer, cancellationToken).ConfigureAwait(false);
     }
 
-    async ValueTask RunSelectedAsync(
+    private async ValueTask RunSelectedAsync(
         IReadOnlyList<ScenarioDefinition> selected,
         SessionUid sessionUid,
         IMessageBus messageBus,
@@ -133,7 +133,7 @@ internal sealed class PUnitRunLoop
         }
     }
 
-    async ValueTask RunOneAsync(
+    private async ValueTask RunOneAsync(
         ScenarioDefinition definition,
         SessionUid sessionUid,
         IMessageBus messageBus,
@@ -148,7 +148,7 @@ internal sealed class PUnitRunLoop
         await runScenario(definition, reporter, runCts.Token).ConfigureAwait(false);
     }
 
-    static async Task DefaultRunScenario(
+    private static async Task DefaultRunScenario(
         ScenarioDefinition definition,
         IStepObserver observer,
         CancellationToken cancellationToken)

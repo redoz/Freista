@@ -7,10 +7,10 @@ namespace PUnit.Generator.Test;
 /// <summary>Verifies the analyzer flags code outside the lowerable subset and leaves valid code clean.</summary>
 public class AnalyzerTests
 {
-    static async Task<ImmutableArray<Diagnostic>> Analyze(string scenario) =>
+    private static async Task<ImmutableArray<Diagnostic>> Analyze(string scenario) =>
         await GeneratorHarness.AnalyzeAsync(SampleSources.Dsl + scenario);
 
-    static void AssertHas(ImmutableArray<Diagnostic> diagnostics, string id) =>
+    private static void AssertHas(ImmutableArray<Diagnostic> diagnostics, string id) =>
         Assert.Contains(diagnostics, d => d.Id == id);
 
     [Fact]

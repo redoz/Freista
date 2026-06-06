@@ -13,7 +13,7 @@ namespace PUnit.Mtp.Test;
 /// </summary>
 public class ScenarioAttributeTests
 {
-    static Type ScenarioAttributeType => typeof(global::PUnit.ScenarioAttribute);
+    private static Type ScenarioAttributeType => typeof(global::PUnit.ScenarioAttribute);
 
     [Fact]
     public void Lives_in_PUnit_namespace_so_authoring_is_using_PUnit()

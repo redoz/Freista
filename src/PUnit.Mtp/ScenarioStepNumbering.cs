@@ -85,5 +85,5 @@ internal static class ScenarioStepNumbering
     }
 
     /// <summary>Decimal digit-width of a count (at least 1).</summary>
-    static int Digits(int value) => value < 10 ? 1 : value.ToString(CultureInfo.InvariantCulture).Length;
+    private static int Digits(int value) => value < 10 ? 1 : value.ToString(CultureInfo.InvariantCulture).Length;
 }

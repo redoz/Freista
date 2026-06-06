@@ -10,7 +10,7 @@ namespace PUnit;
 /// </summary>
 public static class ScenarioRegistry
 {
-    static readonly ConcurrentDictionary<string, Func<ScenarioDefinition>> Factories = new();
+    private static readonly ConcurrentDictionary<string, Func<ScenarioDefinition>> Factories = new();
 
     /// <summary>Registers (or replaces) the definition factory for a scenario method.</summary>
     public static void Register(string methodFullName, Func<ScenarioDefinition> factory)

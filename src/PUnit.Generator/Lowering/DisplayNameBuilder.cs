@@ -72,7 +72,7 @@ internal static class DisplayNameBuilder
         return new LoweredDisplayName(constant.ToString(), anyRuntime ? interpolation.ToString() : null);
     }
 
-    static ExpressionSyntax? ArgumentForParameter(
+    private static ExpressionSyntax? ArgumentForParameter(
         IMethodSymbol method,
         SeparatedSyntaxList<ArgumentSyntax> args,
         string parameterName)
@@ -88,6 +88,6 @@ internal static class DisplayNameBuilder
         return null;
     }
 
-    static string EscapeForInterpolation(string text)
+    private static string EscapeForInterpolation(string text)
         => text.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("{", "{{").Replace("}", "}}");
 }

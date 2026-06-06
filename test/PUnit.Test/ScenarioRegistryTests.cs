@@ -10,7 +10,7 @@ namespace PUnit.Test;
 /// </summary>
 public class ScenarioRegistryTests
 {
-    static ScenarioDefinition Empty(string method) => new()
+    private static ScenarioDefinition Empty(string method) => new()
     {
         ScenarioId = "id",
         DisplayName = method,

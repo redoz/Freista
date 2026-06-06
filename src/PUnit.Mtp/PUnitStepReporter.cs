@@ -43,11 +43,11 @@ namespace PUnit.Mtp;
 /// </remarks>
 internal sealed class PUnitStepReporter : IStepObserver
 {
-    readonly ScenarioDefinition definition;
-    readonly IReadOnlyDictionary<int, string> labels;
-    readonly SessionUid sessionUid;
-    readonly IMessageBus messageBus;
-    readonly IDataProducer producer;
+    private readonly ScenarioDefinition definition;
+    private readonly IReadOnlyDictionary<int, string> labels;
+    private readonly SessionUid sessionUid;
+    private readonly IMessageBus messageBus;
+    private readonly IDataProducer producer;
 
     public PUnitStepReporter(
         ScenarioDefinition definition,
@@ -98,7 +98,7 @@ internal sealed class PUnitStepReporter : IStepObserver
     }
 
     /// <summary>Maps a terminal <see cref="StepResult"/> onto its MTP node-state property (design §6).</summary>
-    static IProperty MapState(StepResult result) => result.Status switch
+    private static IProperty MapState(StepResult result) => result.Status switch
     {
         StepStatus.Passed => PassedTestNodeStateProperty.CachedInstance,
         StepStatus.Skipped => new SkippedTestNodeStateProperty(result.SkipReason ?? "skipped"),
@@ -109,7 +109,7 @@ internal sealed class PUnitStepReporter : IStepObserver
                 string.Format(CultureInfo.InvariantCulture, "Unexpected terminal step status '{0}'.", result.Status))),
     };
 
-    static IProperty MapFailure(Exception? exception)
+    private static IProperty MapFailure(Exception? exception)
     {
         var ex = exception ?? new InvalidOperationException("Step failed without an exception.");
         return ex switch
@@ -126,7 +126,7 @@ internal sealed class PUnitStepReporter : IStepObserver
     /// <c>Xunit.Sdk.XunitException</c>; Shouldly/NUnit/etc. raise types whose name or interface ends
     /// in <c>AssertionException</c>. Anything else is treated as an unexpected error.
     /// </summary>
-    static bool IsAssertionException(Exception exception)
+    private static bool IsAssertionException(Exception exception)
     {
         for (var type = exception.GetType(); type is not null; type = type.BaseType)
         {
@@ -152,7 +152,7 @@ internal sealed class PUnitStepReporter : IStepObserver
     /// run update lands on the same node discovery emitted), the numbered, runtime-formatted display
     /// name, and the file location when the step's source is known.
     /// </summary>
-    TestNode BuildNode(ScenarioNode node, string displayName)
+    private TestNode BuildNode(ScenarioNode node, string displayName)
     {
         var testNode = new TestNode
         {
@@ -172,7 +172,7 @@ internal sealed class PUnitStepReporter : IStepObserver
         return testNode;
     }
 
-    static void AddOutput(TestNode testNode, StepResult result)
+    private static void AddOutput(TestNode testNode, StepResult result)
     {
         if (result.Logs.Count == 0)
         {
@@ -190,7 +190,7 @@ internal sealed class PUnitStepReporter : IStepObserver
 #pragma warning restore TPEXP
     }
 
-    void AddAttachments(TestNode testNode, StepResult result)
+    private void AddAttachments(TestNode testNode, StepResult result)
     {
         if (result.Attachments.Count == 0)
         {
@@ -220,7 +220,7 @@ internal sealed class PUnitStepReporter : IStepObserver
         }
     }
 
-    string CreateAttachmentDirectory(StepResult result)
+    private string CreateAttachmentDirectory(StepResult result)
     {
         var path = Path.Combine(
             Path.GetTempPath(),
@@ -230,7 +230,7 @@ internal sealed class PUnitStepReporter : IStepObserver
         return path;
     }
 
-    static string SanitizeFileName(string name)
+    private static string SanitizeFileName(string name)
     {
         var invalid = Path.GetInvalidFileNameChars();
         var builder = new StringBuilder(name.Length);
@@ -242,7 +242,7 @@ internal sealed class PUnitStepReporter : IStepObserver
         return builder.ToString();
     }
 
-    Task Publish(TestNode testNode)
+    private Task Publish(TestNode testNode)
     {
         NodeDiagnostics.Log("run", testNode);
         return messageBus.PublishAsync(producer, new TestNodeUpdateMessage(sessionUid, testNode));

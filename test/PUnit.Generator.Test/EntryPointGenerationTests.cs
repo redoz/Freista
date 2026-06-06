@@ -12,9 +12,9 @@ namespace PUnit.Generator.Test;
 /// </summary>
 public class EntryPointGenerationTests
 {
-    const string EntryPointHint = "PUnitProgram.g.cs";
+    private const string EntryPointHint = "PUnitProgram.g.cs";
 
-    static string Source => SampleSources.Dsl + SampleSources.LinearScenario;
+    private static string Source => SampleSources.Dsl + SampleSources.LinearScenario;
 
     [Fact]
     public void Entry_point_is_emitted_by_default()

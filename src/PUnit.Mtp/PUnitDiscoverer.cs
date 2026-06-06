@@ -67,7 +67,7 @@ internal static class PUnitDiscoverer
     /// <summary>The stable node uid for a step: <c>{ScenarioId}:{StepId}</c>.</summary>
     public static string MakeUid(string scenarioId, string stepId) => scenarioId + ":" + stepId;
 
-    static bool TryMakeFileLocation(ScenarioNode step, out TestFileLocationProperty location)
+    private static bool TryMakeFileLocation(ScenarioNode step, out TestFileLocationProperty location)
     {
         // SourceLine is 1-based, or 0 when unknown; without a file there is nothing to navigate to.
         if (!string.IsNullOrEmpty(step.SourceFile) && step.SourceLine > 0)

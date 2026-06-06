@@ -72,7 +72,7 @@ public sealed class ScenarioDefinition
         }
     }
 
-    bool HasCycle(int index, int[] state)
+    private bool HasCycle(int index, int[] state)
     {
         state[index] = 1;
         foreach (var dep in Nodes[index].DependsOn)

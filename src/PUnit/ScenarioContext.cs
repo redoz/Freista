@@ -10,8 +10,8 @@ namespace PUnit;
 /// </summary>
 public sealed class ScenarioContext
 {
-    readonly ConcurrentQueue<string> _logs = new();
-    readonly ConcurrentDictionary<string, string> _attachments = new();
+    private readonly ConcurrentQueue<string> _logs = new();
+    private readonly ConcurrentDictionary<string, string> _attachments = new();
 
     public ScenarioContext(
         string stepId,

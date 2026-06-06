@@ -5,7 +5,7 @@ namespace PUnit.Generator.Analysis;
 /// <summary>Diagnostics for the supported scenario subset (see the design's "Analyzer Rules").</summary>
 internal static class Descriptors
 {
-    const string Category = "PUnit.Usage";
+    private const string Category = "PUnit.Usage";
 
     public static readonly DiagnosticDescriptor UnhandledException = new(
         "PUNIT000",

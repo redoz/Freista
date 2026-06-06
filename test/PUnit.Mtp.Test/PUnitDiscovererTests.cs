@@ -15,7 +15,7 @@ namespace PUnit.Mtp.Test;
 /// </summary>
 public class PUnitDiscovererTests
 {
-    static ScenarioNode Node(int index, string stepId, string template, string? file = null, int line = 0, string? group = null) => new()
+    private static ScenarioNode Node(int index, string stepId, string template, string? file = null, int line = 0, string? group = null) => new()
     {
         Index = index,
         StepId = stepId,
@@ -29,7 +29,7 @@ public class PUnitDiscovererTests
         Invoke = (_, _) => Task.FromResult<object?>(null),
     };
 
-    static ScenarioDefinition Definition(string id = "scn", string display = "my scenario", string method = "Ns.Scn", params ScenarioNode[] nodes) => new()
+    private static ScenarioDefinition Definition(string id = "scn", string display = "my scenario", string method = "Ns.Scn", params ScenarioNode[] nodes) => new()
     {
         ScenarioId = id,
         DisplayName = display,

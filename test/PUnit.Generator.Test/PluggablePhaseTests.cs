@@ -7,7 +7,7 @@ namespace PUnit.Generator.Test;
 /// built-in Given/When/Then, and its type name becomes the step's phase label.</summary>
 public class PluggablePhaseTests
 {
-    const string CustomPhaseSource =
+    private const string CustomPhaseSource =
         """
         using System.Threading.Tasks;
         using PUnit;

@@ -20,9 +20,9 @@ namespace PUnit.Generator.Test;
 /// </summary>
 public static class GeneratorHarness
 {
-    static readonly ImmutableArray<MetadataReference> References = BuildReferences();
+    private static readonly ImmutableArray<MetadataReference> References = BuildReferences();
 
-    static ImmutableArray<MetadataReference> BuildReferences()
+    private static ImmutableArray<MetadataReference> BuildReferences()
     {
         var tpa = (string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!;
         var refs = tpa.Split(Path.PathSeparator)
@@ -285,7 +285,7 @@ file sealed class TestOptionsProvider(IReadOnlyDictionary<string, string> global
 
     public override AnalyzerConfigOptions GetOptions(AdditionalText textFile) => GlobalOptions;
 
-    sealed class TestOptions(IReadOnlyDictionary<string, string> values) : AnalyzerConfigOptions
+    private sealed class TestOptions(IReadOnlyDictionary<string, string> values) : AnalyzerConfigOptions
     {
         public override bool TryGetValue(string key, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? value)
             => values.TryGetValue(key, out value);

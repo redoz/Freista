@@ -6,7 +6,7 @@ namespace PUnit.Test.Resources;
 /// exclusive wins over shared.</summary>
 public class ResourceClaimTests
 {
-    static ResourceIdentity Id(string key) => new(typeof(User), key);
+    private static ResourceIdentity Id(string key) => new(typeof(User), key);
 
     [Fact]
     public void Reduce_dedups_by_identity_keeping_the_strongest_lifecycle_and_exclusive_mode()

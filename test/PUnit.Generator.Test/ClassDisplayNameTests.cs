@@ -7,7 +7,7 @@ namespace PUnit.Generator.Test;
 /// ScenarioDefinition.ClassDisplayName; without it the value is null.</summary>
 public class ClassDisplayNameTests
 {
-    const string WithDisplayName =
+    private const string WithDisplayName =
         """
 
         [System.ComponentModel.DisplayName("Appointment booking")]

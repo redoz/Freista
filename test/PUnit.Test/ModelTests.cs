@@ -11,7 +11,7 @@ namespace PUnit.Test;
 /// </summary>
 public class ModelTests
 {
-    static ScenarioNode Node(int index, params int[] dependsOn) => new()
+    private static ScenarioNode Node(int index, params int[] dependsOn) => new()
     {
         Index = index,
         StepId = $"step-{index}",
@@ -22,7 +22,7 @@ public class ModelTests
         Invoke = (_, _) => Task.FromResult<object?>(null),
     };
 
-    static ScenarioDefinition Def(params ScenarioNode[] nodes) => new()
+    private static ScenarioDefinition Def(params ScenarioNode[] nodes) => new()
     {
         ScenarioId = "scn",
         DisplayName = "scenario",

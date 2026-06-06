@@ -52,47 +52,47 @@ public static class ScenarioAwaiters
         => Combine(tasks.Item1, tasks.Item2, tasks.Item3, tasks.Item4, tasks.Item5, tasks.Item6,
             tasks.Item7, tasks.Item8).GetAwaiter();
 
-    static async Task<(T1, T2)> Combine<T1, T2>(Task<T1> t1, Task<T2> t2)
+    private static async Task<(T1, T2)> Combine<T1, T2>(Task<T1> t1, Task<T2> t2)
     {
         await Task.WhenAll(t1, t2).ConfigureAwait(false);
         return (t1.Result, t2.Result);
     }
 
-    static async Task<(T1, T2, T3)> Combine<T1, T2, T3>(Task<T1> t1, Task<T2> t2, Task<T3> t3)
+    private static async Task<(T1, T2, T3)> Combine<T1, T2, T3>(Task<T1> t1, Task<T2> t2, Task<T3> t3)
     {
         await Task.WhenAll(t1, t2, t3).ConfigureAwait(false);
         return (t1.Result, t2.Result, t3.Result);
     }
 
-    static async Task<(T1, T2, T3, T4)> Combine<T1, T2, T3, T4>(
+    private static async Task<(T1, T2, T3, T4)> Combine<T1, T2, T3, T4>(
         Task<T1> t1, Task<T2> t2, Task<T3> t3, Task<T4> t4)
     {
         await Task.WhenAll(t1, t2, t3, t4).ConfigureAwait(false);
         return (t1.Result, t2.Result, t3.Result, t4.Result);
     }
 
-    static async Task<(T1, T2, T3, T4, T5)> Combine<T1, T2, T3, T4, T5>(
+    private static async Task<(T1, T2, T3, T4, T5)> Combine<T1, T2, T3, T4, T5>(
         Task<T1> t1, Task<T2> t2, Task<T3> t3, Task<T4> t4, Task<T5> t5)
     {
         await Task.WhenAll(t1, t2, t3, t4, t5).ConfigureAwait(false);
         return (t1.Result, t2.Result, t3.Result, t4.Result, t5.Result);
     }
 
-    static async Task<(T1, T2, T3, T4, T5, T6)> Combine<T1, T2, T3, T4, T5, T6>(
+    private static async Task<(T1, T2, T3, T4, T5, T6)> Combine<T1, T2, T3, T4, T5, T6>(
         Task<T1> t1, Task<T2> t2, Task<T3> t3, Task<T4> t4, Task<T5> t5, Task<T6> t6)
     {
         await Task.WhenAll(t1, t2, t3, t4, t5, t6).ConfigureAwait(false);
         return (t1.Result, t2.Result, t3.Result, t4.Result, t5.Result, t6.Result);
     }
 
-    static async Task<(T1, T2, T3, T4, T5, T6, T7)> Combine<T1, T2, T3, T4, T5, T6, T7>(
+    private static async Task<(T1, T2, T3, T4, T5, T6, T7)> Combine<T1, T2, T3, T4, T5, T6, T7>(
         Task<T1> t1, Task<T2> t2, Task<T3> t3, Task<T4> t4, Task<T5> t5, Task<T6> t6, Task<T7> t7)
     {
         await Task.WhenAll(t1, t2, t3, t4, t5, t6, t7).ConfigureAwait(false);
         return (t1.Result, t2.Result, t3.Result, t4.Result, t5.Result, t6.Result, t7.Result);
     }
 
-    static async Task<(T1, T2, T3, T4, T5, T6, T7, T8)> Combine<T1, T2, T3, T4, T5, T6, T7, T8>(
+    private static async Task<(T1, T2, T3, T4, T5, T6, T7, T8)> Combine<T1, T2, T3, T4, T5, T6, T7, T8>(
         Task<T1> t1, Task<T2> t2, Task<T3> t3, Task<T4> t4, Task<T5> t5, Task<T6> t6, Task<T7> t7,
         Task<T8> t8)
     {

@@ -16,7 +16,7 @@ namespace PUnit.Mtp.Test;
 /// </summary>
 public class DiscoveryRequestTests
 {
-    static ScenarioNode Node(int index, string stepId, string template) => new()
+    private static ScenarioNode Node(int index, string stepId, string template) => new()
     {
         Index = index,
         StepId = stepId,
@@ -30,7 +30,7 @@ public class DiscoveryRequestTests
     };
 
     /// <summary>Registers a scenario under a unique method key and returns that key for cleanup.</summary>
-    static string RegisterScenario(string scenarioId, string display, params ScenarioNode[] nodes)
+    private static string RegisterScenario(string scenarioId, string display, params ScenarioNode[] nodes)
     {
         var method = $"PUnit.Mtp.Test.Generated.{scenarioId}_{Guid.NewGuid():N}";
         ScenarioRegistry.Register(method, () => new ScenarioDefinition
@@ -131,9 +131,9 @@ public class DiscoveryRequestTests
     /// Collects every <see cref="TestNodeUpdateMessage"/> published during discovery. The registry is
     /// process-global (other tests register their own scenarios), so helpers filter by scenario id.
     /// </summary>
-    sealed class RecordingMessageBus : IMessageBus
+    private sealed class RecordingMessageBus : IMessageBus
     {
-        readonly List<TestNodeUpdateMessage> updates = [];
+        private readonly List<TestNodeUpdateMessage> updates = [];
 
         public IReadOnlyList<TestNodeUpdateMessage> Updates
         {

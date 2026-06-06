@@ -62,7 +62,7 @@ public class ScenarioContextTests
         Assert.Equal(1000, ctx.Logs.Count);
     }
 
-    sealed class StubProvider(object value) : IServiceProvider
+    private sealed class StubProvider(object value) : IServiceProvider
     {
         public object? GetService(Type serviceType) => value;
     }

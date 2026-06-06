@@ -44,7 +44,7 @@ public class PUnitTestFramework :
     /// <summary>Stable extension UID for PUnit's MTP test framework.</summary>
     internal const string ExtensionUid = "punit.mtp.testframework";
 
-    readonly ConcurrentDictionary<string, byte> sessions = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, byte> sessions = new(StringComparer.Ordinal);
 
     /// <inheritdoc/>
     public string Uid => ExtensionUid;
@@ -232,7 +232,7 @@ public class PUnitTestFramework :
     /// no-op filter means "run all". Unknown filter kinds are rejected so a silent partial run can't
     /// masquerade as success.
     /// </summary>
-    static HashSet<string>? ReadUidFilter(ITestExecutionFilter? filter) => filter switch
+    private static HashSet<string>? ReadUidFilter(ITestExecutionFilter? filter) => filter switch
     {
         null => null,
 #pragma warning disable TPEXP // NopFilter is an experimental Microsoft.Testing.Platform API.
@@ -249,7 +249,7 @@ public class PUnitTestFramework :
     };
 
     /// <summary>Lowers every scenario registered in <see cref="ScenarioRegistry"/> to its definition.</summary>
-    static IEnumerable<ScenarioDefinition> EnumerateRegisteredScenarios()
+    private static IEnumerable<ScenarioDefinition> EnumerateRegisteredScenarios()
     {
         foreach (var methodName in ScenarioRegistry.RegisteredMethods)
         {
@@ -260,7 +260,7 @@ public class PUnitTestFramework :
         }
     }
 
-    void EnsureSession(SessionUid sessionUid, string requestKind)
+    private void EnsureSession(SessionUid sessionUid, string requestKind)
     {
         if (!sessions.ContainsKey(sessionUid.Value))
         {

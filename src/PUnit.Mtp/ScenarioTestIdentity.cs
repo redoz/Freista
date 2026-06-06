@@ -28,10 +28,10 @@ namespace PUnit.Mtp;
 /// </remarks>
 internal static class ScenarioTestIdentity
 {
-    static readonly string AssemblyFullName = Assembly.GetEntryAssembly()?.FullName ?? string.Empty;
+    private static readonly string AssemblyFullName = Assembly.GetEntryAssembly()?.FullName ?? string.Empty;
 
     /// <summary>The VSTest spelling of a <see langword="void"/> return type (matches xunit.v3's MTP bridge).</summary>
-    const string VoidReturnTypeName = "System.Void";
+    private const string VoidReturnTypeName = "System.Void";
 
     /// <summary>
     /// Builds the method-identity property for a scenario: namespace and type are derived from

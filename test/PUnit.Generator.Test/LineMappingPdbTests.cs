@@ -8,7 +8,7 @@ namespace PUnit.Generator.Test;
 
 public class LineMappingPdbTests(ITestOutputHelper output)
 {
-    const string Path = "Scenario.cs";
+    private const string Path = "Scenario.cs";
 
     [Fact]
     public void Generated_step_call_maps_to_original_invocation_span()
@@ -46,7 +46,7 @@ public class LineMappingPdbTests(ITestOutputHelper output)
         result.AssertCompiles();
     }
 
-    static (int startLine, int startCol, int endLine, int endCol) InvocationSpan(
+    private static (int startLine, int startCol, int endLine, int endCol) InvocationSpan(
         string source, string path, string receiver, string method)
     {
         var tree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview), path: path);

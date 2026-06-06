@@ -38,7 +38,7 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
         context.RegisterSyntaxNodeAction(AnalyzeMethod, SyntaxKind.MethodDeclaration);
     }
 
-    static void AnalyzeMethod(SyntaxNodeAnalysisContext context)
+    private static void AnalyzeMethod(SyntaxNodeAnalysisContext context)
     {
         try
         {
@@ -52,7 +52,7 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    static void AnalyzeMethodCore(SyntaxNodeAnalysisContext context)
+    private static void AnalyzeMethodCore(SyntaxNodeAnalysisContext context)
     {
         var method = (MethodDeclarationSyntax)context.Node;
         if (context.SemanticModel.GetDeclaredSymbol(method) is not IMethodSymbol symbol)
@@ -87,7 +87,7 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    static void AnalyzeStatement(
+    private static void AnalyzeStatement(
         SyntaxNodeAnalysisContext context,
         StatementSyntax statement,
         HashSet<ILocalSymbol> stepOutputs)
@@ -121,7 +121,7 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    static void AnalyzeLocalDeclaration(
+    private static void AnalyzeLocalDeclaration(
         SyntaxNodeAnalysisContext context,
         LocalDeclarationStatementSyntax local,
         HashSet<ILocalSymbol> stepOutputs)
@@ -141,7 +141,7 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    static void AnalyzeExpressionStatement(
+    private static void AnalyzeExpressionStatement(
         SyntaxNodeAnalysisContext context,
         ExpressionStatementSyntax statement,
         HashSet<ILocalSymbol> stepOutputs)
@@ -163,7 +163,7 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    static void AnalyzeAwaited(
+    private static void AnalyzeAwaited(
         SyntaxNodeAnalysisContext context,
         ExpressionSyntax awaited,
         HashSet<ILocalSymbol> stepOutputs)
@@ -201,7 +201,7 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    static void AnalyzeArrayElements(
+    private static void AnalyzeArrayElements(
         SyntaxNodeAnalysisContext context,
         InitializerExpressionSyntax? initializer,
         ExpressionSyntax awaited,
@@ -219,7 +219,7 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    static void AnalyzeGroupElement(
+    private static void AnalyzeGroupElement(
         SyntaxNodeAnalysisContext context,
         ExpressionSyntax element,
         HashSet<ILocalSymbol> stepOutputs)
@@ -234,7 +234,7 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    static void AnalyzeDslCall(
+    private static void AnalyzeDslCall(
         SyntaxNodeAnalysisContext context,
         InvocationExpressionSyntax invocation,
         HashSet<ILocalSymbol> stepOutputs,
@@ -274,7 +274,7 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    static void AnalyzeLinqArray(
+    private static void AnalyzeLinqArray(
         SyntaxNodeAnalysisContext context,
         InvocationExpressionSyntax toArray,
         HashSet<ILocalSymbol> stepOutputs)
@@ -311,7 +311,7 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
         Report(context, Descriptors.UnsupportedStatement, toArray.GetLocation());
     }
 
-    static void RecordDeconstructedLocals(
+    private static void RecordDeconstructedLocals(
         SyntaxNodeAnalysisContext context,
         ExpressionSyntax left,
         HashSet<ILocalSymbol> stepOutputs)
@@ -325,7 +325,7 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    static void AnalyzeStepName(SyntaxNodeAnalysisContext context, IMethodSymbol method)
+    private static void AnalyzeStepName(SyntaxNodeAnalysisContext context, IMethodSymbol method)
     {
         var attribute = method.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "StepNameAttribute");
         if (attribute is not { ConstructorArguments.Length: > 0 }
@@ -346,12 +346,12 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    static bool HasAttribute(IMethodSymbol method, string attributeName)
+    private static bool HasAttribute(IMethodSymbol method, string attributeName)
         => method.GetAttributes().Any(a =>
             a.AttributeClass?.Name == attributeName
             && a.AttributeClass.ContainingNamespace?.ToDisplayString(SymbolHelpers.NoGlobal) == "PUnit");
 
-    static void Report(
+    private static void Report(
         SyntaxNodeAnalysisContext context,
         DiagnosticDescriptor descriptor,
         Location location,

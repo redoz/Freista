@@ -6,7 +6,7 @@ namespace PUnit.Generator.Test;
 /// <summary>A linear scenario lowers into a source-order + dataflow dependency chain that runs.</summary>
 public class LinearLoweringTests
 {
-    static GeneratorResult Generate() =>
+    private static GeneratorResult Generate() =>
         GeneratorHarness.Run(SampleSources.Dsl + SampleSources.LinearScenario);
 
     [Fact]

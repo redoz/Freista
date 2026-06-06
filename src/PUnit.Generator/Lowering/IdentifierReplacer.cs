@@ -14,8 +14,8 @@ namespace PUnit.Generator.Lowering;
 /// </summary>
 internal sealed class IdentifierReplacer : CSharpSyntaxRewriter
 {
-    readonly Dictionary<string, string> _map;
-    readonly HashSet<string> _shadowed = [];
+    private readonly Dictionary<string, string> _map;
+    private readonly HashSet<string> _shadowed = [];
 
     public IdentifierReplacer(Dictionary<string, string> map) => _map = map;
 
@@ -43,7 +43,7 @@ internal sealed class IdentifierReplacer : CSharpSyntaxRewriter
             : base.VisitIdentifierName(node);
     }
 
-    SyntaxNode? WithShadow(IEnumerable<string> names, Func<SyntaxNode?> visit)
+    private SyntaxNode? WithShadow(IEnumerable<string> names, Func<SyntaxNode?> visit)
     {
         var added = names.Where(_shadowed.Add).ToList();
         try

@@ -175,7 +175,7 @@ public static class PUnitTestFrameworkTests
     /// A subclass that records which handler the dispatch routed to without running real
     /// discovery/execution (those land in later phases). Lets the dispatch test observe routing.
     /// </summary>
-    sealed class RecordingTestFramework : PUnitTestFramework
+    private sealed class RecordingTestFramework : PUnitTestFramework
     {
         public int DiscoverCalls { get; private set; }
         public int ExecuteCalls { get; private set; }
@@ -208,7 +208,7 @@ public static class PUnitTestFrameworkTests
         }
     }
 
-    sealed class SpyMessageBus : IMessageBus
+    private sealed class SpyMessageBus : IMessageBus
     {
         public List<IData> Published { get; } = [];
 
@@ -226,11 +226,11 @@ public static class PUnitTestFrameworkTests
     /// constructor — so we reach it via reflection. This mirrors what the platform host does at
     /// runtime; the framework code under test never constructs these itself.
     /// </summary>
-    static class MtpContextFactory
+    private static class MtpContextFactory
     {
-        static readonly Assembly Mtp = typeof(ITestExecutionFilter).Assembly;
+        private static readonly Assembly Mtp = typeof(ITestExecutionFilter).Assembly;
 
-        static TestSessionContext SessionContext(SessionUid uid)
+        private static TestSessionContext SessionContext(SessionUid uid)
         {
             var clientInfoType = Mtp.GetType("Microsoft.Testing.Platform.TestHost.ClientInfo")!;
             var client = Activator.CreateInstance(
@@ -265,7 +265,7 @@ public static class PUnitTestFrameworkTests
             CancellationToken cancellationToken)
             => new(request, messageBus, new CompletionNotifier(onComplete), cancellationToken);
 
-        sealed class CompletionNotifier(Action onComplete) : IExecuteRequestCompletionNotifier
+        private sealed class CompletionNotifier(Action onComplete) : IExecuteRequestCompletionNotifier
         {
             public void Complete() => onComplete();
         }

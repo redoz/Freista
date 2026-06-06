@@ -14,8 +14,8 @@ namespace PUnit.Mtp;
 /// </summary>
 internal static class NodeDiagnostics
 {
-    static readonly string? Sink = Environment.GetEnvironmentVariable("PUNIT_NODE_DEBUG");
-    static readonly object FileLock = new();
+    private static readonly string? Sink = Environment.GetEnvironmentVariable("PUNIT_NODE_DEBUG");
+    private static readonly object FileLock = new();
 
     /// <summary>Whether tracing is enabled (the <c>PUNIT_NODE_DEBUG</c> environment variable is set).</summary>
     public static bool Enabled => !string.IsNullOrEmpty(Sink);
@@ -31,7 +31,7 @@ internal static class NodeDiagnostics
         Write(Describe(phase, node));
     }
 
-    static string Describe(string phase, TestNode node)
+    private static string Describe(string phase, TestNode node)
     {
         var state = node.Properties.OfType<TestNodeStateProperty>().FirstOrDefault()?.GetType().Name ?? "(none)";
 
@@ -55,7 +55,7 @@ internal static class NodeDiagnostics
         return builder.ToString();
     }
 
-    static void Write(string line)
+    private static void Write(string line)
     {
         if (string.Equals(Sink, "1", StringComparison.Ordinal)
             || string.Equals(Sink, "stderr", StringComparison.OrdinalIgnoreCase)

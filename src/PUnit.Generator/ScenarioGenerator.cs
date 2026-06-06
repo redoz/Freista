@@ -89,7 +89,7 @@ public sealed class ScenarioGenerator : IIncrementalGenerator
         });
     }
 
-    static bool ShouldGenerateProgram(AnalyzerConfigOptionsProvider provider)
+    private static bool ShouldGenerateProgram(AnalyzerConfigOptionsProvider provider)
     {
         // Default true: emit unless the consumer explicitly opts out with PUnitGenerateProgram=false.
         if (provider.GlobalOptions.TryGetValue("build_property.PUnitGenerateProgram", out var value)
@@ -101,7 +101,7 @@ public sealed class ScenarioGenerator : IIncrementalGenerator
         return true;
     }
 
-    static ScenarioResult? Transform(GeneratorAttributeSyntaxContext ctx)
+    private static ScenarioResult? Transform(GeneratorAttributeSyntaxContext ctx)
     {
         if (ctx.TargetSymbol is not IMethodSymbol method || ctx.TargetNode is not MethodDeclarationSyntax syntax)
         {
@@ -117,7 +117,7 @@ public sealed class ScenarioGenerator : IIncrementalGenerator
 
     /// <summary>A 1-based file/line location for a diagnostic, or <see cref="Location.None"/> when the
     /// input had no path.</summary>
-    static Location MakeLocation(string? file, int line)
+    private static Location MakeLocation(string? file, int line)
     {
         if (string.IsNullOrEmpty(file) || line <= 0)
         {

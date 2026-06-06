@@ -12,7 +12,7 @@ namespace PUnit.Mtp.Test;
 /// </summary>
 public class ScenarioStepNumberingTests
 {
-    static ScenarioNode Node(int index, string? group = null) => new()
+    private static ScenarioNode Node(int index, string? group = null) => new()
     {
         Index = index,
         StepId = "s" + index,
@@ -24,7 +24,7 @@ public class ScenarioStepNumberingTests
         Invoke = (_, _) => Task.FromResult<object?>(null),
     };
 
-    static ScenarioDefinition Def(params ScenarioNode[] nodes) => new()
+    private static ScenarioDefinition Def(params ScenarioNode[] nodes) => new()
     {
         ScenarioId = "scn",
         DisplayName = "scenario",

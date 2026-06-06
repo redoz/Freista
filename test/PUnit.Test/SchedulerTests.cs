@@ -11,9 +11,9 @@ namespace PUnit.Test;
 /// </summary>
 public class SchedulerTests
 {
-    static readonly TimeSpan Generous = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan Generous = TimeSpan.FromSeconds(10);
 
-    static ScenarioNode Node(
+    private static ScenarioNode Node(
         int index,
         Func<IStepInputs, ScenarioContext, Task<object?>> invoke,
         int[]? dependsOn = null,
@@ -29,7 +29,7 @@ public class SchedulerTests
         Invoke = invoke,
     };
 
-    static ScenarioDefinition Def(params ScenarioNode[] nodes) => new()
+    private static ScenarioDefinition Def(params ScenarioNode[] nodes) => new()
     {
         ScenarioId = "scn",
         DisplayName = "scenario",
@@ -37,10 +37,10 @@ public class SchedulerTests
         Nodes = nodes,
     };
 
-    static Func<IStepInputs, ScenarioContext, Task<object?>> Pass(object? output = null)
+    private static Func<IStepInputs, ScenarioContext, Task<object?>> Pass(object? output = null)
         => (_, _) => Task.FromResult(output);
 
-    static async Task<T> WithTimeout<T>(Task<T> task)
+    private static async Task<T> WithTimeout<T>(Task<T> task)
     {
         var done = await Task.WhenAny(task, Task.Delay(Generous));
         Assert.True(done == task, "operation did not complete within the test timeout");
@@ -262,9 +262,9 @@ public class SchedulerTests
             () => new ScenarioScheduler().RunAsync(def));
     }
 
-    sealed class RecordingObserver : IStepObserver
+    private sealed class RecordingObserver : IStepObserver
     {
-        readonly object _sync = new();
+        private readonly object _sync = new();
         public List<(ScenarioNode Node, string Name)> Started { get; } = [];
         public List<StepResult> Finished { get; } = [];
 
