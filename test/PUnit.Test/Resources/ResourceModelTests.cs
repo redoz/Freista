@@ -41,4 +41,8 @@ public class ResourceModelTests
     [Fact]
     public void Static_abstract_KeyFor_is_callable_through_the_interface()
         => Assert.Equal(new ResourceKey("jane@x"), User.KeyFor(new User("jane@x")));
+
+    [Fact]
+    public void ResourceIdentity_ToString_renders_as_TypeName_colon_Key()
+        => Assert.Equal("User:jane@x", new ResourceIdentity(typeof(User), "jane@x").ToString());
 }

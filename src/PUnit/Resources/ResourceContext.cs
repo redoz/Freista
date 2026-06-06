@@ -1,7 +1,5 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using PUnit.Model;
 
@@ -10,13 +8,17 @@ namespace PUnit;
 /// <summary>
 /// The imperative resource surface hanging off <see cref="ScenarioContext.Resources"/>. In C1 it is a
 /// pure tracer: each lifecycle verb resolves the resource's identity and records a
-/// <see cref="ResourceEffect"/> for the report's resource lane — no locking yet (that arrives in C2,
-/// when the verbs also park a token in the scenario scope). The API is async end to end so call sites
+/// <see cref="ResourceEffect"/> for the report's resource lane — no cross-step contention locking yet
+/// (that arrives in C2, when verbs park a token in the scenario scope); the lock here is solely for
+/// per-step dedup correctness. The API is async end to end so call sites
 /// (<c>await ctx.Resources.Create(user)</c>) stay stable across phases.
 /// </summary>
 public sealed class ResourceContext
 {
-    readonly ConcurrentQueue<ResourceEffect> _effects = new();
+    readonly object _lock = new();
+    // Effects in first-seen order; _index maps identity → its position in _effects.
+    readonly List<ResourceEffect> _effects = [];
+    readonly Dictionary<ResourceIdentity, int> _index = [];
     readonly ResourceIdentityResolver _resolver;
     readonly TimeProvider _timeProvider;
     readonly string _stepId;
@@ -37,8 +39,11 @@ public sealed class ResourceContext
         _timeProvider = timeProvider;
     }
 
-    /// <summary>Effects recorded by this step's verbs, in call order.</summary>
-    public IReadOnlyList<ResourceEffect> Effects => _effects.ToArray();
+    /// <summary>Effects recorded by this step's verbs, in first-seen order (one per identity).</summary>
+    public IReadOnlyList<ResourceEffect> Effects
+    {
+        get { lock (_lock) { return _effects.ToArray(); } }
+    }
 
     /// <summary>
     /// Registers a key selector for <typeparamref name="T"/> (resolver chain link 2), for resource
@@ -55,6 +60,11 @@ public sealed class ResourceContext
     public ValueTask Load<T>(ResourceKey key)
         where T : notnull
         => Record(LifecycleVerb.Load, new ResourceIdentity(typeof(T), key), data: null);
+
+    /// <summary>Records fetching an existing resource instance (shared, with data snapshot).</summary>
+    public ValueTask Load<T>(T resource)
+        where T : notnull
+        => Record(LifecycleVerb.Load, _resolver.Resolve(resource), resource);
 
     /// <summary>Records a shared use of an in-scope <paramref name="resource"/>.</summary>
     public ValueTask Read<T>(T resource)
@@ -73,15 +83,31 @@ public sealed class ResourceContext
 
     ValueTask Record(LifecycleVerb verb, ResourceIdentity identity, object? data)
     {
-        _effects.Enqueue(new ResourceEffect
+        lock (_lock)
         {
-            Verb = verb,
-            Identity = identity,
-            Data = data,
-            StepId = _stepId,
-            StepDisplayName = _stepDisplayName,
-            Timestamp = _timeProvider.GetUtcNow(),
-        });
+            if (_index.TryGetValue(identity, out int idx))
+            {
+                // Dedup: keep the stronger verb; use latest non-null data.
+                // Timestamp/StepId/StepDisplayName are intentionally preserved from the first-seen touch
+                // so later same-step calls don't reset the clock.
+                ResourceEffect existing = _effects[idx];
+                LifecycleVerb stronger = verb.Precedence() > existing.Verb.Precedence() ? verb : existing.Verb;
+                _effects[idx] = existing with { Verb = stronger, Data = data ?? existing.Data };
+            }
+            else
+            {
+                _index[identity] = _effects.Count;
+                _effects.Add(new ResourceEffect
+                {
+                    Verb = verb,
+                    Identity = identity,
+                    Data = data,
+                    StepId = _stepId,
+                    StepDisplayName = _stepDisplayName,
+                    Timestamp = _timeProvider.GetUtcNow(),
+                });
+            }
+        }
         return ValueTask.CompletedTask;
     }
 }

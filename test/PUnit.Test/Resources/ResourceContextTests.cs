@@ -49,7 +49,7 @@ public class ResourceContextTests
     }
 
     [Fact]
-    public async Task Read_Edit_Delete_record_their_verbs_and_carry_the_instance()
+    public async Task Same_identity_dedups_to_the_strongest_verb()
     {
         var ctx = NewContext(out _);
         var user = new User("admin@acme.com");
@@ -58,12 +58,28 @@ public class ResourceContextTests
         await ctx.Edit(user with { Suspended = true });
         await ctx.Delete(user);
 
-        Assert.Equal(
-            new[] { LifecycleVerb.Read, LifecycleVerb.Edit, LifecycleVerb.Delete },
-            ctx.Effects.Select(e => e.Verb));
-        Assert.All(ctx.Effects, e => Assert.NotNull(e.Data));
-        // with-edited record keeps its key, so all three target the same identity.
-        Assert.Single(ctx.Effects.Select(e => e.Identity).Distinct());
+        // All three touches have the same identity — dedup collapses to a single effect.
+        var effect = Assert.Single(ctx.Effects);
+        Assert.Equal(LifecycleVerb.Delete, effect.Verb);
+        Assert.Equal(LockMode.Exclusive, effect.Mode);
+        Assert.Equal(new ResourceIdentity(typeof(User), "admin@acme.com"), effect.Identity);
+        Assert.NotNull(effect.Data);
+    }
+
+    [Fact]
+    public async Task Dedup_keeps_latest_nonnull_data()
+    {
+        var ctx = NewContext(out _);
+        var user = new User("admin@acme.com");
+        var suspended = user with { Suspended = true };
+
+        await ctx.Read(user);
+        await ctx.Edit(suspended);
+
+        var effect = Assert.Single(ctx.Effects);
+        Assert.Equal(LifecycleVerb.Edit, effect.Verb);
+        // The Edit data (suspended copy) replaces the Read data — proven by reference identity.
+        Assert.Same(suspended, effect.Data);
     }
 
     [Fact]
@@ -77,6 +93,21 @@ public class ResourceContextTests
         Assert.Equal(
             new[] { LifecycleVerb.Create, LifecycleVerb.Load },
             ctx.Effects.Select(e => e.Verb));
+    }
+
+    [Fact]
+    public async Task Load_instance_overload_records_a_shared_effect_with_resolved_identity_and_data()
+    {
+        var ctx = NewContext(out _);
+        var user = new User("jane@acme.com");
+
+        await ctx.Load(user);
+
+        var effect = Assert.Single(ctx.Effects);
+        Assert.Equal(LifecycleVerb.Load, effect.Verb);
+        Assert.Equal(LockMode.Shared, effect.Mode);
+        Assert.Equal(new ResourceIdentity(typeof(User), "jane@acme.com"), effect.Identity);
+        Assert.NotNull(effect.Data);
     }
 
     sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
