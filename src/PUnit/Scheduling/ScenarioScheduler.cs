@@ -231,6 +231,7 @@ public sealed class ScenarioScheduler
                     Duration = stopwatch.Elapsed,
                     Logs = context.Logs,
                     Attachments = context.Attachments,
+                    Effects = context.Resources.Effects,
                 },
                 output);
         }
@@ -257,6 +258,7 @@ public sealed class ScenarioScheduler
                     SkipReason = skipReason,
                     Logs = context.Logs,
                     Attachments = context.Attachments,
+                    Effects = context.Resources.Effects,
                 },
                 null);
     }

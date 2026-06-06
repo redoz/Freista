@@ -27,4 +27,7 @@ public sealed class StepResult
     /// <summary>Attachments collected during the step.</summary>
     public IReadOnlyDictionary<string, string> Attachments { get; init; } =
         new Dictionary<string, string>();
+
+    /// <summary>Resource effects (lifecycle acquires) the step recorded, in call order.</summary>
+    public IReadOnlyList<ResourceEffect> Effects { get; init; } = [];
 }
