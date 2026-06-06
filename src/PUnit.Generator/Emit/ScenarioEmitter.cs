@@ -211,44 +211,52 @@ internal static class ScenarioEmitter
     }
 
     /// <summary>
-    /// Builds: <c>static async (__inputs, __ctx) => { var __r = await CALL; return (object?)__r; }</c>
-    /// or:     <c>static async (__inputs, __ctx) => { await CALL; return (object?)null; }</c>
+    /// Builds: <c>static async (__inputs, __ctx) => { var __r = await CALL; [resource calls] return (object?)__r; }</c>
+    /// or:     <c>static async (__inputs, __ctx) => { await CALL; [resource calls] return (object?)null; }</c>
+    /// The line-mapped CALL statement stays FIRST; any <c>ctx.Resources.*</c> calls are inserted AFTER
+    /// it with hidden trivia (so they don't perturb the call's source mapping); the return stays last.
+    /// When the step has no resource roles, the body is byte-identical to the role-free output.
     /// </summary>
     private static ParenthesizedLambdaExpressionSyntax BuildInvokeLambda(ParsedStep step)
     {
         var callExpr = ParseExpression(step.InvokeCallText);
         var awaitExpr = AwaitExpression(callExpr);
 
-        List<StatementSyntax> bodyStatements;
+        StatementSyntax callStmt;
+        StatementSyntax returnStmt;
         if (step.HasResult)
         {
             // var __r = await CALL;
-            var varDecl = LocalDeclarationStatement(
+            callStmt = LocalDeclarationStatement(
                 VariableDeclaration(IdentifierName("var"))
                     .WithVariables(SingletonSeparatedList(
                         VariableDeclarator(Identifier("__r"))
                             .WithInitializer(EqualsValueClause(awaitExpr)))))
                 .WithLeadingTrivia(LineMappedTrivia(step));
             // return (object?)__r;
-            var returnStmt = ReturnStatement(
+            returnStmt = ReturnStatement(
                 CastExpression(
                     NullableType(PredefinedType(Token(SyntaxKind.ObjectKeyword))),
                     IdentifierName("__r")))
                 .WithLeadingTrivia(HiddenTrivia());
-            bodyStatements = new List<StatementSyntax> { varDecl, returnStmt };
         }
         else
         {
             // await CALL;
-            var awaitStmt = ExpressionStatement(awaitExpr).WithLeadingTrivia(LineMappedTrivia(step));
+            callStmt = ExpressionStatement(awaitExpr).WithLeadingTrivia(LineMappedTrivia(step));
             // return (object?)null;
-            var returnStmt = ReturnStatement(
+            returnStmt = ReturnStatement(
                 CastExpression(
                     NullableType(PredefinedType(Token(SyntaxKind.ObjectKeyword))),
                     LiteralExpression(SyntaxKind.NullLiteralExpression)))
                 .WithLeadingTrivia(HiddenTrivia());
-            bodyStatements = new List<StatementSyntax> { awaitStmt, returnStmt };
         }
+
+        // No roles ⇒ [callStmt, returnStmt], identical to the prior output. Roles ⇒ the resource
+        // calls slot in between, each carrying its own hidden-line directive.
+        var bodyStatements = new List<StatementSyntax> { callStmt };
+        bodyStatements.AddRange(step.ResourceClaims.Select(ResourceCallStatement));
+        bodyStatements.Add(returnStmt);
 
         return ParenthesizedLambdaExpression()
             .WithModifiers(TokenList(Token(SyntaxKind.StaticKeyword), Token(SyntaxKind.AsyncKeyword)))
@@ -258,6 +266,28 @@ internal static class ScenarioEmitter
                 Parameter(Identifier("__ctx")),
             })))
             .WithBlock(Block(bodyStatements));
+    }
+
+    /// <summary>
+    /// Builds <c>await __ctx.Resources.{Verb}({Expression});</c> as a hidden-trivia expression
+    /// statement, e.g. <c>await __ctx.Resources.Edit(__r);</c>. The verb is the runtime
+    /// <c>ResourceContext</c> method name; the expression is the parameter argument (in terms of
+    /// <c>__inputs</c>) or <c>__r</c> for a return role.
+    /// </summary>
+    private static StatementSyntax ResourceCallStatement(ResourceRoleClaim claim)
+    {
+        var call = InvocationExpression(
+            MemberAccessExpression(
+                SyntaxKind.SimpleMemberAccessExpression,
+                MemberAccessExpression(
+                    SyntaxKind.SimpleMemberAccessExpression,
+                    IdentifierName("__ctx"),
+                    IdentifierName("Resources")),
+                IdentifierName(claim.Verb)))
+            .WithArgumentList(ArgumentList(SingletonSeparatedList(
+                Argument(ParseExpression(claim.Expression)))));
+
+        return ExpressionStatement(AwaitExpression(call)).WithLeadingTrivia(HiddenTrivia());
     }
 
     private static SyntaxTriviaList HiddenTrivia()

@@ -352,6 +352,7 @@ internal sealed class ScenarioParser
         var replacements = BuildReplacements();
         var wantsCtx = SymbolHelpers.WantsContext(method, invocation.ArgumentList.Arguments.Count);
         var callText = BuildCallText(invocation, member, replacements, wantsCtx);
+        var resourceClaims = BuildResourceClaims(invocation, method, resultType is not null, replacements);
 
         var (template, formatExpr) = DisplayNameBuilder.Build(_model, method, invocation.ArgumentList.Arguments, replacements);
 
@@ -372,6 +373,7 @@ internal sealed class ScenarioParser
             SourceLine = line,
             CallSpan = SpanOf(invocation),
             DependsOn = [.. deps],
+            ResourceClaims = resourceClaims,
         };
 
         _steps.Add(step);
@@ -439,6 +441,77 @@ internal sealed class ScenarioParser
         }
 
         return $"{receiver}.{name}({string.Join(", ", args)})";
+    }
+
+    /// <summary>
+    /// Lowers the method's resource role attributes into <see cref="ResourceRoleClaim"/>s: one per
+    /// role-bearing parameter (its rewritten argument expression), then one for a return role when the
+    /// step yields a value (using <c>__r</c>). Argument expressions are rewritten with the SAME
+    /// replacements as the call text, so step-output locals become <c>__inputs.Get&lt;…&gt;(i)</c>.
+    /// Empty when the method declares no roles ⇒ the emitter inserts nothing.
+    /// </summary>
+    private static List<ResourceRoleClaim> BuildResourceClaims(
+        InvocationExpressionSyntax invocation,
+        IMethodSymbol method,
+        bool hasResult,
+        Dictionary<string, string> replacements)
+    {
+        var claims = new List<ResourceRoleClaim>();
+        var rewriter = new IdentifierReplacer(replacements);
+        var arguments = invocation.ArgumentList.Arguments;
+
+        for (var p = 0; p < method.Parameters.Length; p++)
+        {
+            var parameter = method.Parameters[p];
+            var role = AttributeReader.ParameterRole(parameter);
+            if (role is null)
+            {
+                continue;
+            }
+
+            var argument = FindArgument(arguments, parameter.Name, p);
+            if (argument is null)
+            {
+                // No supplied argument. The trailing-ScenarioContext case is correct (nothing to claim).
+                // The omitted-optional case (a declared role on a defaulted param that the call left out)
+                // is a deliberate, known gap: the role silently vanishes. Diagnosing it is intentionally
+                // deferred to PUNIT009 (Task 9); a future reader should not treat this skip as a bug.
+                continue;
+            }
+
+            var expression = ((ExpressionSyntax)rewriter.Visit(argument.Expression)).ToFullString().Trim();
+            claims.Add(new ResourceRoleClaim(role, expression, IsReturn: false));
+        }
+
+        if (hasResult && AttributeReader.ReturnRole(method) is { } returnRole)
+        {
+            claims.Add(new ResourceRoleClaim(returnRole, "__r", IsReturn: true));
+        }
+
+        return claims;
+    }
+
+    /// <summary>
+    /// Finds the argument bound to the parameter at <paramref name="position"/>: a named argument
+    /// (<c>name: value</c>) matching <paramref name="parameterName"/> if present, else the positional
+    /// argument at that index. Null when neither exists (e.g. an omitted optional parameter).
+    /// </summary>
+    private static ArgumentSyntax? FindArgument(
+        SeparatedSyntaxList<ArgumentSyntax> arguments,
+        string parameterName,
+        int position)
+    {
+        foreach (var argument in arguments)
+        {
+            if (argument.NameColon?.Name.Identifier.Text == parameterName)
+            {
+                return argument;
+            }
+        }
+
+        return position < arguments.Count && arguments[position].NameColon is null
+            ? arguments[position]
+            : null;
     }
 
     // The emitter dedupes the merged using set, so no need to dedupe here.

@@ -7,6 +7,14 @@ namespace PUnit.Generator.Lowering;
 internal readonly record struct SourceSpan(
     string File, int StartLine, int StartChar, int EndLine, int EndChar);
 
+/// <summary>
+/// A single resource role lowered from a <c>[Creates]/[Loads]/[Reads]/[Edits]/[Deletes]</c> attribute
+/// on a step's parameter or return value. <see cref="Verb"/> is the runtime <c>ResourceContext</c>
+/// method name (Read/Load/Create/Edit/Delete); <see cref="Expression"/> is the rewritten argument
+/// expression (in terms of <c>__inputs</c>) for a parameter role, or <c>__r</c> for a return role.
+/// </summary>
+internal readonly record struct ResourceRoleClaim(string Verb, string Expression, bool IsReturn);
+
 /// <summary>A lowered scenario ready for emission.</summary>
 internal sealed record ParsedScenario
 {
@@ -57,4 +65,10 @@ internal sealed record ParsedStep
     /// runtime display-name formatter; null when the display name is fully constant.
     /// </summary>
     public string? FormatExpression { get; init; }
+
+    /// <summary>
+    /// Resource roles lowered from the step's role attributes, in declaration order (parameter roles
+    /// first, then a return role). Empty when the step declares no roles ⇒ the emitter inserts nothing.
+    /// </summary>
+    public IReadOnlyList<ResourceRoleClaim> ResourceClaims { get; init; } = [];
 }
