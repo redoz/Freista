@@ -29,6 +29,7 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
         Descriptors.InvalidGroupElement,
         Descriptors.InvalidArgument,
         Descriptors.UnboundPlaceholder,
+        Descriptors.MissingResourceRole,
     ];
 
     public override void Initialize(AnalysisContext context)
@@ -63,6 +64,7 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
         if (HasAttribute(symbol, "StepNameAttribute"))
         {
             AnalyzeStepName(context, symbol);
+            AnalyzeStepResources(context, symbol);
         }
 
         if (!HasAttribute(symbol, "ScenarioAttribute"))
@@ -345,6 +347,40 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
             }
         }
     }
+
+    private static void AnalyzeStepResources(SyntaxNodeAnalysisContext context, IMethodSymbol method)
+    {
+        foreach (var parameter in method.Parameters)
+        {
+            if (IsResourceType(parameter.Type) && AttributeReader.ParameterRole(parameter) is null)
+            {
+                var location = parameter.Locations.FirstOrDefault() ?? method.Locations.FirstOrDefault() ?? Location.None;
+                context.ReportDiagnostic(Diagnostic.Create(
+                    Descriptors.MissingResourceRole, location, "parameter", parameter.Name));
+            }
+        }
+
+        if (SymbolHelpers.TryUnwrapReturn(method.ReturnType, out var resultType)
+            && resultType is not null
+            && IsResourceType(resultType)
+            && AttributeReader.ReturnRole(method) is null)
+        {
+            var location = method.Locations.FirstOrDefault() ?? Location.None;
+            context.ReportDiagnostic(Diagnostic.Create(
+                Descriptors.MissingResourceRole, location, "return", method.Name));
+        }
+    }
+
+    /// <summary>
+    /// True when <paramref name="type"/> participates in the resource model — i.e. it implements
+    /// <c>PUnit.IResource&lt;TSelf&gt;</c> (arity 1) or <c>PUnit.IResourceIdentity</c>. A trailing
+    /// <c>PUnit.ScenarioContext</c> param is naturally excluded; so is <c>ISingletonResource&lt;&gt;</c>,
+    /// which does not implement <c>IResource&lt;&gt;</c>.
+    /// </summary>
+    private static bool IsResourceType(ITypeSymbol type)
+        => type.AllInterfaces.Any(i =>
+            i.ContainingNamespace?.ToDisplayString(SymbolHelpers.NoGlobal) == "PUnit"
+            && ((i.Name == "IResource" && i.Arity == 1) || i.Name == "IResourceIdentity"));
 
     private static bool HasAttribute(IMethodSymbol method, string attributeName)
         => method.GetAttributes().Any(a =>

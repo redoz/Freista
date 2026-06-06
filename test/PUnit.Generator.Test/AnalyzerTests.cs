@@ -183,4 +183,87 @@ public class AnalyzerTests
 
         AssertHas(await GeneratorHarness.AnalyzeAsync(source), "PUNIT008");
     }
+
+    [Fact]
+    public void PUNIT009_is_a_supported_diagnostic()
+    {
+        var analyzer = new PUnit.Generator.Analysis.ScenarioAnalyzer();
+
+        Assert.Contains(analyzer.SupportedDiagnostics, d => d.Id == "PUNIT009");
+    }
+
+    [Fact]
+    public async Task PUNIT009_unannotated_resource_parameter()
+    {
+        // A resource-typed parameter with no [Reads]/[Edits]/[Deletes] role — there is no default.
+        var source =
+            """
+            using System.Threading.Tasks;
+            using PUnit;
+            namespace Bad;
+            public sealed record User(string Email) : IResource<User>
+            {
+                public static ResourceKey KeyFor(User instance) => instance.Email;
+            }
+            public static class BadDsl
+            {
+                extension(When)
+                {
+                    [StepName("suspending the user")]
+                    public static async Task Suspend(User user) { await Task.Yield(); }
+                }
+            }
+            """;
+
+        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "PUNIT009");
+    }
+
+    [Fact]
+    public async Task PUNIT009_unannotated_resource_return()
+    {
+        // A resource-typed return with no return role — there is no default.
+        var source =
+            """
+            using System.Threading.Tasks;
+            using PUnit;
+            namespace Bad;
+            public sealed record User(string Email) : IResource<User>
+            {
+                public static ResourceKey KeyFor(User instance) => instance.Email;
+            }
+            public static class BadDsl
+            {
+                extension(Given)
+                {
+                    [StepName("a user exists")]
+                    public static async Task<User> AUser()
+                    {
+                        await Task.Yield();
+                        return new User("jane@acme.com");
+                    }
+                }
+            }
+            """;
+
+        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "PUNIT009");
+    }
+
+    [Fact]
+    public async Task PUNIT009_clean_when_roles_are_declared()
+    {
+        // Every resource param/return in the resource DSL carries a role attribute.
+        var diagnostics = await GeneratorHarness.AnalyzeAsync(
+            SampleSources.ResourceDsl + SampleSources.ResourceScenario);
+
+        Assert.DoesNotContain(diagnostics, d => d.Id == "PUNIT009");
+    }
+
+    [Fact]
+    public async Task PUNIT009_does_not_fire_on_non_resource_types()
+    {
+        // Plain records carry no resource interface, so role-free params/returns are fine.
+        var diagnostics = await Analyze(SampleSources.LinearScenario);
+
+        Assert.DoesNotContain(diagnostics, d => d.Id == "PUNIT009");
+    }
 }

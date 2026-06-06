@@ -78,4 +78,12 @@ internal static class Descriptors
         Category,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor MissingResourceRole = new(
+        "PUNIT009",
+        "Resource access must be declared",
+        "Resource-typed {0} '{1}' must declare its access: [Reads], [Edits], or [Deletes] on a parameter, or [Creates], [Loads], or [Edits] on the return — there is no default",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }
