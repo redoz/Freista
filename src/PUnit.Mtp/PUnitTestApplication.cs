@@ -38,7 +38,7 @@ public static class PUnitTestApplication
 
         builder.RegisterTestFramework(
             _ => new TestFrameworkCapabilities(),
-            (_, _) => new PUnitTestFramework());
+            (_, serviceProvider) => new PUnitTestFramework(serviceProvider));
 
         using var app = await builder.BuildAsync().ConfigureAwait(false);
         return await app.RunAsync().ConfigureAwait(false);

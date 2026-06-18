@@ -3,6 +3,7 @@ using Microsoft.Testing.Platform.Extensions.Messages;
 using Microsoft.Testing.Platform.Messages;
 using Microsoft.Testing.Platform.TestHost;
 using PUnit.Model;
+using PUnit.Reporting;
 using PUnit.Scheduling;
 using Xunit;
 
@@ -12,10 +13,10 @@ namespace PUnit.Mtp.Test;
 /// Phase 5 behavioral tests for the run loop. On a run request the loop reads the filter
 /// (a <c>TestNodeUidListFilter</c> uid set, or null = run everything), maps each requested step-uid
 /// onto its owning scenario, and runs each <em>distinct</em> scenario exactly once via the
-/// <see cref="ScenarioScheduler"/> with the Phase-4 reporter and a per-run
-/// <see cref="CancellationTokenSource"/> owned by the loop. Because MTP's publish path has no
-/// filter/lifecycle gate, every step the scheduler executes lights up — including the dependency
-/// siblings of a single-step run.
+/// <see cref="ScenarioScheduler"/> with the Phase-3 <see cref="MtpReportSink"/> and a per-run
+/// <see cref="CancellationTokenSource"/> owned by the loop. Because the sink fans events out to all
+/// subscribers, every step the scheduler executes lights up — including the dependency siblings of a
+/// single-step run.
 /// </summary>
 public class RunLoopTests
 {
@@ -46,6 +47,9 @@ public class RunLoopTests
     };
 
     private static string Uid(string scenarioId, string stepId) => scenarioId + ":" + stepId;
+
+    private static string PassedUid(StepFinished e) =>
+        PUnitDiscoverer.MakeUid(e.Definition.ScenarioId, e.Result.Node.StepId);
 
     // -- Scenario selection (filter -> distinct scenarios) ---------------------------------------
 
@@ -110,10 +114,11 @@ public class RunLoopTests
         var runs = 0;
         var loop = new PUnitRunLoop(
             () => [def],
-            runScenario: (_, _, _) => { Interlocked.Increment(ref runs); return Task.CompletedTask; });
+            runScenario: (_, _, _) => { Interlocked.Increment(ref runs); return Task.FromResult<IReadOnlyList<StepResult>>([]); });
 
         var uids = new HashSet<string>([Uid("a", "x"), Uid("a", "z")], StringComparer.OrdinalIgnoreCase);
-        await loop.RunAsync(new SessionUid("s"), uids, new RecordingBus(), new StubProducer(), CancellationToken.None);
+        var sink = new RecordingSink();
+        await loop.RunAsync(uids, sink, CancellationToken.None);
 
         Assert.Equal(1, runs);
     }
@@ -130,14 +135,14 @@ public class RunLoopTests
 
         var loop = new PUnitRunLoop(() => [def]);
 
-        var bus = new RecordingBus();
+        var sink = new RecordingSink();
         var uids = new HashSet<string>([Uid("chain", "z")], StringComparer.OrdinalIgnoreCase);
-        await loop.RunAsync(new SessionUid("s"), uids, bus, new StubProducer(), CancellationToken.None);
+        await loop.RunAsync(uids, sink, CancellationToken.None);
 
         // All three siblings reported (each at least one finished Passed update).
-        Assert.Contains(Uid("chain", "x"), bus.PassedUids);
-        Assert.Contains(Uid("chain", "y"), bus.PassedUids);
-        Assert.Contains(Uid("chain", "z"), bus.PassedUids);
+        Assert.Contains(Uid("chain", "x"), sink.PassedUids);
+        Assert.Contains(Uid("chain", "y"), sink.PassedUids);
+        Assert.Contains(Uid("chain", "z"), sink.PassedUids);
     }
 
     [Fact]
@@ -148,11 +153,11 @@ public class RunLoopTests
 
         var loop = new PUnitRunLoop(() => [a, b]);
 
-        var bus = new RecordingBus();
-        await loop.RunAsync(new SessionUid("s"), uids: null, bus, new StubProducer(), CancellationToken.None);
+        var sink = new RecordingSink();
+        await loop.RunAsync(uids: null, sink, CancellationToken.None);
 
-        Assert.Contains(Uid("a", "x"), bus.PassedUids);
-        Assert.Contains(Uid("b", "y"), bus.PassedUids);
+        Assert.Contains(Uid("a", "x"), sink.PassedUids);
+        Assert.Contains(Uid("b", "y"), sink.PassedUids);
     }
 
     [Fact]
@@ -186,7 +191,7 @@ public class RunLoopTests
         var c = Definition("c", "C", Node(0, "z", "z", invoke: Body));
 
         var loop = new PUnitRunLoop(() => [a, b, c]);
-        await loop.RunAsync(new SessionUid("s"), uids: null, new RecordingBus(), new StubProducer(), CancellationToken.None);
+        await loop.RunAsync(uids: null, new RecordingSink(), CancellationToken.None);
 
         Assert.Equal(1, max);
     }
@@ -215,14 +220,14 @@ public class RunLoopTests
 
         var loop = new PUnitRunLoop(() => [def]);
 
-        var bus = new RecordingBus();
+        var sink = new RecordingSink();
         var uids = new HashSet<string>([Uid("scn", "lonely")], StringComparer.OrdinalIgnoreCase);
-        await loop.RunAsync(new SessionUid("s"), uids, bus, new StubProducer(), CancellationToken.None);
+        await loop.RunAsync(uids, sink, CancellationToken.None);
 
         Assert.True(siblingRan);
         // The sibling completes successfully; nothing was skipped (the run token never canceled).
-        Assert.Contains(Uid("scn", "sibling"), bus.PassedUids);
-        Assert.Empty(bus.SkippedUids);
+        Assert.Contains(Uid("scn", "sibling"), sink.PassedUids);
+        Assert.Empty(sink.SkippedUids);
     }
 
     [Fact]
@@ -237,12 +242,12 @@ public class RunLoopTests
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        var bus = new RecordingBus();
-        await loop.RunAsync(new SessionUid("s"), uids: null, bus, new StubProducer(), cts.Token);
+        var sink = new RecordingSink();
+        await loop.RunAsync(uids: null, sink, cts.Token);
 
         // The scheduler skips steps when the run token is already canceled; the body never runs.
         Assert.False(bodyRan);
-        Assert.Contains(Uid("scn", "x"), bus.SkippedUids);
+        Assert.Contains(Uid("scn", "x"), sink.SkippedUids);
     }
 
     [Fact]
@@ -262,12 +267,13 @@ public class RunLoopTests
 
         var loop = new PUnitRunLoop(() => [first, second]);
 
-        var bus = new RecordingBus();
-        await loop.RunAsync(new SessionUid("s"), uids: null, bus, new StubProducer(), cts.Token);
+        var sink = new RecordingSink();
+        await loop.RunAsync(uids: null, sink, cts.Token);
 
         Assert.False(secondRan);
-        // The second scenario's node was never published at all (not even as skipped).
-        Assert.DoesNotContain(Uid("second", "b"), bus.Nodes.Select(n => n.Uid.Value));
+        // The second scenario was never started at all (not even as skipped).
+        Assert.DoesNotContain("second",
+            sink.Events.OfType<ScenarioStarted>().Select(e => e.Definition.ScenarioId));
     }
 
     [Fact]
@@ -284,45 +290,53 @@ public class RunLoopTests
         var uid = new SessionUid("fw-run");
         await framework.CreateTestSession(uid);
 
-        var bus = new RecordingBus();
+        var bus = new RecordingMessageBus();
         var completed = false;
         await framework.OnExecute(uid, filter: null, bus, () => completed = true, CancellationToken.None);
 
         Assert.True(completed);
-        Assert.Contains(Uid("fw-scn", "a"), bus.PassedUids);
-        Assert.Contains(Uid("fw-scn", "b"), bus.PassedUids);
+        var passed = bus.Nodes
+            .Where(n => n.Properties.OfType<PassedTestNodeStateProperty>().Length != 0)
+            .Select(n => n.Uid.Value).ToList();
+        Assert.Contains("fw-scn:a", passed);
+        Assert.Contains("fw-scn:b", passed);
     }
 
-    private sealed class StubProducer : IDataProducer
+    private sealed class RecordingSink : IRunEventSink
     {
-        public Type[] DataTypesProduced => [typeof(TestNodeUpdateMessage)];
-        public string Uid => "stub.producer";
-        public string Version => "1.0.0";
-        public string DisplayName => "stub";
-        public string Description => "stub data producer for run-loop tests";
-        public Task<bool> IsEnabledAsync() => Task.FromResult(true);
+        public List<RunEvent> Events { get; } = [];
+
+        public ValueTask PublishAsync(RunEvent evt)
+        {
+            lock (Events) { Events.Add(evt); }
+            return default;
+        }
+
+        public IEnumerable<string> PassedUids => Events
+            .OfType<StepFinished>()
+            .Where(e => e.Result.Status == StepStatus.Passed)
+            .Select(PassedUid);
+
+        public IEnumerable<string> SkippedUids => Events
+            .OfType<StepFinished>()
+            .Where(e => e.Result.Status == StepStatus.Skipped)
+            .Select(e => PUnitDiscoverer.MakeUid(e.Definition.ScenarioId, e.Result.Node.StepId));
     }
 
-    private sealed class RecordingBus : IMessageBus
+    private sealed class RecordingMessageBus : IMessageBus
     {
-        private readonly ConcurrentQueue<TestNodeUpdateMessage> updates = new();
+        private readonly List<TestNodeUpdateMessage> updates = [];
 
-        public IReadOnlyList<TestNode> Nodes => updates.Select(u => u.TestNode).ToList();
-
-        public IReadOnlyList<string> PassedUids => UidsWithState<PassedTestNodeStateProperty>();
-
-        public IReadOnlyList<string> SkippedUids => UidsWithState<SkippedTestNodeStateProperty>();
-
-        private List<string> UidsWithState<TState>() where TState : IProperty => Nodes
-            .Where(n => n.Properties.OfType<TState>().Length != 0)
-            .Select(n => n.Uid.Value)
-            .ToList();
+        public IReadOnlyList<TestNode> Nodes
+        {
+            get { lock (updates) { return updates.Select(u => u.TestNode).ToList(); } }
+        }
 
         public Task PublishAsync(IDataProducer dataProducer, IData data)
         {
             if (data is TestNodeUpdateMessage update)
             {
-                updates.Enqueue(update);
+                lock (updates) { updates.Add(update); }
             }
 
             return Task.CompletedTask;

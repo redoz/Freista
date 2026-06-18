@@ -31,6 +31,17 @@ internal static class NodeDiagnostics
         Write(Describe(phase, node));
     }
 
+    /// <summary>Traces a plain message under the given <paramref name="phase"/> (e.g. "report-sink-failure").</summary>
+    public static void Log(string phase, string message)
+    {
+        if (!Enabled)
+        {
+            return;
+        }
+
+        Write($"[punit-node] {phase} {message}");
+    }
+
     private static string Describe(string phase, TestNode node)
     {
         var state = node.Properties.OfType<TestNodeStateProperty>().FirstOrDefault()?.GetType().Name ?? "(none)";

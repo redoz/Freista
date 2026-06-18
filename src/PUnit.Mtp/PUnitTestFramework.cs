@@ -13,6 +13,7 @@ using Microsoft.Testing.Platform.Messages;
 using Microsoft.Testing.Platform.Requests;
 using Microsoft.Testing.Platform.TestHost;
 using PUnit.Model;
+using PUnit.Reporting;
 using PUnit.Scheduling;
 using ITestPlatformTestFramework = Microsoft.Testing.Platform.Extensions.TestFramework.ITestFramework;
 
@@ -45,6 +46,14 @@ public class PUnitTestFramework :
     internal const string ExtensionUid = "punit.mtp.testframework";
 
     private readonly ConcurrentDictionary<string, byte> sessions = new(StringComparer.Ordinal);
+    private readonly IServiceProvider? _services;
+
+    /// <summary>Parameterless ctor for tests and the default registration path.</summary>
+    public PUnitTestFramework() { }
+
+    /// <summary>Production ctor: the MTP <see cref="IServiceProvider"/> supplies command-line options
+    /// (the <c>--report-html</c> flag) and the resolved results directory.</summary>
+    public PUnitTestFramework(IServiceProvider services) => _services = services;
 
     /// <inheritdoc/>
     public string Uid => ExtensionUid;
@@ -219,9 +228,14 @@ public class PUnitTestFramework :
         CancellationToken cancellationToken)
     {
         var uids = ReadUidFilter(filter);
+        var bus = new RunEventBus([new MtpReportSink(sessionUid, messageBus, this)]);
         var loop = new PUnitRunLoop(EnumerateRegisteredScenarios);
+        await loop.RunAsync(uids, bus, cancellationToken).ConfigureAwait(false);
 
-        await loop.RunAsync(sessionUid, uids, messageBus, this, cancellationToken).ConfigureAwait(false);
+        foreach (var failure in bus.Failures)
+        {
+            NodeDiagnostics.Log("report-sink-failure", failure.ToString());
+        }
 
         operationComplete();
     }
