@@ -11,13 +11,12 @@
     <PackageVersion Include="xunit.v3.extensibility.core" Version="3.2.2" />
 
     <!--
-      Microsoft.Testing.Platform: pinned to the v1 line (1.9.1) because the xunit-based test
-      projects run on xunit.v3 3.2.2, whose MTP runner is v1-only. Tried 2.0.2: PUnit.Mtp + the
-      sample build/run fine, but any test project that references PUnit.Mtp then unifies MTP to
-      2.0.2 and xunit's v1 runner fails to load (TypeLoadException on IDataConsumer). Moving to
-      2.x needs a v2-capable xunit.v3 (unreleased) or PUnit.Mtp's test projects off the xunit runner.
+      Microsoft.Testing.Platform v2. The xunit-based test projects opt into the MTP v2 runner by
+      referencing `xunit.v3.mtp-v2` (xunit.v3 3.2.0+ selects its MTP major via package choice; the
+      default `xunit.v3` package is MTP v1). This replaced the old 1.9.1 pin: the earlier 2.x attempt
+      failed only because the test projects stayed on the v1 runner package while MTP unified to 2.x.
     -->
-    <PackageVersion Include="Microsoft.Testing.Platform" Version="1.9.1" />
+    <PackageVersion Include="Microsoft.Testing.Platform" Version="2.2.3" />
 
     <!--
       Roslyn the primary generator builds against. Installed SDK 10.0.300 ships Roslyn
@@ -30,6 +29,7 @@
 
     <!-- Test infrastructure. xunit.v3 is pinned to match xunit.v3.extensibility.core. -->
     <PackageVersion Include="xunit.v3" Version="3.2.2" />
+    <PackageVersion Include="xunit.v3.mtp-v2" Version="3.2.2" />
     <!-- Assertions only (Assert.Equal/NotNull/...) for PUnit.Mtp consumers: scenario step bodies keep
          `using Xunit;` verbatim. Pinned to match the xunit.v3 line above. -->
     <PackageVersion Include="xunit.v3.assert" Version="3.2.2" />
