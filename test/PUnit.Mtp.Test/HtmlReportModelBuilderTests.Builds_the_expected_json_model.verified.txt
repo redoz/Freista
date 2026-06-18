@@ -1,0 +1,97 @@
+﻿{
+  "GeneratedAtUtc": "2026-06-09T12:00:01Z",
+  "Summary": {
+    "Passed": 1,
+    "Failed": 0,
+    "Skipped": 0,
+    "TotalMs": 90
+  },
+  "Scenarios": [
+    {
+      "ScenarioId": "scn",
+      "DisplayName": "customer books",
+      "ClassDisplayName": "Appointment booking",
+      "MethodName": "Ns.Booking",
+      "StartedAtUtc": "2026-06-09T12:00:00.0000000Z",
+      "DurationMs": 90,
+      "Status": "passed",
+      "Steps": [
+        {
+          "StepId": "p",
+          "Index": 0,
+          "Label": "0",
+          "Phase": "Given",
+          "DisplayName": "Given patient Jane exists",
+          "Status": "passed",
+          "OffsetMs": 0,
+          "DurationMs": 40,
+          "Lane": 0,
+          "DependsOn": [],
+          "GroupId": null,
+          "Logs": [],
+          "Effects": [
+            {
+              "Verb": "Create",
+              "Type": "String",
+              "Key": "Jane",
+              "OffsetMs": 1,
+              "Data": null
+            }
+          ],
+          "Exception": null,
+          "SkipReason": null
+        },
+        {
+          "StepId": "s",
+          "Index": 1,
+          "Label": "1",
+          "Phase": "Given",
+          "DisplayName": "Given an available slot exists",
+          "Status": "passed",
+          "OffsetMs": 0,
+          "DurationMs": 30,
+          "Lane": 1,
+          "DependsOn": [],
+          "GroupId": null,
+          "Logs": [],
+          "Effects": [],
+          "Exception": null,
+          "SkipReason": null
+        },
+        {
+          "StepId": "c",
+          "Index": 2,
+          "Label": "2",
+          "Phase": "When",
+          "DisplayName": "When creating an appointment",
+          "Status": "passed",
+          "OffsetMs": 40,
+          "DurationMs": 50,
+          "Lane": 0,
+          "DependsOn": [
+            0,
+            1
+          ],
+          "GroupId": null,
+          "Logs": [],
+          "Effects": [],
+          "Exception": null,
+          "SkipReason": null
+        }
+      ],
+      "Resources": [
+        {
+          "Type": "String",
+          "Key": "Jane",
+          "Events": [
+            {
+              "Verb": "Create",
+              "OffsetMs": 1,
+              "StepId": "p"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
