@@ -93,6 +93,7 @@ public class PUnitStepReporterTests
             Node = def.Nodes[0],
             DisplayName = "step a",
             Status = StepStatus.Passed,
+            StartedAt = default,
             Duration = TimeSpan.FromMilliseconds(1),
         });
 
@@ -125,6 +126,7 @@ public class PUnitStepReporterTests
             Node = def.Nodes[0],
             DisplayName = "step a",
             Status = StepStatus.Passed,
+            StartedAt = default,
             Duration = TimeSpan.FromMilliseconds(5),
         });
 
@@ -147,6 +149,7 @@ public class PUnitStepReporterTests
             Node = def.Nodes[0],
             DisplayName = "step a",
             Status = StepStatus.Failed,
+            StartedAt = default,
             Exception = ex,
         });
 
@@ -169,6 +172,7 @@ public class PUnitStepReporterTests
             Node = def.Nodes[0],
             DisplayName = "step a",
             Status = StepStatus.Failed,
+            StartedAt = default,
             Exception = ex,
         });
 
@@ -190,6 +194,7 @@ public class PUnitStepReporterTests
             Node = def.Nodes[0],
             DisplayName = "step a",
             Status = StepStatus.Failed,
+            StartedAt = default,
             Exception = ex,
         });
 
@@ -211,6 +216,7 @@ public class PUnitStepReporterTests
             Node = def.Nodes[0],
             DisplayName = "step a",
             Status = StepStatus.Skipped,
+            StartedAt = default,
             SkipReason = "dependency failed: creating an appointment",
         });
 
@@ -231,6 +237,7 @@ public class PUnitStepReporterTests
             Node = def.Nodes[0],
             DisplayName = "step a",
             Status = StepStatus.Passed,
+            StartedAt = default,
             Duration = TimeSpan.FromMilliseconds(250),
         });
 
@@ -250,6 +257,7 @@ public class PUnitStepReporterTests
             Node = def.Nodes[0],
             DisplayName = "step a",
             Status = StepStatus.Passed,
+            StartedAt = default,
         });
 
         var node = Assert.Single(bus.Nodes);
@@ -269,6 +277,7 @@ public class PUnitStepReporterTests
             Node = def.Nodes[0],
             DisplayName = "patient Jane exists",
             Status = StepStatus.Passed,
+            StartedAt = default,
         });
 
         var node = Assert.Single(bus.Nodes);
@@ -305,6 +314,7 @@ public class PUnitStepReporterTests
             Node = def.Nodes[0],
             DisplayName = "step a",
             Status = StepStatus.Passed,
+            StartedAt = default,
             Logs = ["first line", "second line"],
         });
 
@@ -327,6 +337,7 @@ public class PUnitStepReporterTests
             Node = def.Nodes[0],
             DisplayName = "step a",
             Status = StepStatus.Passed,
+            StartedAt = default,
             Effects =
             [
                 new ResourceEffect
@@ -375,6 +386,7 @@ public class PUnitStepReporterTests
             Node = def.Nodes[0],
             DisplayName = "step a",
             Status = StepStatus.Passed,
+            StartedAt = default,
         });
 
         Assert.False(finished.IsCompleted);

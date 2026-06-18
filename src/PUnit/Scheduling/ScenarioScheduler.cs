@@ -14,11 +14,15 @@ namespace PUnit.Scheduling;
 public sealed class ScenarioScheduler
 {
     private readonly int _maxParallelism;
+    private readonly TimeProvider _timeProvider;
 
     /// <param name="maxParallelism">Maximum steps running at once; 0 (default) means unbounded.</param>
-    public ScenarioScheduler(int maxParallelism = 0)
+    /// <param name="timeProvider">Clock for step <see cref="StepResult.StartedAt"/> stamps and step
+    /// resource effects; defaults to <see cref="TimeProvider.System"/>.</param>
+    public ScenarioScheduler(int maxParallelism = 0, TimeProvider? timeProvider = null)
     {
         _maxParallelism = maxParallelism;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
 
@@ -168,6 +172,7 @@ public sealed class ScenarioScheduler
                 Node = node,
                 DisplayName = name,
                 Status = StepStatus.Skipped,
+                StartedAt = _timeProvider.GetUtcNow(),
                 SkipReason = reason,
             };
             results[i] = result;
@@ -178,16 +183,18 @@ public sealed class ScenarioScheduler
         }
     }
 
-    private static async Task<NodeOutcome> RunNodeAsync(
+    private async Task<NodeOutcome> RunNodeAsync(
         ScenarioNode node,
         IStepInputs inputs,
         IServiceProvider? services,
         string displayName,
         CancellationToken scenarioToken)
     {
+        var startedAt = _timeProvider.GetUtcNow();
         var stopwatch = Stopwatch.StartNew();
         using var stepCts = CancellationTokenSource.CreateLinkedTokenSource(scenarioToken);
-        var context = new ScenarioContext(node.StepId, displayName, services, stepCts.Token);
+        var context = new ScenarioContext(
+            node.StepId, displayName, services, resolver: null, _timeProvider, stepCts.Token);
 
         try
         {
@@ -228,6 +235,7 @@ public sealed class ScenarioScheduler
                     Node = node,
                     DisplayName = displayName,
                     Status = StepStatus.Passed,
+                    StartedAt = startedAt,
                     Duration = stopwatch.Elapsed,
                     Logs = context.Logs,
                     Attachments = context.Attachments,
@@ -253,6 +261,7 @@ public sealed class ScenarioScheduler
                     Node = node,
                     DisplayName = displayName,
                     Status = statusValue,
+                    StartedAt = startedAt,
                     Duration = stopwatch.Elapsed,
                     Exception = exception,
                     SkipReason = skipReason,

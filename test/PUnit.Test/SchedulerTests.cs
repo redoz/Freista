@@ -262,6 +262,48 @@ public class SchedulerTests
             () => new ScenarioScheduler().RunAsync(def));
     }
 
+    [Fact]
+    public async Task StartedAt_comes_from_the_injected_time_provider()
+    {
+        var baseInstant = new DateTimeOffset(2026, 6, 9, 12, 0, 0, TimeSpan.Zero);
+        var clock = new TestTimeProvider(baseInstant);
+        var def = Def(Node(0, Pass()));
+
+        var results = await WithTimeout(new ScenarioScheduler(timeProvider: clock).RunAsync(def));
+
+        Assert.Equal(baseInstant, results[0].StartedAt);
+    }
+
+    [Fact]
+    public async Task Concurrent_group_steps_get_distinct_overlapping_windows()
+    {
+        var clock = new TestTimeProvider(new DateTimeOffset(2026, 6, 9, 12, 0, 0, TimeSpan.Zero));
+        var def = Def(
+            Node(0, Pass()),
+            Node(1, Pass(), [0]),
+            Node(2, Pass(), [0]));
+
+        var results = await WithTimeout(new ScenarioScheduler(timeProvider: clock).RunAsync(def));
+
+        // Each concurrent sibling got its own StartedAt from the advancing clock (no shared anchor).
+        Assert.NotEqual(results[1].StartedAt, results[2].StartedAt);
+    }
+
+    [Fact]
+    public async Task Skipped_step_carries_started_at_and_zero_duration()
+    {
+        var clock = new TestTimeProvider(new DateTimeOffset(2026, 6, 9, 12, 0, 0, TimeSpan.Zero));
+        var def = Def(
+            Node(0, (_, _) => throw new InvalidOperationException("boom")),
+            Node(1, Pass(), [0]));
+
+        var results = await WithTimeout(new ScenarioScheduler(timeProvider: clock).RunAsync(def));
+
+        Assert.Equal(StepStatus.Skipped, results[1].Status);
+        Assert.NotEqual(default, results[1].StartedAt);
+        Assert.Equal(TimeSpan.Zero, results[1].Duration);
+    }
+
     private sealed class RecordingObserver : IStepObserver
     {
         private readonly object _sync = new();
