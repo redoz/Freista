@@ -1,0 +1,93 @@
+using PUnit.Model;
+using PUnit.Reporting;
+using Xunit;
+
+namespace PUnit.Mtp.Test;
+
+public sealed class HtmlReportSinkTests : IDisposable
+{
+    private static readonly DateTimeOffset T0 = new(2026, 6, 9, 12, 0, 0, TimeSpan.Zero);
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "punit-report-test-" + Guid.NewGuid().ToString("N"));
+
+    public HtmlReportSinkTests() => Directory.CreateDirectory(_dir);
+
+    public void Dispose()
+    {
+        try { Directory.Delete(_dir, recursive: true); } catch (IOException) { }
+        GC.SuppressFinalize(this);
+    }
+
+    private static ScenarioNode Node(int i, string id, string phase, string t) => new()
+    {
+        Index = i, StepId = id, Phase = phase, OperationName = "Op" + i, DisplayNameTemplate = t,
+        DependsOn = [], Invoke = (_, _) => Task.FromResult<object?>(null),
+    };
+
+    private static ScenarioDefinition Def() => new()
+    {
+        ScenarioId = "scn", DisplayName = "books", MethodName = "Ns.Booking",
+        Nodes = [Node(0, "a", "Given", "Given patient Jane exists")],
+    };
+
+    private static StepResult Passed(ScenarioNode n) => new()
+    {
+        Node = n, DisplayName = n.DisplayNameTemplate, Status = StepStatus.Passed,
+        StartedAt = T0, Duration = TimeSpan.FromMilliseconds(42),
+    };
+
+    [Fact]
+    public async Task Writes_a_self_contained_html_file_on_run_finished()
+    {
+        var path = Path.Combine(_dir, "punit-report.html");
+        var sink = new HtmlReport.HtmlReportSink(path, new TestTimeProviderUtc(T0));
+        var def = Def();
+
+        await sink.PublishAsync(new RunStarted(1));
+        await sink.PublishAsync(new ScenarioStarted(def));
+        await sink.PublishAsync(new StepFinished(def, Passed(def.Nodes[0])));
+        await sink.PublishAsync(new ScenarioFinished(def, [Passed(def.Nodes[0])]));
+
+        Assert.False(File.Exists(path)); // not written until RunFinished
+
+        await sink.PublishAsync(new RunFinished());
+
+        Assert.True(File.Exists(path));
+        var html = await File.ReadAllTextAsync(path);
+        Assert.Contains("books", html, StringComparison.Ordinal); // scenario name present
+        Assert.Contains("\"scenarioId\": \"scn\"", html, StringComparison.Ordinal); // JSON blob present
+        Assert.DoesNotContain("__PUNIT_REPORT_JSON__", html, StringComparison.Ordinal); // token replaced
+    }
+
+    [Fact]
+    public async Task Empty_run_still_writes_a_valid_report()
+    {
+        var path = Path.Combine(_dir, "punit-report.html");
+        var sink = new HtmlReport.HtmlReportSink(path, new TestTimeProviderUtc(T0));
+
+        await sink.PublishAsync(new RunStarted(0));
+        await sink.PublishAsync(new RunFinished());
+
+        Assert.True(File.Exists(path));
+    }
+
+    [Fact]
+    public async Task A_write_failure_is_recorded_on_the_bus_not_thrown()
+    {
+        // Target a path whose directory does not exist and cannot be created (a file as a dir segment).
+        var fileAsDir = Path.Combine(_dir, "afile");
+        await File.WriteAllTextAsync(fileAsDir, "x");
+        var badPath = Path.Combine(fileAsDir, "nested", "report.html");
+        var bus = new RunEventBus([new HtmlReport.HtmlReportSink(badPath, new TestTimeProviderUtc(T0))]);
+
+        await bus.PublishAsync(new RunStarted(0));
+        var ex = await Record.ExceptionAsync(async () => await bus.PublishAsync(new RunFinished()));
+
+        Assert.Null(ex);                 // never thrown into the run
+        Assert.Single(bus.Failures);     // recorded for the framework to log
+    }
+
+    private sealed class TestTimeProviderUtc(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
+    }
+}

@@ -27,6 +27,10 @@
     <PackageReference Include="Microsoft.Testing.Platform" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="HtmlReport\report-template.html" />
+  </ItemGroup>
+
   <!--
     Packaging: `dotnet add package PUnit.Mtp` should bring the generator along. We reference the
     generator only to order its build (its assembly is not referenced and never becomes a package
