@@ -49,6 +49,7 @@ public class PUnitTestFramework :
 
     private readonly ConcurrentDictionary<string, byte> sessions = new(StringComparer.Ordinal);
     private readonly IServiceProvider? _services;
+    private readonly bool _simulateTime;
 
     /// <summary>Parameterless ctor for tests and the default registration path.</summary>
     public PUnitTestFramework() { }
@@ -56,6 +57,12 @@ public class PUnitTestFramework :
     /// <summary>Production ctor: the MTP <see cref="IServiceProvider"/> supplies command-line options
     /// (the <c>--report-html</c> flag) and the resolved results directory.</summary>
     public PUnitTestFramework(IServiceProvider services) => _services = services;
+
+    /// <summary>Carries the sample-local opt-in <paramref name="simulateTime"/> flag (off in production)
+    /// from <see cref="PUnitTestApplication"/>'s <c>RunAsync</c> down to the run loop / scheduler.
+    /// Defaults elsewhere keep production runs on real timing.</summary>
+    public PUnitTestFramework(IServiceProvider services, bool simulateTime)
+        : this(services) => _simulateTime = simulateTime;
 
     /// <inheritdoc/>
     public string Uid => ExtensionUid;
@@ -238,7 +245,7 @@ public class PUnitTestFramework :
         }
 
         var bus = new RunEventBus(sinks);
-        var loop = new PUnitRunLoop(EnumerateRegisteredScenarios);
+        var loop = new PUnitRunLoop(EnumerateRegisteredScenarios, simulateTime: _simulateTime);
         await loop.RunAsync(uids, bus, cancellationToken).ConfigureAwait(false);
 
         if (bus.Failures.Count > 0)

@@ -51,6 +51,11 @@ public class RunLoopTests
     private static string PassedUid(StepFinished e) =>
         PUnitDiscoverer.MakeUid(e.Definition.ScenarioId, e.Result.Node.StepId);
 
+    /// <summary>A step body that advances its per-step clock by <paramref name="delta"/> via
+    /// <see cref="ScenarioContext.SimulateElapsed"/> with no real waiting (an inert no-op in real mode).</summary>
+    private static Func<IStepInputs, ScenarioContext, Task<object?>> Elapse(TimeSpan delta)
+        => (_, ctx) => { ctx.SimulateElapsed(delta); return Task.FromResult<object?>(null); };
+
     // -- Scenario selection (filter -> distinct scenarios) ---------------------------------------
 
     [Fact]
@@ -300,6 +305,80 @@ public class RunLoopTests
             .Select(n => n.Uid.Value).ToList();
         Assert.Contains("fw-scn:a", passed);
         Assert.Contains("fw-scn:b", passed);
+    }
+
+    // -- Simulated-time opt-in threaded through the loop (A4) -------------------------------------
+
+    [Fact]
+    public async Task Default_runner_in_simulated_mode_yields_nonzero_overlapping_timings()
+    {
+        // simulateTime:true must reach DefaultRunScenario, which builds a ScenarioScheduler(simulatedTime:true).
+        // Two parallel siblings advance their own per-step clocks (NO real waiting), producing exact,
+        // overlapping durations on one shared timeline — only possible if the flag threaded all the way down.
+        var slow = TimeSpan.FromMilliseconds(700);
+        var fast = TimeSpan.FromMilliseconds(500);
+        var def = Definition("sim", "sim",
+            Node(0, "root", "root", invoke: Elapse(TimeSpan.Zero)),
+            Node(1, "slow", "slow", dependsOn: [0], invoke: Elapse(slow)),
+            Node(2, "fast", "fast", dependsOn: [0], invoke: Elapse(fast)));
+
+        var loop = new PUnitRunLoop(() => [def], runScenario: null, simulateTime: true);
+        var sink = new RecordingSink();
+        await loop.RunAsync(uids: null, sink, CancellationToken.None);
+
+        var finished = sink.Events.OfType<StepFinished>()
+            .Where(e => e.Result.Status == StepStatus.Passed)
+            .ToDictionary(e => e.Result.Node.StepId, e => e.Result, StringComparer.Ordinal);
+
+        // Durations are exactly the simulated amounts (non-zero, deterministic).
+        Assert.Equal(slow, finished["slow"].Duration);
+        Assert.Equal(fast, finished["fast"].Duration);
+
+        // The two siblings share a start instant and genuinely overlap on the one timeline.
+        var s1 = finished["slow"].StartedAt; var e1 = s1 + finished["slow"].Duration;
+        var s2 = finished["fast"].StartedAt; var e2 = s2 + finished["fast"].Duration;
+        Assert.True(s1 < e2 && s2 < e1, "parallel siblings must overlap under simulated time");
+    }
+
+    [Fact]
+    public async Task Default_runner_in_real_mode_ignores_SimulateElapsed()
+    {
+        // simulateTime defaults to false: the same SimulateElapsed body is an inert no-op and the measured
+        // duration is real wall-clock for a no-op step — nowhere near the simulated 5s.
+        var def = Definition("real", "real",
+            Node(0, "x", "x", invoke: Elapse(TimeSpan.FromSeconds(5))));
+
+        var loop = new PUnitRunLoop(() => [def]); // simulateTime defaults to false
+        var sink = new RecordingSink();
+        await loop.RunAsync(uids: null, sink, CancellationToken.None);
+
+        var finished = sink.Events.OfType<StepFinished>().Single(e => e.Result.Status == StepStatus.Passed);
+        Assert.True(finished.Result.Duration < TimeSpan.FromSeconds(1),
+            $"real mode must not absorb the simulated 5s (was {finished.Result.Duration})");
+    }
+
+    [Fact]
+    public async Task Framework_built_with_simulateTime_threads_the_flag_to_the_scheduler()
+    {
+        // The (IServiceProvider, bool) overload carries the opt-in flag from RunAsync down through the run
+        // loop to the scheduler: a body that SimulateElapsed(800ms) reports exactly that on the published
+        // node's TimingProperty — only reachable if simulated mode arrived at the scheduler.
+        var method = $"PUnit.Mtp.Test.SimRun.{Guid.NewGuid():N}";
+        var work = TimeSpan.FromMilliseconds(800);
+        ScenarioRegistry.Register(method, () => Definition("sim-fw", "sim scenario",
+            Node(0, "a", "a", invoke: Elapse(work))));
+
+        var framework = new PUnitTestFramework(services: null!, simulateTime: true);
+        var uid = new SessionUid("sim-fw-run");
+        await framework.CreateTestSession(uid);
+
+        var bus = new RecordingMessageBus();
+        await framework.OnExecute(uid, filter: null, bus, () => { }, CancellationToken.None);
+
+        var node = bus.Nodes.Single(n => n.Uid.Value == "sim-fw:a"
+            && n.Properties.OfType<PassedTestNodeStateProperty>().Length != 0);
+        var timing = node.Properties.OfType<TimingProperty>().Single();
+        Assert.Equal(work, timing.GlobalTiming.Duration);
     }
 
     private sealed class RecordingSink : IRunEventSink

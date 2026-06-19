@@ -35,17 +35,26 @@ internal sealed class PUnitRunLoop
 
     private readonly Func<IEnumerable<ScenarioDefinition>> scenarioSource;
     private readonly RunScenario runScenario;
+    private readonly bool simulateTime;
 
     /// <param name="scenarioSource">Supplies the registered scenarios to consider for the run.</param>
     /// <param name="runScenario">
     /// How to run one scenario; defaults to a fresh <see cref="ScenarioScheduler"/> per run.
     /// </param>
+    /// <param name="simulateTime">
+    /// When true, the default scenario runner builds a <see cref="ScenarioScheduler"/> in simulated-time
+    /// mode (deterministic DAG-correct timeline driven from step bodies via
+    /// <see cref="ScenarioContext.SimulateElapsed"/>). Defaults to <see langword="false"/> so production
+    /// runs use real timing. Ignored when an explicit <paramref name="runScenario"/> seam is supplied.
+    /// </param>
     public PUnitRunLoop(
         Func<IEnumerable<ScenarioDefinition>> scenarioSource,
-        RunScenario? runScenario = null)
+        RunScenario? runScenario = null,
+        bool simulateTime = false)
     {
         ArgumentNullException.ThrowIfNull(scenarioSource);
         this.scenarioSource = scenarioSource;
+        this.simulateTime = simulateTime;
         this.runScenario = runScenario ?? DefaultRunScenario;
     }
 
@@ -128,9 +137,10 @@ internal sealed class PUnitRunLoop
         await bus.PublishAsync(new ScenarioFinished(definition, results)).ConfigureAwait(false);
     }
 
-    private static async Task<IReadOnlyList<StepResult>> DefaultRunScenario(
+    // Instance (not static) because it reads the simulateTime field to pick the scheduler's timing mode.
+    private async Task<IReadOnlyList<StepResult>> DefaultRunScenario(
         ScenarioDefinition definition, IStepObserver observer, CancellationToken cancellationToken)
-        => await new ScenarioScheduler().RunAsync(
+        => await new ScenarioScheduler(simulatedTime: simulateTime).RunAsync(
             definition,
             services: null,
             observer: observer,
