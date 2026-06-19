@@ -1,7 +1,7 @@
 # Design: Self-contained HTML run report (timeline, logs, resource events)
 
 - **Date:** 2026-06-07
-- **Status:** Design / approved — ready for implementation plan (TDD).
+- **Status:** Implemented (2026-06-09) on MTP 2.2.3.
 - **Scope:** `src/PUnit` (new `Reporting` event bus; scheduler timestamps; `StepResult`),
   `src/PUnit.Mtp` (run-loop emission; reporter refactor; new HTML report sink + option provider),
   `test/PUnit.Test`, `test/PUnit.Mtp.Test`, `samples/AppointmentTests` (showcase).
