@@ -2,83 +2,491 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="light dark" />
 <title>PUnit run report</title>
 <style>
-  :root { --pass:#2e7d32; --fail:#c62828; --skip:#9e9e9e; --bg:#fafafa; --ink:#222; }
-  body { font:14px/1.4 system-ui, sans-serif; color:var(--ink); margin:0; background:var(--bg); }
-  header { padding:12px 16px; background:#fff; border-bottom:1px solid #ddd; }
-  .summary span { margin-right:16px; font-weight:600; }
-  .scenario { margin:16px; background:#fff; border:1px solid #ddd; border-radius:6px; padding:12px; }
-  .gantt { position:relative; }
-  .row { position:relative; height:22px; margin:2px 0; }
-  .bar { position:absolute; height:18px; border-radius:3px; color:#fff; font-size:11px;
-         white-space:nowrap; overflow:hidden; padding:0 4px; cursor:pointer; box-sizing:border-box; }
-  .bar.passed { background:var(--pass); } .bar.failed { background:var(--fail); } .bar.skipped { background:var(--skip); }
-  .res { fill-opacity:.9; }
-  .reslane { position:relative; height:22px; margin-top:8px; border-top:1px dashed #ccc; }
-  .marker { position:absolute; width:10px; height:10px; top:6px; border-radius:50%; transform:translateX(-50%); }
-  .marker.create { background:#1565c0; } .marker.read,.marker.load { background:#00897b; }
-  .marker.edit { background:#ef6c00; } .marker.delete { background:#6a1b9a; }
-  .detail { margin-top:8px; padding:8px; background:#f4f4f4; border-radius:4px; display:none; white-space:pre-wrap; }
-  .detail.open { display:block; }
-  h2 { font-size:15px; margin:0 0 8px; } .muted { color:#777; font-weight:400; }
+  /* ---------- LIGHT PALETTE (default) ---------- */
+  :root{
+    color-scheme: light;
+    --bg:#eef1f5; --bg-grad:#e7ebf1;
+    --surface:#ffffff; --surface-2:#f5f7fa; --inset:#eef1f4;
+    --border:#e3e7ec; --border-strong:#d2d8df;
+    --ink:#1b2027; --muted:#5b636e; --faint:#8b929c;
+    --pass:#1a9c50; --fail:#d23636; --skip:#9a6b0c;
+    --pass-text:#15803d; --fail-text:#b91c1c; --skip-text:#8a5e0a;
+    --pass-bg:#e4f5ea; --fail-bg:#fbe8e8; --skip-bg:#f6edd6;
+    --bar-pass:#22a35a; --bar-fail:#dc3b3b; --bar-skip:#a7740f; --bar-text:#ffffff;
+    --v-create:#2563eb; --v-read:#0d9488; --v-edit:#e07a14; --v-delete:#9333ea;
+    --grid:rgba(20,28,40,.06); --lifeline:#cdd4dc; --ruler-text:#8b929c;
+    --accent:#3b62e8;
+    --shadow:0 1px 2px rgba(17,24,39,.06), 0 6px 16px rgba(17,24,39,.06);
+    --shadow-sm:0 1px 2px rgba(17,24,39,.07);
+  }
+  /* ---------- DARK PALETTE (auto) ---------- */
+  @media (prefers-color-scheme: dark){
+    :root{
+      color-scheme: dark;
+      --bg:#0d1117; --bg-grad:#0b0f14;
+      --surface:#161b22; --surface-2:#1b2230; --inset:#10151d;
+      --border:#2a313c; --border-strong:#39414e;
+      --ink:#e6edf3; --muted:#9aa4b0; --faint:#6c7682;
+      --pass:#3fb950; --fail:#f0524a; --skip:#d4a13a;
+      --pass-text:#56d364; --fail-text:#ff7b72; --skip-text:#e3b341;
+      --pass-bg:rgba(63,185,80,.15); --fail-bg:rgba(240,82,74,.15); --skip-bg:rgba(212,161,58,.16);
+      --bar-pass:#2ea043; --bar-fail:#da3633; --bar-skip:#b9842a; --bar-text:#ffffff;
+      --v-create:#4f8bff; --v-read:#2dd4bf; --v-edit:#f59e3c; --v-delete:#c07bf0;
+      --grid:rgba(180,200,230,.07); --lifeline:#39414e; --ruler-text:#6c7682;
+      --accent:#5b86ff;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.35);
+      --shadow-sm:0 1px 2px rgba(0,0,0,.4);
+    }
+  }
+  /* ---------- EXPLICIT OVERRIDES (screenshot-deterministic) ---------- */
+  :root[data-theme="light"]{
+    color-scheme: light;
+    --bg:#eef1f5; --bg-grad:#e7ebf1;
+    --surface:#ffffff; --surface-2:#f5f7fa; --inset:#eef1f4;
+    --border:#e3e7ec; --border-strong:#d2d8df;
+    --ink:#1b2027; --muted:#5b636e; --faint:#8b929c;
+    --pass:#1a9c50; --fail:#d23636; --skip:#9a6b0c;
+    --pass-text:#15803d; --fail-text:#b91c1c; --skip-text:#8a5e0a;
+    --pass-bg:#e4f5ea; --fail-bg:#fbe8e8; --skip-bg:#f6edd6;
+    --bar-pass:#22a35a; --bar-fail:#dc3b3b; --bar-skip:#a7740f; --bar-text:#ffffff;
+    --v-create:#2563eb; --v-read:#0d9488; --v-edit:#e07a14; --v-delete:#9333ea;
+    --grid:rgba(20,28,40,.06); --lifeline:#cdd4dc; --ruler-text:#8b929c;
+    --accent:#3b62e8;
+    --shadow:0 1px 2px rgba(17,24,39,.06), 0 6px 16px rgba(17,24,39,.06);
+    --shadow-sm:0 1px 2px rgba(17,24,39,.07);
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --bg:#0d1117; --bg-grad:#0b0f14;
+    --surface:#161b22; --surface-2:#1b2230; --inset:#10151d;
+    --border:#2a313c; --border-strong:#39414e;
+    --ink:#e6edf3; --muted:#9aa4b0; --faint:#6c7682;
+    --pass:#3fb950; --fail:#f0524a; --skip:#d4a13a;
+    --pass-text:#56d364; --fail-text:#ff7b72; --skip-text:#e3b341;
+    --pass-bg:rgba(63,185,80,.15); --fail-bg:rgba(240,82,74,.15); --skip-bg:rgba(212,161,58,.16);
+    --bar-pass:#2ea043; --bar-fail:#da3633; --bar-skip:#b9842a; --bar-text:#ffffff;
+    --v-create:#4f8bff; --v-read:#2dd4bf; --v-edit:#f59e3c; --v-delete:#c07bf0;
+    --grid:rgba(180,200,230,.07); --lifeline:#39414e; --ruler-text:#6c7682;
+    --accent:#5b86ff;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.35);
+    --shadow-sm:0 1px 2px rgba(0,0,0,.4);
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; }
+  body{
+    font:14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color:var(--ink);
+    background:linear-gradient(180deg, var(--bg-grad), var(--bg) 220px) fixed;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{ font-family:ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace; }
+
+  /* ---------- APP BAR ---------- */
+  .appbar{
+    max-width:1180px; margin:0 auto; padding:26px 24px 8px;
+  }
+  .brand{ display:flex; align-items:center; gap:12px; margin-bottom:18px; }
+  .brand .logo{
+    width:34px; height:34px; border-radius:9px; flex:none;
+    background:linear-gradient(135deg, var(--accent), #7aa2ff);
+    display:grid; place-items:center; color:#fff; font-weight:800; font-size:15px;
+    box-shadow:var(--shadow-sm);
+  }
+  .brand h1{ font-size:17px; margin:0; font-weight:700; letter-spacing:-.01em; }
+  .brand .sub{ font-size:12.5px; color:var(--muted); margin-top:1px; }
+  .chips{ display:flex; gap:12px; flex-wrap:wrap; }
+  .chip{
+    display:flex; align-items:center; gap:12px;
+    background:var(--surface); border:1px solid var(--border); border-radius:13px;
+    padding:11px 15px 11px 13px; box-shadow:var(--shadow-sm); min-width:118px;
+  }
+  .chip .dot{ width:10px; height:10px; border-radius:50%; flex:none; }
+  .chip .n{ font:650 21px/1 ui-monospace, Consolas, monospace; letter-spacing:-.02em; }
+  .chip .l{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-top:3px; }
+  .chip.pass .dot{ background:var(--pass); } .chip.pass .n{ color:var(--pass-text); }
+  .chip.fail .dot{ background:var(--fail); } .chip.fail .n{ color:var(--fail-text); }
+  .chip.skip .dot{ background:var(--skip); } .chip.skip .n{ color:var(--skip-text); }
+  .chip.meta .n{ color:var(--ink); font-size:16px; }
+  .chip.meta{ min-width:0; }
+
+  /* ---------- SCENARIO CARD ---------- */
+  main{ max-width:1180px; margin:0 auto; padding:14px 24px 60px; }
+  .card{
+    position:relative; background:var(--surface); border:1px solid var(--border);
+    border-left:4px solid var(--edge); border-radius:14px; box-shadow:var(--shadow);
+    padding:16px 20px 18px; margin:16px 0;
+  }
+  .card.s-passed{ --edge:var(--bar-pass); }
+  .card.s-failed{ --edge:var(--bar-fail); }
+  .card.s-skipped{ --edge:var(--bar-skip); }
+
+  .card-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:14px; }
+  .card-title{ min-width:0; }
+  .card-title .name{ font-size:15.5px; font-weight:680; letter-spacing:-.01em; }
+  .card-title .cls{ font-size:12.5px; color:var(--muted); margin-top:2px; }
+  .card-title .cls .mth{ color:var(--faint); }
+  .card-meta{ display:flex; align-items:center; gap:10px; flex:none; }
+  .dur{ font:13px/1 ui-monospace, Consolas, monospace; color:var(--muted); }
+
+  .pill{
+    display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600;
+    padding:4px 10px; border-radius:999px; white-space:nowrap;
+  }
+  .pill .pd{ width:7px; height:7px; border-radius:50%; }
+  .pill.passed{ color:var(--pass-text); background:var(--pass-bg); } .pill.passed .pd{ background:var(--pass); }
+  .pill.failed{ color:var(--fail-text); background:var(--fail-bg); } .pill.failed .pd{ background:var(--fail); }
+  .pill.skipped{ color:var(--skip-text); background:var(--skip-bg); } .pill.skipped .pd{ background:var(--skip); }
+
+  /* ---------- TIMELINE ---------- */
+  .timeline{ --gutter:92px; --track:900px; }
+  .tl-row{ display:grid; grid-template-columns:var(--gutter) var(--track); align-items:center; }
+  .tl-gutter{
+    font:11px/1 ui-monospace, Consolas, monospace; color:var(--faint);
+    padding-right:12px; text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .tl-track{ position:relative; height:30px; }
+
+  /* ruler */
+  .tl-ruler .tl-track{ height:26px; }
+  .tl-ruler .tl-gutter{ color:var(--ruler-text); font-weight:600; }
+  .tick{ position:absolute; top:0; bottom:0; }
+  .tick .line{ position:absolute; left:0; top:14px; bottom:0; width:1px; background:var(--border-strong); }
+  .tick .lab{ position:absolute; top:1px; left:0; font-size:10.5px; color:var(--ruler-text); white-space:nowrap; transform:translateX(calc(var(--f) * -100%)); }
+
+  /* lane track gridlines */
+  .lanes .tl-track{
+    background:repeating-linear-gradient(to right, var(--grid) 0, var(--grid) 1px, transparent 1px, transparent var(--tick));
+  }
+
+  .bar{
+    position:absolute; top:4px; height:22px; border-radius:6px; background:var(--bcolor);
+    color:var(--bar-text); display:flex; align-items:center; gap:6px; padding:0 8px;
+    font-size:11.5px; white-space:nowrap; overflow:hidden; cursor:pointer;
+    box-shadow:var(--shadow-sm); border:1px solid rgba(0,0,0,.07);
+    transition:filter .12s ease, box-shadow .12s ease;
+  }
+  .bar.passed{ --bcolor:var(--bar-pass); }
+  .bar.failed{ --bcolor:var(--bar-fail); }
+  .bar.skipped{ --bcolor:var(--bar-skip); }
+  .bar:hover{ filter:brightness(1.07); box-shadow:0 2px 8px rgba(0,0,0,.18); }
+  .bar.active{ outline:2px solid var(--accent); outline-offset:1px; }
+  .bar .ph{
+    font:700 9.5px/1 ui-monospace, Consolas, monospace; letter-spacing:.04em;
+    background:rgba(255,255,255,.24); border-radius:4px; padding:3px 4px; flex:none;
+  }
+  .bar .lbl{ overflow:hidden; text-overflow:ellipsis; text-shadow:0 1px 1px rgba(0,0,0,.22); }
+
+  /* resource lane */
+  .res-head{
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    margin:14px 0 6px; padding-top:12px; border-top:1px dashed var(--border-strong);
+  }
+  .res-head .t{ font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--faint); }
+  .legend{ display:flex; gap:14px; flex-wrap:wrap; }
+  .legend span{ display:inline-flex; align-items:center; gap:6px; font-size:11px; color:var(--muted); }
+  .legend i{ width:9px; height:9px; border-radius:50%; display:inline-block; }
+  .res-row .tl-track{ height:26px; }
+  .res-row .tl-gutter{ color:var(--muted); }
+  .lifeline{ position:absolute; top:12px; height:2px; background:var(--lifeline); border-radius:2px; }
+  .marker{
+    position:absolute; top:7px; width:13px; height:13px; border-radius:50%;
+    transform:translateX(-50%); border:2px solid var(--surface); box-shadow:0 0 0 1px rgba(0,0,0,.06);
+    background:var(--mcolor); cursor:default;
+  }
+  .marker.create{ --mcolor:var(--v-create); } .marker.read,.marker.load{ --mcolor:var(--v-read); }
+  .marker.edit{ --mcolor:var(--v-edit); } .marker.delete{ --mcolor:var(--v-delete); }
+
+  /* ---------- DRILL PANEL ---------- */
+  .drill-host{ margin-top:4px; }
+  .drill{
+    display:none; margin-top:12px; background:var(--surface-2); border:1px solid var(--border);
+    border-radius:11px; padding:14px 16px; box-shadow:var(--shadow-sm);
+  }
+  .drill.open{ display:block; }
+  .drill-head{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:4px; }
+  .drill-head .dn{ font-weight:650; font-size:14px; }
+  .drill-head .dm{ font:12px/1 ui-monospace, Consolas, monospace; color:var(--muted); margin-left:auto; }
+  .sec{ margin-top:12px; }
+  .sec h4{
+    margin:0 0 7px; font-size:10.5px; font-weight:700; letter-spacing:.07em;
+    text-transform:uppercase; color:var(--faint);
+  }
+  .logs{ margin:0; padding-left:20px; }
+  .logs li{ font-family:ui-monospace, Consolas, monospace; font-size:12px; color:var(--ink); margin:2px 0; }
+  .eff{ display:flex; flex-direction:column; gap:5px; }
+  .eff .e{ display:flex; align-items:center; gap:9px; font-size:12.5px; flex-wrap:wrap; }
+  .eff .vd{ width:9px; height:9px; border-radius:50%; flex:none; }
+  .eff .vb{ font-weight:600; width:50px; text-transform:capitalize; }
+  .eff .id{ font-family:ui-monospace, Consolas, monospace; }
+  .eff .of{ font-family:ui-monospace, Consolas, monospace; color:var(--faint); }
+  .eff .da{ color:var(--muted); font-size:12px; }
+  .exc{
+    margin:0; padding:11px 13px; border-radius:9px; overflow:auto;
+    background:var(--fail-bg); border:1px solid color-mix(in srgb, var(--fail) 30%, transparent);
+    color:var(--ink); font-family:ui-monospace, Consolas, monospace; font-size:12px; line-height:1.55; white-space:pre;
+  }
+  .skipnote{
+    display:flex; align-items:center; gap:9px; padding:10px 13px; border-radius:9px;
+    background:var(--skip-bg); border:1px solid color-mix(in srgb, var(--skip) 30%, transparent);
+    color:var(--skip-text); font-size:12.5px;
+  }
+  .skipnote::before{ content:"\26A0"; font-size:14px; }
+  .hint{ color:var(--faint); font-size:11.5px; margin:2px 0 10px; }
 </style>
 </head>
 <body>
-<header><div class="summary" id="summary"></div></header>
-<main id="report"></main>
-<script id="model" type="application/json">/*__PUNIT_REPORT_JSON__*/</script>
-<script>
-  const model = JSON.parse(document.getElementById('model').textContent);
-  const PX_PER_MS = 4, MIN_W = 24;
-  const sum = model.summary;
-  document.getElementById('summary').innerHTML =
-    `<span style="color:var(--pass)">✓ ${sum.passed}</span>` +
-    `<span style="color:var(--fail)">✗ ${sum.failed}</span>` +
-    `<span style="color:var(--skip)">∅ ${sum.skipped}</span>` +
-    `<span class="muted">${sum.totalMs.toFixed(1)} ms · ${model.generatedAtUtc}</span>`;
-  const root = document.getElementById('report');
-  for (const sc of model.scenarios) {
-    const el = document.createElement('section'); el.className = 'scenario';
-    el.innerHTML = `<h2>${esc(sc.displayName)} <span class="muted">${esc(sc.classDisplayName||'')} · ${sc.status}</span></h2>`;
-    const gantt = document.createElement('div'); gantt.className = 'gantt';
-    const laneCount = sc.steps.reduce((m,s)=>Math.max(m,s.lane),0)+1;
-    for (let lane=0; lane<laneCount; lane++) {
-      const row = document.createElement('div'); row.className='row';
-      for (const s of sc.steps.filter(s=>s.lane===lane)) row.appendChild(bar(s, sc));
-      gantt.appendChild(row);
+  <div class="appbar">
+    <div class="brand">
+      <div class="logo">P</div>
+      <div>
+        <h1>PUnit run report</h1>
+        <div class="sub" id="genline"></div>
+      </div>
+    </div>
+    <div class="chips" id="chips"></div>
+  </div>
+  <main id="report"></main>
+
+  <script id="model" type="application/json">/*__PUNIT_REPORT_JSON__*/</script>
+
+  <script>
+    "use strict";
+    // explicit theme override for deterministic screenshots
+    (function(){
+      const p = new URLSearchParams(location.search).get("theme");
+      if (p === "dark" || p === "light") document.documentElement.dataset.theme = p;
+    })();
+
+    const TRACK = 900, MIN_BAR = 30;
+    const model = JSON.parse(document.getElementById("model").textContent);
+
+    const esc = (x) => { const d = document.createElement("div"); d.textContent = x == null ? "" : String(x); return d.innerHTML; };
+    const el = (tag, cls) => { const e = document.createElement(tag); if (cls) e.className = cls; return e; };
+
+    function fmtDur(ms){
+      if (ms >= 1000) return (ms / 1000).toFixed(2) + " s";
+      return Math.round(ms) + " ms";
     }
-    if (sc.resources.length) {
-      const rl = document.createElement('div'); rl.className='reslane';
-      for (const r of sc.resources) for (const ev of r.events) {
-        const m=document.createElement('div'); m.className='marker '+ev.verb.toLowerCase();
-        m.style.left=(ev.offsetMs*PX_PER_MS)+'px'; m.title=`${ev.verb} ${r.type}:${r.key} @ ${ev.offsetMs}ms`;
-        rl.appendChild(m);
+    function fmtGen(iso){
+      // 2026-06-19T21:42:11Z -> 2026-06-19 21:42:11 UTC
+      return iso.replace("T", " ").replace("Z", " UTC").replace(/(\.\d+)/, "");
+    }
+
+    // ---- nice auto-scaled axis -------------------------------------------
+    function niceAxis(maxMs){
+      maxMs = Math.max(maxMs, 1);
+      const raw = maxMs / 6;
+      const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+      const n = raw / mag;
+      const step = (n < 1.5 ? 1 : n < 3 ? 2 : n < 7 ? 5 : 10) * mag;
+      const axisMax = Math.ceil(maxMs / step) * step;
+      return { step, axisMax };
+    }
+    function fmtTick(ms, axisMax){
+      if (ms === 0) return "0";
+      if (axisMax >= 1000){ const s = ms / 1000; return (s % 1 === 0 ? s.toFixed(0) : s.toFixed(1)) + "s"; }
+      return ms + "";
+    }
+
+    // ---- summary chips ----------------------------------------------------
+    const sum = model.summary;
+    document.getElementById("genline").textContent =
+      model.scenarios.length + " scenarios · generated " + fmtGen(model.generatedAtUtc);
+    const chips = document.getElementById("chips");
+    const chipDefs = [
+      ["pass", sum.passed, "passed"],
+      ["fail", sum.failed, "failed"],
+      ["skip", sum.skipped, "skipped"],
+    ];
+    for (const [c, n, l] of chipDefs){
+      const e = el("div", "chip " + c);
+      e.innerHTML = '<span class="dot"></span><div><div class="n">' + n + '</div><div class="l">' + l + "</div></div>";
+      chips.appendChild(e);
+    }
+    const tw = el("div", "chip meta");
+    tw.innerHTML = '<div><div class="n mono">' + fmtDur(sum.totalMs) + '</div><div class="l">wall clock</div></div>';
+    chips.appendChild(tw);
+    const tg = el("div", "chip meta");
+    tg.innerHTML = '<div><div class="n">' + esc(fmtGen(model.generatedAtUtc)) + '</div><div class="l">generated</div></div>';
+    chips.appendChild(tg);
+
+    // ---- scenarios --------------------------------------------------------
+    const VCOLOR = { create: "var(--v-create)", read: "var(--v-read)", load: "var(--v-read)", edit: "var(--v-edit)", delete: "var(--v-delete)" };
+    const BARVAR = { passed: "--bar-pass", failed: "--bar-fail", skipped: "--bar-skip" };
+    const report = document.getElementById("report");
+    const openers = [];
+
+    for (const sc of model.scenarios) report.appendChild(renderScenario(sc));
+
+    // pre-expand the first failing step so a drill panel is visible by default
+    for (const sc of model.scenarios){
+      const failing = sc.steps.find((s) => s.status === "failed");
+      if (failing){
+        const o = openers.find((x) => x.scenarioId === sc.scenarioId);
+        if (o){ o.open(failing.stepId); break; }
       }
-      gantt.appendChild(rl);
     }
-    el.appendChild(gantt);
-    root.appendChild(el);
-  }
-  function bar(s, sc) {
-    const b=document.createElement('div'); b.className='bar '+s.status;
-    b.style.left=(s.offsetMs*PX_PER_MS)+'px'; b.style.width=Math.max(MIN_W,s.durationMs*PX_PER_MS)+'px';
-    b.textContent=`${s.phase[0]} ${s.label}`; b.title=s.displayName;
-    const detail=document.createElement('div'); detail.className='detail';
-    detail.textContent=drill(s);
-    b.onclick=()=>{ detail.classList.toggle('open'); };
-    const wrap=document.createElement('div'); wrap.appendChild(b); wrap.appendChild(detail);
-    return wrap;
-  }
-  function drill(s){
-    let t=`${s.displayName}\n${s.status} · ${s.durationMs}ms\n`;
-    if (s.logs.length) t+='\nLogs:\n'+s.logs.map(l=>'  '+l).join('\n');
-    if (s.effects.length) t+='\nEffects:\n'+s.effects.map(e=>`  ${e.verb} ${e.type}:${e.key} +${e.offsetMs}ms`+(e.data?` (${e.data})`:'')).join('\n');
-    if (s.exception) t+='\nException:\n'+s.exception;
-    if (s.skipReason) t+='\nSkipped: '+s.skipReason;
-    return t;
-  }
-  function esc(x){ const d=document.createElement('div'); d.textContent=x; return d.innerHTML; }
-</script>
+
+    function renderScenario(sc){
+      const card = el("section", "card s-" + sc.status);
+
+      // header
+      const head = el("div", "card-head");
+      head.innerHTML =
+        '<div class="card-title">' +
+          '<div class="name">' + esc(sc.displayName) + "</div>" +
+          '<div class="cls">' + esc(sc.classDisplayName || "") +
+            ' <span class="mth mono">· ' + esc(sc.methodName) + "</span></div>" +
+        "</div>" +
+        '<div class="card-meta">' +
+          '<span class="dur">' + fmtDur(sc.durationMs) + "</span>" +
+          '<span class="pill ' + sc.status + '"><span class="pd"></span>' + sc.status + "</span>" +
+        "</div>";
+      card.appendChild(head);
+
+      // axis
+      const axisMaxRaw = sc.steps.reduce((m, s) => Math.max(m, s.offsetMs + s.durationMs), 0);
+      const { step, axisMax } = niceAxis(axisMaxRaw);
+      const px = TRACK / axisMax;             // px per ms (auto-scaled per scenario)
+      const tickPx = step * px;
+
+      const timeline = el("div", "timeline");
+      timeline.style.setProperty("--tick", tickPx + "px");
+
+      // ruler
+      const ruler = el("div", "tl-row tl-ruler");
+      const rg = el("div", "tl-gutter");
+      rg.textContent = axisMax >= 1000 ? "s" : "ms";
+      const rt = el("div", "tl-track");
+      for (let v = 0; v <= axisMax + 0.5; v += step){
+        const f = v / axisMax;
+        const t = el("div", "tick");
+        t.style.left = (f * TRACK) + "px";
+        const lab = el("div", "lab"); lab.style.setProperty("--f", f); lab.textContent = fmtTick(v, axisMax);
+        const line = el("div", "line");
+        t.appendChild(lab); t.appendChild(line);
+        rt.appendChild(t);
+      }
+      ruler.appendChild(rg); ruler.appendChild(rt);
+      timeline.appendChild(ruler);
+
+      // lane rows
+      const lanesWrap = el("div", "lanes");
+      const laneCount = sc.steps.reduce((m, s) => Math.max(m, s.lane), 0) + 1;
+      const pairs = [];
+      const drillHost = el("div", "drill-host");
+
+      function toggle(p, b){
+        const isOpen = p.classList.contains("open");
+        pairs.forEach(({ panel, bar }) => { panel.classList.remove("open"); bar.classList.remove("active"); });
+        if (!isOpen){ p.classList.add("open"); b.classList.add("active"); }
+      }
+
+      for (let lane = 0; lane < laneCount; lane++){
+        const row = el("div", "tl-row");
+        const g = el("div", "tl-gutter");
+        const track = el("div", "tl-track");
+        for (const s of sc.steps.filter((s) => s.lane === lane)){
+          const bar = el("div", "bar " + s.status);
+          bar.dataset.step = s.stepId;
+          bar.style.left = (s.offsetMs * px) + "px";
+          bar.style.width = Math.max(MIN_BAR, s.durationMs * px) + "px";
+          bar.innerHTML = '<span class="ph">' + s.phase[0] + '</span><span class="lbl">' + esc(s.displayName) + "</span>";
+          bar.title = s.phase + " · " + s.displayName + "  (" + fmtDur(s.durationMs) + " @ +" + s.offsetMs + "ms)";
+          const panel = buildDrill(s);
+          bar.onclick = () => toggle(panel, bar);
+          pairs.push({ panel, bar });
+          track.appendChild(bar);
+          drillHost.appendChild(panel);
+        }
+        row.appendChild(g); row.appendChild(track);
+        lanesWrap.appendChild(row);
+      }
+      timeline.appendChild(lanesWrap);
+
+      // resources
+      if (sc.resources.length){
+        const rh = el("div", "res-head");
+        rh.innerHTML = '<span class="t">Resources</span>' +
+          '<span class="legend">' +
+            '<span><i style="background:var(--v-create)"></i>create</span>' +
+            '<span><i style="background:var(--v-read)"></i>read</span>' +
+            '<span><i style="background:var(--v-edit)"></i>edit</span>' +
+            '<span><i style="background:var(--v-delete)"></i>delete</span>' +
+          "</span>";
+        timeline.appendChild(rh);
+
+        for (const r of sc.resources){
+          const row = el("div", "tl-row res-row");
+          const g = el("div", "tl-gutter"); const label = r.type + ":" + r.key;
+          g.textContent = label; g.title = label;
+          const track = el("div", "tl-track");
+          const offs = r.events.map((e) => e.offsetMs);
+          const lo = Math.min(...offs), hi = Math.max(...offs);
+          const line = el("div", "lifeline");
+          line.style.left = (lo * px) + "px"; line.style.width = Math.max(2, (hi - lo) * px) + "px";
+          track.appendChild(line);
+          for (const ev of r.events){
+            const m = el("div", "marker " + ev.verb.toLowerCase());
+            m.style.left = (ev.offsetMs * px) + "px";
+            m.title = ev.verb + " " + label + " @ +" + ev.offsetMs + "ms";
+            track.appendChild(m);
+          }
+          row.appendChild(g); row.appendChild(track);
+          timeline.appendChild(row);
+        }
+      }
+
+      card.appendChild(timeline);
+      card.appendChild(drillHost);
+
+      openers.push({ scenarioId: sc.scenarioId, open: (stepId) => {
+        const pr = pairs.find((x) => x.bar.dataset.step === stepId);
+        if (pr) toggle(pr.panel, pr.bar);
+      }});
+
+      return card;
+    }
+
+    function buildDrill(s){
+      const p = el("div", "drill");
+      let h = '<div class="drill-head">' +
+        '<span class="ph" style="background:var(' + BARVAR[s.status] + ');color:#fff">' + s.phase + "</span>" +
+        '<span class="dn">' + esc(s.displayName) + "</span>" +
+        '<span class="pill ' + s.status + '"><span class="pd"></span>' + s.status + "</span>" +
+        '<span class="dm">+' + s.offsetMs + "ms · " + fmtDur(s.durationMs) + "</span>" +
+        "</div>";
+
+      if (s.skipReason){
+        h += '<div class="sec"><div class="skipnote">' + esc(s.skipReason) + "</div></div>";
+      }
+      if (s.logs && s.logs.length){
+        h += '<div class="sec"><h4>Logs</h4><ol class="logs">' +
+          s.logs.map((l) => "<li>" + esc(l) + "</li>").join("") + "</ol></div>";
+      }
+      if (s.effects && s.effects.length){
+        h += '<div class="sec"><h4>Effects</h4><div class="eff">' +
+          s.effects.map((e) =>
+            '<div class="e">' +
+              '<span class="vd" style="background:' + (VCOLOR[e.verb.toLowerCase()] || "var(--faint)") + '"></span>' +
+              '<span class="vb">' + esc(e.verb) + "</span>" +
+              '<span class="id">' + esc(e.type) + ":" + esc(e.key) + "</span>" +
+              '<span class="of">+' + e.offsetMs + "ms</span>" +
+              (e.data ? '<span class="da">· ' + esc(e.data) + "</span>" : "") +
+            "</div>"
+          ).join("") + "</div></div>";
+      }
+      if (s.exception){
+        h += '<div class="sec"><h4>Exception</h4><pre class="exc">' + esc(s.exception) + "</pre></div>";
+      }
+      p.innerHTML = h;
+      return p;
+    }
+  </script>
 </body>
 </html>

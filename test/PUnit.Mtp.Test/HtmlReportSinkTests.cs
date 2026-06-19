@@ -56,6 +56,9 @@ public sealed class HtmlReportSinkTests : IDisposable
         Assert.Contains("books", html, StringComparison.Ordinal); // scenario name present
         Assert.Contains("\"scenarioId\": \"scn\"", html, StringComparison.Ordinal); // JSON blob present
         Assert.DoesNotContain("__PUNIT_REPORT_JSON__", html, StringComparison.Ordinal); // token replaced
+        Assert.Contains("PUnit run report", html, StringComparison.Ordinal); // restyled shell present
+        Assert.Contains("id=\"chips\"", html, StringComparison.Ordinal); // dashboard header chips present
+        Assert.Contains("data-theme", html, StringComparison.Ordinal); // theme override wiring present
     }
 
     [Fact]
