@@ -22,6 +22,10 @@ public sealed class RunEventBus : IRunEventSink
     /// <summary>The first error each failed sink raised, in sink order; empty when all sinks held.</summary>
     public IReadOnlyList<Exception> Failures => _failures;
 
+    // THREADING: not thread-safe. Correctness relies on the serial-emission invariant: at most one
+    // PublishAsync call is in flight at a time (enforced by PUnitRunLoop's sequential event emission).
+    // If a future change parallelises scenarios or makes the scheduler notify observers concurrently,
+    // both _failures/_firstError and the sink accumulators (e.g. HtmlReportModelBuilder) would race.
     public async ValueTask PublishAsync(RunEvent evt)
     {
         ArgumentNullException.ThrowIfNull(evt);

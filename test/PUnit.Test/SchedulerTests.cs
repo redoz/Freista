@@ -275,7 +275,7 @@ public class SchedulerTests
     }
 
     [Fact]
-    public async Task Concurrent_group_steps_get_distinct_overlapping_windows()
+    public async Task Concurrent_group_steps_get_distinct_started_at()
     {
         var clock = new TestTimeProvider(new DateTimeOffset(2026, 6, 9, 12, 0, 0, TimeSpan.Zero));
         var def = Def(

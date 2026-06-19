@@ -255,6 +255,9 @@ public class MtpReportSinkTests
         var finished = bus.Nodes[^1];
         var timing = Assert.Single(finished.Properties.OfType<TimingProperty>());
         Assert.Equal(TimeSpan.FromMilliseconds(250), timing.GlobalTiming.Duration);
+        // The window is StartedAt-anchored (design §3.B bonus): asserts the actual behavioral change
+        // so that reverting to the old finish-anchored computation breaks this test.
+        Assert.Equal(TestInstant, timing.GlobalTiming.StartTime);
     }
 
     [Fact]

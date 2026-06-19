@@ -10,7 +10,7 @@ using Xunit;
 namespace PUnit.Mtp.Test;
 
 /// <summary>
-/// Phase 5 behavioral tests for the run loop. On a run request the loop reads the filter
+/// Phase 3 behavioral tests for the run loop. On a run request the loop reads the filter
 /// (a <c>TestNodeUidListFilter</c> uid set, or null = run everything), maps each requested step-uid
 /// onto its owning scenario, and runs each <em>distinct</em> scenario exactly once via the
 /// <see cref="ScenarioScheduler"/> with the Phase-3 <see cref="MtpReportSink"/> and a per-run

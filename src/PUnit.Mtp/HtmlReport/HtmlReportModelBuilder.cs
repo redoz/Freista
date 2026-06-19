@@ -36,7 +36,7 @@ internal sealed class HtmlReportModelBuilder
             Passed = scenarios.Count(s => s.Status == "passed"),
             Failed = scenarios.Count(s => s.Status == "failed"),
             Skipped = scenarios.Count(s => s.Status == "skipped"),
-            TotalMs = scenarios.Count == 0 ? 0 : scenarios.Max(s => s.DurationMs),
+            TotalMs = scenarios.Sum(s => s.DurationMs),
         };
 
         return new HtmlReportModel

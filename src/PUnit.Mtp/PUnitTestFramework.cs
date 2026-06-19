@@ -9,8 +9,10 @@ using System.Globalization;
 using Microsoft.Testing.Platform.Extensions;
 using Microsoft.Testing.Platform.Extensions.Messages;
 using Microsoft.Testing.Platform.Extensions.TestFramework;
+using Microsoft.Testing.Platform.Logging;
 using Microsoft.Testing.Platform.Messages;
 using Microsoft.Testing.Platform.Requests;
+using Microsoft.Testing.Platform.Services;
 using Microsoft.Testing.Platform.TestHost;
 using PUnit.Model;
 using PUnit.Reporting;
@@ -239,9 +241,22 @@ public class PUnitTestFramework :
         var loop = new PUnitRunLoop(EnumerateRegisteredScenarios);
         await loop.RunAsync(uids, bus, cancellationToken).ConfigureAwait(false);
 
-        foreach (var failure in bus.Failures)
+        if (bus.Failures.Count > 0)
         {
-            NodeDiagnostics.Log("report-sink-failure", failure.ToString());
+            // Surface each sink failure through MTP's logger so a broken --report-html write is
+            // visible to the user via --diagnostic output (design §3.A/§3.E). The debug
+            // NodeDiagnostics path is kept as a fallback for the unit-test code path where
+            // _services is null (parameterless ctor).
+            ILogger? logger = _services?.GetLoggerFactory().CreateLogger(typeof(PUnitTestFramework).FullName!);
+            foreach (var failure in bus.Failures)
+            {
+                if (logger is not null)
+                {
+                    await logger.LogWarningAsync($"report sink failure: {failure}").ConfigureAwait(false);
+                }
+
+                NodeDiagnostics.Log("report-sink-failure", failure.ToString());
+            }
         }
 
         operationComplete();

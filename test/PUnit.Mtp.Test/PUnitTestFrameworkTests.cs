@@ -7,10 +7,9 @@ using Xunit;
 namespace PUnit.Mtp.Test;
 
 /// <summary>
-/// Phase 2 behavioral tests for the MTP <c>ITestFramework</c> shell: session create/close
-/// correctness and request dispatch (discover vs run routing). Discovery/run bodies land in
-/// later phases; here we assert the shell's contract and that <c>ExecuteRequestAsync</c> routes
-/// each request kind to the right handler and always completes the operation.
+/// Phase 0 behavioral tests for the MTP <c>ITestFramework</c> shell: session create/close
+/// lifecycle (open, close, duplicate-open, double-close, unknown-close) and the base
+/// <c>ExecuteRequestAsync</c> routing contract (discover vs run routing to the right handler).
 /// </summary>
 public static class PUnitTestFrameworkTests
 {
