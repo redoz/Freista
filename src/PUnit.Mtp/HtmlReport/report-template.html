@@ -17,6 +17,8 @@
     --pass-text:#15803d; --fail-text:#b91c1c; --skip-text:#8a5e0a;
     --pass-bg:#e4f5ea; --fail-bg:#fbe8e8; --skip-bg:#f6edd6;
     --bar-pass:#22a35a; --bar-fail:#dc3b3b; --bar-skip:#a7740f; --bar-text:#ffffff;
+    --ph-given:#2f74d0; --ph-when:#8350c4; --ph-then:#0c8576;
+    --ph-given-ink:#2562c2; --ph-when-ink:#7237bd; --ph-then-ink:#0a7567;
     --v-create:#2563eb; --v-read:#0d9488; --v-edit:#e07a14; --v-delete:#9333ea;
     --grid:rgba(20,28,40,.06); --lifeline:#cdd4dc; --ruler-text:#8b929c;
     --accent:#3b62e8;
@@ -35,6 +37,8 @@
       --pass-text:#56d364; --fail-text:#ff7b72; --skip-text:#e3b341;
       --pass-bg:rgba(63,185,80,.15); --fail-bg:rgba(240,82,74,.15); --skip-bg:rgba(212,161,58,.16);
       --bar-pass:#2ea043; --bar-fail:#da3633; --bar-skip:#b9842a; --bar-text:#ffffff;
+      --ph-given:#3f82e6; --ph-when:#9a6ae0; --ph-then:#1aa48d;
+      --ph-given-ink:#2562c2; --ph-when-ink:#7237bd; --ph-then-ink:#0a7567;
       --v-create:#4f8bff; --v-read:#2dd4bf; --v-edit:#f59e3c; --v-delete:#c07bf0;
       --grid:rgba(180,200,230,.07); --lifeline:#39414e; --ruler-text:#6c7682;
       --accent:#5b86ff;
@@ -53,6 +57,8 @@
     --pass-text:#15803d; --fail-text:#b91c1c; --skip-text:#8a5e0a;
     --pass-bg:#e4f5ea; --fail-bg:#fbe8e8; --skip-bg:#f6edd6;
     --bar-pass:#22a35a; --bar-fail:#dc3b3b; --bar-skip:#a7740f; --bar-text:#ffffff;
+    --ph-given:#2f74d0; --ph-when:#8350c4; --ph-then:#0c8576;
+    --ph-given-ink:#2562c2; --ph-when-ink:#7237bd; --ph-then-ink:#0a7567;
     --v-create:#2563eb; --v-read:#0d9488; --v-edit:#e07a14; --v-delete:#9333ea;
     --grid:rgba(20,28,40,.06); --lifeline:#cdd4dc; --ruler-text:#8b929c;
     --accent:#3b62e8;
@@ -69,6 +75,8 @@
     --pass-text:#56d364; --fail-text:#ff7b72; --skip-text:#e3b341;
     --pass-bg:rgba(63,185,80,.15); --fail-bg:rgba(240,82,74,.15); --skip-bg:rgba(212,161,58,.16);
     --bar-pass:#2ea043; --bar-fail:#da3633; --bar-skip:#b9842a; --bar-text:#ffffff;
+    --ph-given:#3f82e6; --ph-when:#9a6ae0; --ph-then:#1aa48d;
+    --ph-given-ink:#2562c2; --ph-when-ink:#7237bd; --ph-then-ink:#0a7567;
     --v-create:#4f8bff; --v-read:#2dd4bf; --v-edit:#f59e3c; --v-delete:#c07bf0;
     --grid:rgba(180,200,230,.07); --lifeline:#39414e; --ruler-text:#6c7682;
     --accent:#5b86ff;
@@ -113,6 +121,19 @@
   .chip.skip .dot{ background:var(--skip); } .chip.skip .n{ color:var(--skip-text); }
   .chip.meta .n{ color:var(--ink); font-size:16px; }
   .chip.meta{ min-width:0; }
+
+  /* ---------- PHASE LEGEND ---------- */
+  .phase-legend{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-top:14px; }
+  .phase-legend .pl-title{ font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); }
+  .phase-legend .it{ display:inline-flex; align-items:center; gap:7px; font-size:12.5px; color:var(--muted); }
+  .phase-legend b{
+    width:19px; height:19px; border-radius:5px; flex:none; display:grid; place-items:center;
+    color:#fff; font:700 10.5px/1 ui-monospace, Consolas, monospace;
+    box-shadow:var(--shadow-sm); border:1px solid rgba(0,0,0,.08);
+  }
+  .phase-legend b.g{ background:var(--ph-given); }
+  .phase-legend b.w{ background:var(--ph-when); }
+  .phase-legend b.t{ background:var(--ph-then); }
 
   /* ---------- SCENARIO CARD ---------- */
   main{ max-width:1180px; margin:0 auto; padding:14px 24px 60px; }
@@ -170,15 +191,23 @@
     box-shadow:var(--shadow-sm); border:1px solid rgba(0,0,0,.07);
     transition:filter .12s ease, box-shadow .12s ease;
   }
-  .bar.passed{ --bcolor:var(--bar-pass); }
-  .bar.failed{ --bcolor:var(--bar-fail); }
-  .bar.skipped{ --bcolor:var(--bar-skip); }
+  .bar.passed{ --bcolor:var(--bar-pass); }              /* fallback for unknown phases */
+  .bar.passed.ph-given{ --bcolor:var(--ph-given); }     /* passing bars carry the phase hue */
+  .bar.passed.ph-when{  --bcolor:var(--ph-when); }
+  .bar.passed.ph-then{  --bcolor:var(--ph-then); }
+  .bar.failed{ --bcolor:var(--bar-fail); }              /* status OVERRIDES phase: failed = red */
+  .bar.skipped{ --bcolor:var(--bar-skip); }             /* status OVERRIDES phase: skipped = grey */
   .bar:hover{ filter:brightness(1.07); box-shadow:0 2px 8px rgba(0,0,0,.18); }
   .bar.active{ outline:2px solid var(--accent); outline-offset:1px; }
   .bar .ph{
     font:700 9.5px/1 ui-monospace, Consolas, monospace; letter-spacing:.04em;
-    background:rgba(255,255,255,.24); border-radius:4px; padding:3px 4px; flex:none;
+    background:rgba(255,255,255,.92); color:var(--faint); border-radius:4px; padding:3px 4px; flex:none;
+    text-shadow:none; box-shadow:0 0 0 .5px rgba(0,0,0,.06);
   }
+  /* phase-tinted glyph stays decodable even when status (red/grey) overrides the bar fill */
+  .bar.ph-given .ph{ color:var(--ph-given-ink); }
+  .bar.ph-when  .ph{ color:var(--ph-when-ink); }
+  .bar.ph-then  .ph{ color:var(--ph-then-ink); }
   .bar .lbl{ overflow:hidden; text-overflow:ellipsis; text-shadow:0 1px 1px rgba(0,0,0,.22); }
 
   /* resource lane */
@@ -249,6 +278,12 @@
       </div>
     </div>
     <div class="chips" id="chips"></div>
+    <div class="phase-legend" aria-label="Given / When / Then phase colors">
+      <span class="pl-title">Phases</span>
+      <span class="it"><b class="g">G</b>Given</span>
+      <span class="it"><b class="w">W</b>When</span>
+      <span class="it"><b class="t">T</b>Then</span>
+    </div>
   </div>
   <main id="report"></main>
 
@@ -318,6 +353,7 @@
     // ---- scenarios --------------------------------------------------------
     const VCOLOR = { create: "var(--v-create)", read: "var(--v-read)", load: "var(--v-read)", edit: "var(--v-edit)", delete: "var(--v-delete)" };
     const BARVAR = { passed: "--bar-pass", failed: "--bar-fail", skipped: "--bar-skip" };
+    const PHCOLOR = { given: "var(--ph-given)", when: "var(--ph-when)", then: "var(--ph-then)" };
     const report = document.getElementById("report");
     const openers = [];
 
@@ -392,7 +428,7 @@
         const g = el("div", "tl-gutter");
         const track = el("div", "tl-track");
         for (const s of sc.steps.filter((s) => s.lane === lane)){
-          const bar = el("div", "bar " + s.status);
+          const bar = el("div", "bar " + s.status + " ph-" + s.phase.toLowerCase());
           bar.dataset.step = s.stepId;
           bar.style.left = (s.offsetMs * px) + "px";
           bar.style.width = Math.max(MIN_BAR, s.durationMs * px) + "px";
@@ -456,7 +492,7 @@
     function buildDrill(s){
       const p = el("div", "drill");
       let h = '<div class="drill-head">' +
-        '<span class="ph" style="background:var(' + BARVAR[s.status] + ');color:#fff">' + s.phase + "</span>" +
+        '<span class="ph" style="background:' + (PHCOLOR[s.phase.toLowerCase()] || "var(--faint)") + ';color:#fff;padding:2px 7px;border-radius:5px;font:700 11px/1.5 ui-monospace,Consolas,monospace">' + s.phase + "</span>" +
         '<span class="dn">' + esc(s.displayName) + "</span>" +
         '<span class="pill ' + s.status + '"><span class="pd"></span>' + s.status + "</span>" +
         '<span class="dm">+' + s.offsetMs + "ms · " + fmtDur(s.durationMs) + "</span>" +
