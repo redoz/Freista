@@ -1,4 +1,5 @@
 using PUnit;
+using PUnit.Scheduling;
 using Xunit;
 
 namespace PUnit.Test;
@@ -82,6 +83,62 @@ public class ScenarioContextTests
 
         var effect = Assert.Single(ctx.Resources.Effects);
         Assert.Equal(new ResourceIdentity(typeof(PlainWidget), "widget"), effect.Identity);
+    }
+
+    /// <summary>
+    /// When built over a <see cref="SimulatedClock"/> (the per-step clock the scheduler injects in
+    /// simulated-time mode), <see cref="ScenarioContext.SimulateElapsed"/> advances that exact clock,
+    /// observable through the context's own <see cref="ScenarioContext.TimeProvider"/>.
+    /// </summary>
+    [Fact]
+    public void SimulateElapsed_advances_a_simulated_clock_via_TimeProvider()
+    {
+        var baseInstant = new DateTimeOffset(2026, 6, 19, 0, 0, 0, TimeSpan.Zero);
+        var clock = new SimulatedClock(baseInstant);
+        var ctx = new ScenarioContext(
+            "s", "n", services: null, resolver: null, timeProvider: clock, CancellationToken.None);
+
+        Assert.Same(clock, ctx.TimeProvider);
+
+        ctx.SimulateElapsed(TimeSpan.FromMilliseconds(250));
+
+        Assert.Equal(baseInstant + TimeSpan.FromMilliseconds(250), ctx.TimeProvider.GetUtcNow());
+    }
+
+    /// <summary>
+    /// Because the resource tracer shares the same per-step <see cref="TimeProvider"/>, a simulated
+    /// advance shifts the timestamp of effects recorded afterwards onto the same timeline.
+    /// </summary>
+    [Fact]
+    public async Task SimulateElapsed_shifts_subsequent_resource_effect_timestamps()
+    {
+        var baseInstant = new DateTimeOffset(2026, 6, 19, 0, 0, 0, TimeSpan.Zero);
+        var clock = new SimulatedClock(baseInstant);
+        var ctx = new ScenarioContext(
+            "s", "n", services: null, resolver: null, timeProvider: clock, CancellationToken.None);
+
+        ctx.SimulateElapsed(TimeSpan.FromMilliseconds(500));
+        await ctx.Resources.Create(new PlainWidget("w"));
+
+        var effect = Assert.Single(ctx.Resources.Effects);
+        Assert.Equal(baseInstant + TimeSpan.FromMilliseconds(500), effect.Timestamp);
+    }
+
+    /// <summary>
+    /// On a real run the context is built over <see cref="TimeProvider.System"/> (via either
+    /// constructor); <see cref="ScenarioContext.SimulateElapsed"/> must be an inert no-op that never
+    /// throws and never swaps out the provider.
+    /// </summary>
+    [Fact]
+    public void SimulateElapsed_is_a_noop_over_the_system_time_provider()
+    {
+        var ctx = new ScenarioContext("s", "n", services: null, CancellationToken.None);
+
+        Assert.Same(TimeProvider.System, ctx.TimeProvider);
+
+        ctx.SimulateElapsed(TimeSpan.FromSeconds(5));
+
+        Assert.Same(TimeProvider.System, ctx.TimeProvider);
     }
 
     private sealed record PlainWidget(string Name);
