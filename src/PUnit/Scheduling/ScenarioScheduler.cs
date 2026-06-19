@@ -15,14 +15,26 @@ public sealed class ScenarioScheduler
 {
     private readonly int _maxParallelism;
     private readonly TimeProvider _timeProvider;
+    private readonly bool _simulatedTime;
 
     /// <param name="maxParallelism">Maximum steps running at once; 0 (default) means unbounded.</param>
     /// <param name="timeProvider">Clock for step <see cref="StepResult.StartedAt"/> stamps and step
-    /// resource effects; defaults to <see cref="TimeProvider.System"/>.</param>
-    public ScenarioScheduler(int maxParallelism = 0, TimeProvider? timeProvider = null)
+    /// resource effects; defaults to <see cref="TimeProvider.System"/>. In simulated-time mode this is
+    /// sampled once for the run's base instant; per-step clocks are derived from it.</param>
+    /// <param name="simulatedTime">When true, drives a deterministic DAG-correct timeline: each step
+    /// gets its own <see cref="SimulatedClock"/> seeded at <c>base + start offset</c>, where a node's
+    /// start offset is the MAX of its dependencies' finish offsets (parallel siblings overlap; a join
+    /// never starts at the SUM of its parallel deps). Step duration is whatever the step advanced its
+    /// clock via <see cref="ScenarioContext.SimulateElapsed"/>. When false (the default) timing is
+    /// real and byte-for-byte unchanged.</param>
+    public ScenarioScheduler(
+        int maxParallelism = 0,
+        TimeProvider? timeProvider = null,
+        bool simulatedTime = false)
     {
         _maxParallelism = maxParallelism;
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _simulatedTime = simulatedTime;
     }
 
 
@@ -44,6 +56,12 @@ public sealed class ScenarioScheduler
 
         var pending = new HashSet<int>(Enumerable.Range(0, count));
         var running = new Dictionary<Task<NodeOutcome>, int>();
+
+        // Simulated-time bookkeeping. The base instant is sampled once; per-node start/finish offsets
+        // (TimeSpan from base) compose the DAG-correct timeline. Unused in real mode.
+        var simBase = _simulatedTime ? _timeProvider.GetUtcNow() : default;
+        var simStartOffset = _simulatedTime ? new TimeSpan[count] : null;
+        var simFinishOffset = _simulatedTime ? new TimeSpan[count] : null;
 
         while (pending.Count > 0 || running.Count > 0)
         {
@@ -111,7 +129,15 @@ public sealed class ScenarioScheduler
                                 .ConfigureAwait(false);
                         }
 
-                        running[RunNodeAsync(node, inputs, services, displayName, cancellationToken)] = i;
+                        var startOffset = TimeSpan.Zero;
+                        if (_simulatedTime)
+                        {
+                            startOffset = StartOffset(node, simFinishOffset!);
+                            simStartOffset![i] = startOffset;
+                        }
+
+                        running[RunNodeAsync(
+                            node, inputs, services, displayName, simBase, startOffset, cancellationToken)] = i;
                         progressed = true;
                     }
                 }
@@ -145,6 +171,11 @@ public sealed class ScenarioScheduler
                 outputs[index] = outcome.Output;
             }
 
+            if (_simulatedTime)
+            {
+                simFinishOffset![index] = simStartOffset![index] + outcome.Result.Duration;
+            }
+
             results[index] = outcome.Result;
             if (observer is not null)
             {
@@ -167,12 +198,21 @@ public sealed class ScenarioScheduler
                     .ConfigureAwait(false);
             }
 
+            var startedAt = _timeProvider.GetUtcNow();
+            if (_simulatedTime)
+            {
+                var startOffset = StartOffset(node, simFinishOffset!);
+                simStartOffset![i] = startOffset;
+                simFinishOffset![i] = startOffset; // skipped steps have zero duration
+                startedAt = simBase + startOffset;
+            }
+
             var result = new StepResult
             {
                 Node = node,
                 DisplayName = name,
                 Status = StepStatus.Skipped,
-                StartedAt = _timeProvider.GetUtcNow(),
+                StartedAt = startedAt,
                 SkipReason = reason,
             };
             results[i] = result;
@@ -188,13 +228,22 @@ public sealed class ScenarioScheduler
         IStepInputs inputs,
         IServiceProvider? services,
         string displayName,
+        DateTimeOffset simBase,
+        TimeSpan simStartOffset,
         CancellationToken scenarioToken)
     {
-        var startedAt = _timeProvider.GetUtcNow();
+        // In simulated mode each step runs on its own clock seeded at base + start offset, so the
+        // step's timing AND its resource-effect timestamps share one consistent timeline. Duration is
+        // whatever the body advanced that clock. In real mode the step clock is the injected provider
+        // and duration comes from the stopwatch — byte-for-byte the original path.
+        var simClock = _simulatedTime ? new SimulatedClock(simBase + simStartOffset) : null;
+        var stepTimeProvider = simClock ?? _timeProvider;
+        var startedAt = simClock is not null ? simBase + simStartOffset : _timeProvider.GetUtcNow();
         var stopwatch = Stopwatch.StartNew();
+        TimeSpan Elapsed() => simClock?.Advanced ?? stopwatch.Elapsed;
         using var stepCts = CancellationTokenSource.CreateLinkedTokenSource(scenarioToken);
         var context = new ScenarioContext(
-            node.StepId, displayName, services, resolver: null, _timeProvider, stepCts.Token);
+            node.StepId, displayName, services, resolver: null, stepTimeProvider, stepCts.Token);
 
         try
         {
@@ -236,7 +285,7 @@ public sealed class ScenarioScheduler
                     DisplayName = displayName,
                     Status = StepStatus.Passed,
                     StartedAt = startedAt,
-                    Duration = stopwatch.Elapsed,
+                    Duration = Elapsed(),
                     Logs = context.Logs,
                     Attachments = context.Attachments,
                     Effects = context.Resources.Effects,
@@ -262,7 +311,7 @@ public sealed class ScenarioScheduler
                     DisplayName = displayName,
                     Status = statusValue,
                     StartedAt = startedAt,
-                    Duration = stopwatch.Elapsed,
+                    Duration = Elapsed(),
                     Exception = exception,
                     SkipReason = skipReason,
                     Logs = context.Logs,
@@ -289,6 +338,25 @@ public sealed class ScenarioScheduler
             // the scenario — fall back to the unformatted template.
             return node.DisplayNameTemplate;
         }
+    }
+
+    /// <summary>
+    /// A node's simulated start offset (from the run's base instant): zero for a root, otherwise the
+    /// MAX of its dependencies' finish offsets. Using the max means parallel siblings overlap and a
+    /// join starts when its last parallel dependency finished — never at their sum.
+    /// </summary>
+    private static TimeSpan StartOffset(ScenarioNode node, TimeSpan[] finishOffsets)
+    {
+        var offset = TimeSpan.Zero;
+        foreach (var dep in node.DependsOn)
+        {
+            if (finishOffsets[dep] > offset)
+            {
+                offset = finishOffsets[dep];
+            }
+        }
+
+        return offset;
     }
 
     private static string BuildSkipReason(List<string>? failed, List<string>? skipped)
