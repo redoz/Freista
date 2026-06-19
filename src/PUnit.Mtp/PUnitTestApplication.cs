@@ -36,6 +36,8 @@ public static class PUnitTestApplication
 
         configure?.Invoke(builder);
 
+        builder.CommandLine.AddProvider(() => new HtmlReport.HtmlReportOptionsProvider());
+
         builder.RegisterTestFramework(
             _ => new TestFrameworkCapabilities(),
             (_, serviceProvider) => new PUnitTestFramework(serviceProvider));

@@ -228,7 +228,14 @@ public class PUnitTestFramework :
         CancellationToken cancellationToken)
     {
         var uids = ReadUidFilter(filter);
-        var bus = new RunEventBus([new MtpReportSink(sessionUid, messageBus, this)]);
+
+        var sinks = new List<IRunEventSink> { new MtpReportSink(sessionUid, messageBus, this) };
+        if (HtmlReport.HtmlReportPath.Resolve(_services) is { } reportPath)
+        {
+            sinks.Add(new HtmlReport.HtmlReportSink(reportPath, TimeProvider.System));
+        }
+
+        var bus = new RunEventBus(sinks);
         var loop = new PUnitRunLoop(EnumerateRegisteredScenarios);
         await loop.RunAsync(uids, bus, cancellationToken).ConfigureAwait(false);
 
