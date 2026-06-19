@@ -10,11 +10,16 @@
          global.json selects the MTP runner for `dotnet test`. -->
     <EnableMSTestRunner>true</EnableMSTestRunner>
     <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
-    <!-- PUnit emits the single Main; suppress the SDK-provided entry points so there is no clash.
-         (These live in PUnit.Mtp's buildTransitive props/targets for package consumers; the sample
-         references PUnit.Mtp by project, so we set them here directly.) -->
+    <!-- PUnit normally emits the single Main; suppress the SDK-provided entry points so there is no
+         clash. (These live in PUnit.Mtp's buildTransitive props/targets for package consumers; the
+         sample references PUnit.Mtp by project, so we set them here directly.) -->
     <GenerateProgramFile>false</GenerateProgramFile>
     <GenerateTestingPlatformEntryPoint>false</GenerateTestingPlatformEntryPoint>
+    <!-- This showcase hand-writes Program.cs (below) so it can opt into PUnit's deterministic
+         simulated-time scheduler (simulateTime: true) — the authored step durations give the HTML
+         report a realistic, overlapping timeline. Suppress the generated entry point to avoid a
+         second Main. A real consumer leaves this at its default (true) and gets the generated one. -->
+    <PUnitGenerateProgram>false</PUnitGenerateProgram>
   </PropertyGroup>
 
   <!-- Expose the entry-point gate to the generator (default true ⇒ emit PUnitProgram.g.cs). -->
