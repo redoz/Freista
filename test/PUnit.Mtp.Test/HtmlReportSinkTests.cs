@@ -89,6 +89,30 @@ public sealed class HtmlReportSinkTests : IDisposable
         Assert.Single(bus.Failures);     // recorded for the framework to log
     }
 
+    [Fact]
+    public async Task Report_embeds_the_serif_font_and_links_no_external_assets()
+    {
+        var path = Path.Combine(_dir, "punit-report.html");
+        var sink = new HtmlReport.HtmlReportSink(path, new TestTimeProviderUtc(T0));
+        var def = Def();
+        await sink.PublishAsync(new RunStarted(1));
+        await sink.PublishAsync(new ScenarioStarted(def));
+        await sink.PublishAsync(new StepFinished(def, Passed(def.Nodes[0])));
+        await sink.PublishAsync(new ScenarioFinished(def, [Passed(def.Nodes[0])]));
+        await sink.PublishAsync(new RunFinished());
+
+        var html = await File.ReadAllTextAsync(path);
+        // Source Serif 4 embedded as base64 woff2 (no CDN/web-font)
+        Assert.Contains("@font-face", html, StringComparison.Ordinal);
+        Assert.Contains("Source Serif 4", html, StringComparison.Ordinal);
+        Assert.Contains("data:font/woff2;base64,", html, StringComparison.Ordinal);
+        // self-contained: no external asset references
+        Assert.DoesNotContain("fonts.googleapis.com", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("@import", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("<link rel=\"stylesheet\" href=\"http", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("<script src=\"http", html, StringComparison.Ordinal);
+    }
+
     private sealed class TestTimeProviderUtc(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
