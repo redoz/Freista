@@ -34,6 +34,9 @@
     --accent:#3b62e8;
     --shadow:0 1px 2px rgba(17,24,39,.06), 0 6px 16px rgba(17,24,39,.06);
     --shadow-sm:0 1px 2px rgba(17,24,39,.07);
+    --ad-panel:#ffffff; --ad-cell:#eef1f5; --ad-cell-row:#e4e8ee; --ad-wall:#aab2bd;
+    --ad-control:#8b929c; --ad-grid:#d8dde4; --ad-card:#ffffff; --ad-card-border:#d0d7de;
+    --ad-card-ink:#1f2328; --ad-grey:#aab2bd; --ad-grey-badge:#8b93a0; --ad-band-op:.09;
   }
   /* ---------- DARK PALETTE (auto) ---------- */
   @media (prefers-color-scheme: dark){
@@ -54,6 +57,9 @@
       --accent:#5b86ff;
       --shadow:0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.35);
       --shadow-sm:0 1px 2px rgba(0,0,0,.4);
+      --ad-panel:#0d1117; --ad-cell:#161b22; --ad-cell-row:#1a212b; --ad-wall:#5f6873;
+      --ad-control:#5c6571; --ad-grid:#1d2531; --ad-card:#131922; --ad-card-border:#2a313c;
+      --ad-card-ink:#e6edf3; --ad-grey:#5c6571; --ad-grey-badge:#7e8794; --ad-band-op:.065;
     }
   }
   /* ---------- EXPLICIT OVERRIDES (screenshot-deterministic) ---------- */
@@ -74,6 +80,9 @@
     --accent:#3b62e8;
     --shadow:0 1px 2px rgba(17,24,39,.06), 0 6px 16px rgba(17,24,39,.06);
     --shadow-sm:0 1px 2px rgba(17,24,39,.07);
+    --ad-panel:#ffffff; --ad-cell:#eef1f5; --ad-cell-row:#e4e8ee; --ad-wall:#aab2bd;
+    --ad-control:#8b929c; --ad-grid:#d8dde4; --ad-card:#ffffff; --ad-card-border:#d0d7de;
+    --ad-card-ink:#1f2328; --ad-grey:#aab2bd; --ad-grey-badge:#8b93a0; --ad-band-op:.09;
   }
   :root[data-theme="dark"]{
     color-scheme: dark;
@@ -92,6 +101,9 @@
     --accent:#5b86ff;
     --shadow:0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.35);
     --shadow-sm:0 1px 2px rgba(0,0,0,.4);
+    --ad-panel:#0d1117; --ad-cell:#161b22; --ad-cell-row:#1a212b; --ad-wall:#5f6873;
+    --ad-control:#5c6571; --ad-grid:#1d2531; --ad-card:#131922; --ad-card-border:#2a313c;
+    --ad-card-ink:#e6edf3; --ad-grey:#5c6571; --ad-grey-badge:#7e8794; --ad-band-op:.065;
   }
 
   *{ box-sizing:border-box; }
@@ -434,6 +446,24 @@
       let h = 0; const k = t || ""; for (let i = 0; i < k.length; i++) h = (h * 31 + k.charCodeAt(i)) % 360;
       return "hsl(" + h + " 60% 45%)";
     }
+    function shade(color, amt){ // amt in [-1,1]; >0 -> toward white, <0 -> toward black
+      let r,g,b;
+      const h = color.match(/^#([0-9a-f]{6})$/i);
+      if (h){ const n=parseInt(h[1],16); r=n>>16; g=(n>>8)&255; b=n&255; }
+      else { const m=color.match(/hsl\(\s*([\d.]+)[, ]+([\d.]+)%[, ]+([\d.]+)%/i);
+        if(!m) return color; const [H,S,L]=[+m[1],+m[2]/100,+m[3]/100];
+        const c=(1-Math.abs(2*L-1))*S, x=c*(1-Math.abs((H/60)%2-1)), mm=L-c/2;
+        const t=H<60?[c,x,0]:H<120?[x,c,0]:H<180?[0,c,x]:H<240?[0,x,c]:H<300?[x,0,c]:[c,0,x];
+        [r,g,b]=t.map(v=>Math.round((v+mm)*255)); }
+      const tgt = amt>0?255:0, k=Math.abs(amt);
+      const mix=v=>Math.round(v+(tgt-v)*k);
+      return "#"+[mix(r),mix(g),mix(b)].map(v=>v.toString(16).padStart(2,"0")).join("");
+    }
+    function currentTheme(){
+      return document.documentElement.dataset.theme
+        || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    }
+    function labelColor(objColor){ return shade(objColor, currentTheme()==="dark" ? 0.22 : -0.22); }
 
     // object-flow legend (one swatch per distinct resource type in the run)
     const flowLegend = document.getElementById("flowlegend");
