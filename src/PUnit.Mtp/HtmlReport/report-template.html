@@ -248,6 +248,10 @@
   .ad-bdg{ font-weight:700; font-size:6.5px; }                                /* collapse count badge */
   .ad-phl{ font-weight:500; font-size:7px; letter-spacing:.16em; }            /* rotated phase label */
   .ad-tk{ font:500 6.5px ui-monospace,Consolas; fill:var(--ad-control); }     /* ruler ticks */
+  /* object-path hover emphasis: when any object is hovered, dim others; cursor on clickable nodes */
+  .ad-flow.has-em [data-obj]:not(.em){ opacity:.22 !important; }
+  .ad-flow.has-em [data-obj].em{ opacity:1 !important; }
+  .actdiag [data-step]{ cursor:pointer; }
 </style>
 </head>
 <body>
@@ -710,6 +714,7 @@
       const status = (st.status || "").toLowerCase();
       const tint = phaseColor(it.phase);
       const g = svgEl("g");
+      g.setAttribute("data-step", st.stepId);  // click→focusStep delegation target
       const box = svgEl("rect", { x: it.x, y: it.y, width: it.w, height: it.h, rx: 3 });
       if (status === "skipped"){
         box.style.fill = "color-mix(in srgb, var(--ad-grey) 12%, var(--ad-panel))";
@@ -1035,21 +1040,28 @@
       }
 
       // 4) draw (tier 1) — lines first (under the cards), then cards, then ports (rings/discs) on top.
+      // emphEls = { el, objKey } for hover-emphasis (data-obj="type:key" per resource).
+      // CSS .ad-flow.has-em rules handle dim/bright via !important; halos excluded (stay at .35).
+      const emphEls = [];
+      const tagObj = (el, objKey) => { el.dataset.obj = objKey; emphEls.push({ el, objKey }); return el; };
       const lineG = svgEl("g", { fill: "none", "stroke-linecap": "round", "stroke-width": "1.3" });
-      lineG.style.opacity = ".9";
-      const addLine = (d, color, head) => {
+      // Per-path opacity (was lineG.style.opacity=".9") so CSS !important can override on hover.
+      const addLine = (d, color, head, objKey) => {
         const p = svgEl("path", { d });
         p.style.stroke = color;
+        p.style.opacity = ".9";
         if (head) p.setAttribute("marker-end", "url(#" + markerFor(color) + ")");
         lineG.appendChild(p);
+        if (objKey) tagObj(p, objKey);
         return p;
       };
       for (const f of tier1Flows){
         if (!f.producerPt || !f.card) continue;
+        const objKey = f.type + ":" + String(f.key);
         // producer -> card: straight down through the join-wall gap (fork), then a gentle curve in.
         const throughY = f.producerInFork ? f.prodItem.y + f.prodItem.h : f.producerPt.y;
         f.producerPathD = producerToCardPath(f.producerPt, f.card, throughY);
-        addLine(f.producerPathD, f.color, false);
+        addLine(f.producerPathD, f.color, false, objKey);
         edges.push({
           kind: "produce", verb: f.createVerb, type: f.type, key: f.key, color: f.color,
           stepId: f.producerStepId, from: { x: f.producerPt.x, y: f.producerPt.y },
@@ -1061,7 +1073,7 @@
           if (!c.ring) continue;
           const x1 = f.card.cx, y1 = f.card.y + f.card.h;
           const d = flowEdgeDown(x1, y1, c.ring.x, c.ring.y);
-          addLine(d, f.color, true);
+          addLine(d, f.color, true, objKey);
           edges.push({
             kind: "consume", verb: c.verb, type: f.type, key: f.key, color: f.color,
             stepId: c.stepId, from: { x: x1, y: y1 }, to: { x: c.ring.x, y: c.ring.y },
@@ -1071,20 +1083,30 @@
         }
       }
       g.appendChild(lineG);
-      for (const card of tier1Cards) g.appendChild(cardEl(card));
+      for (const card of tier1Cards){
+        const objKey = card.type + ":" + String(card.key);
+        const cardG = cardEl(card);
+        tagObj(cardG, objKey);
+        g.appendChild(cardG);
+      }
       for (const f of tier1Flows) for (const c of f.consumers){
         if (!c.ring) continue;
+        const objKey = f.type + ":" + String(f.key);
         const ring = svgEl("circle", { cx: c.ring.x, cy: c.ring.y, r: RING_R, fill: "none", "stroke-width": "1.3" });
         ring.style.stroke = f.color;
+        tagObj(ring, objKey);
         g.appendChild(ring);
       }
       for (const f of tier1Flows){
         if (f.producerInFork || !f.producerPt) continue;
+        const objKey = f.type + ":" + String(f.key);
+        // halo: decorative; excluded from emphEls so it stays at .35 even when others are dimmed.
         const halo = svgEl("circle", { cx: f.producerPt.x, cy: f.producerPt.y, r: HALO_R, fill: "none", "stroke-width": "0.8" });
         halo.style.stroke = f.color; halo.style.opacity = ".35";
         g.appendChild(halo);
         const disc = svgEl("circle", { cx: f.producerPt.x, cy: f.producerPt.y, r: DISC_R });
         disc.style.fill = f.color;
+        tagObj(disc, objKey);
         g.appendChild(disc);
       }
 
@@ -1226,6 +1248,33 @@
         for (const cel of cCardEls) g.appendChild(cel);
         g.appendChild(portsG);
         g.appendChild(labelsG);
+      }
+
+      // ---- hover emphasis: mouseover/mouseout delegated on the flow group ----
+      // CSS .ad-flow.has-em handles dim (.22 !important) / bright (1 !important) via data-obj + .em.
+      // Moving between elements of the same object keeps emphasis; leaving the group clears it.
+      if (emphEls.length){
+        let emphObj = null;
+        const setEmph = (targetObj) => {
+          if (targetObj === emphObj) return;
+          emphObj = targetObj;
+          g.classList.toggle("has-em", targetObj != null);
+          for (const { el, objKey } of emphEls)
+            el.classList.toggle("em", targetObj != null && objKey === targetObj);
+        };
+        g.addEventListener("mouseover", (ev) => {
+          const t = ev.target && ev.target.closest ? ev.target.closest("[data-obj]") : null;
+          if (t) setEmph(t.dataset.obj);
+        });
+        g.addEventListener("mouseout", (ev) => {
+          if (!emphObj) return;
+          const rel = ev.relatedTarget;
+          if (rel && rel.closest){
+            const t = rel.closest("[data-obj]");
+            if (t && t.dataset.obj === emphObj) return;
+          }
+          setEmph(null);
+        });
       }
 
       return { g, cards, edges };
@@ -1534,6 +1583,17 @@
         const entry = drill.querySelector('.step-entry[data-step="' + stepId + '"]');
         if (entry) entry.scrollIntoView({ block: "nearest" });
         return true;
+      }
+
+      // node-click → focusStep: delegated listener on the actdiag SVG (built above).
+      // Action/assert nodes carry data-step; collapsed-card handlers stop propagation so they don't fire.
+      const diagramSvg = card.querySelector("svg.actdiag");
+      if (diagramSvg){
+        diagramSvg.addEventListener("click", (ev) => {
+          const target = ev.target && ev.target.closest ? ev.target.closest("[data-step]") : null;
+          if (!target) return;
+          focusStep(target.dataset.step, { toggle: true });
+        });
       }
 
       const drillHost = el("div", "drill-host");
