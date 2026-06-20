@@ -420,16 +420,132 @@
     // SVG namespace for the activity diagram (built with document.createElementNS)
     const SVGNS = "http://www.w3.org/2000/svg";
 
-    for (const sc of model.scenarios) report.appendChild(renderScenario(sc));
+    // ---- activity-diagram geometry (shared by layoutScenario + buildActivityDiagram) ----
+    const AD_W = 680, AD_MARGIN = 20, AD_BAND_W = AD_W - 2 * AD_MARGIN;
+    const AD_BAND_TOP = 40, AD_BAND_VPAD = 16, AD_GAP = 22, AD_MIN_BH = 64;
+    const NODE_FS = 7.5, NODE_H = 36, NODE_MINW = 64, NODE_PADX = 14;
+    const AD_FORK_HEAD = 22, AD_FORK_ROW = 16, AD_FORK_PAD = 12, AD_FORK_W = 300;
+    const phaseColor = (p) => PHCOLOR[p] || "var(--faint)";
 
-    // pre-expand the first failing step's scenario drill so its detail is visible by default
-    for (const sc of model.scenarios){
-      const failing = sc.steps.find((s) => s.status === "failed");
-      if (failing){
-        const o = openers.find((x) => x.scenarioId === sc.scenarioId);
-        if (o){ o.open(failing.stepId); break; }
+    // ---- text measurement for content-sized nodes ------------------------
+    // Source Serif 4's metrics differ from the fallback, so node widths are measured
+    // against the live (embedded) font once it loads (see renderAll's document.fonts.ready).
+    const AD_FONT = (getComputedStyle(document.documentElement).getPropertyValue("--ad-font") || "").trim()
+      || "'Source Serif 4', Georgia, serif";
+    let _measureSvg = null;
+    function measureSvg(){
+      if (!_measureSvg){
+        _measureSvg = svgEl("svg", { width: 0, height: 0, "aria-hidden": "true" });
+        _measureSvg.style.position = "absolute";
+        _measureSvg.style.left = "-9999px";
+        _measureSvg.style.visibility = "hidden";
+        document.body.appendChild(_measureSvg);
+      }
+      return _measureSvg;
+    }
+    function measureText(str, px, weight, italic){
+      const t = svgEl("text", { "font-size": px, "font-weight": weight || 400, visibility: "hidden" });
+      t.setAttribute("font-family", AD_FONT);
+      if (italic) t.setAttribute("font-style", "italic");
+      t.textContent = str == null ? "" : String(str);
+      measureSvg().appendChild(t);
+      const w = t.getComputedTextLength();
+      t.remove();
+      return w;
+    }
+    // content-sized box: measured label + horizontal padding, clamped to a min-width floor.
+    function nodeBox(label){
+      const w = Math.max(NODE_MINW, Math.round(measureText(label, NODE_FS, 400) + 2 * NODE_PADX));
+      return { w, h: NODE_H };
+    }
+    // node label = displayName with its redundant leading phase word ("Given "/"When "/"Then ") dropped.
+    function nodeLabel(step){
+      const ph = (step.phase || "").trim();
+      let n = step.displayName || "";
+      if (ph && n.toLowerCase().startsWith(ph.toLowerCase() + " ")) n = n.slice(ph.length + 1);
+      return n || step.displayName || step.label || "";
+    }
+
+    // ---- layout classification (THE interface Task 5's fork cell consumes) ----
+    // Walks a scenario's steps in index order and classifies them into an ordered list of
+    // spine items:  { kind:'node'|'fork', steps:[…], phase, x, y, w, h }  (y = absolute top).
+    //   • 'node' — an ordinary sequential step, rendered as a content-sized action/assert box.
+    //   • 'fork' — a MAXIMAL run of parallel steps (same phase, sharing a groupId or
+    //              overlapping in time on different lanes). It reserves ONE vertical slot,
+    //              left empty here; Task 5 drops the fork cell into {x,y,w,h}.
+    // Also derives the phase swimlane bands, sized to contain the items they hold.
+    // Returns { items, bands, contentBottom }.
+    function layoutScenario(sc){
+      const cx = AD_W / 2;
+      const steps = sc.steps.slice().sort((a, b) => a.index - b.index);
+
+      const overlap = (a, b) =>
+        a.offsetMs < b.offsetMs + b.durationMs && b.offsetMs < a.offsetMs + a.durationMs;
+      const coParallel = (a, b) =>
+        (a.phase || "").toLowerCase() === (b.phase || "").toLowerCase() &&
+        ((a.groupId != null && a.groupId === b.groupId) || (a.lane !== b.lane && overlap(a, b)));
+
+      // greedy maximal runs of mutually co-parallel, index-contiguous steps
+      const groups = [];
+      for (const s of steps){
+        const run = groups.length ? groups[groups.length - 1] : null;
+        if (run && run.some((m) => coParallel(m, s))) run.push(s);
+        else groups.push([s]);
+      }
+
+      // size each item (fork = reserved slot; node = content-sized box)
+      const items = groups.map((g) => {
+        const phase = (g[0].phase || "").toLowerCase();
+        if (g.length >= 2){
+          const w = Math.min(AD_BAND_W - 24, Math.max(160, AD_FORK_W));
+          const h = AD_FORK_HEAD + g.length * AD_FORK_ROW + AD_FORK_PAD;
+          return { kind: "fork", steps: g, phase, w, h, x: cx - w / 2, y: 0 };
+        }
+        const b = nodeBox(nodeLabel(g[0]));
+        return { kind: "node", steps: g, phase, w: b.w, h: b.h, x: cx - b.w / 2, y: 0 };
+      });
+
+      // place items top-to-bottom, opening a swimlane band per contiguous phase run
+      const bands = [];
+      let y = AD_BAND_TOP, cur = null;
+      const closeBand = () => { if (cur){ y += AD_BAND_VPAD; cur.h = y - cur.y; } };
+      for (const it of items){
+        if (!cur || cur.key !== it.phase){
+          closeBand();
+          cur = { key: it.phase, label: it.phase.toUpperCase(), color: phaseColor(it.phase), y, h: 0, items: [] };
+          bands.push(cur);
+          y += AD_BAND_VPAD;             // band top padding
+        } else {
+          y += AD_GAP;                   // control edge between two items in the same band
+        }
+        it.y = y;
+        cur.items.push(it);
+        y += it.h;
+      }
+      closeBand();
+
+      const contentBottom = items.length ? y : AD_BAND_TOP + AD_MIN_BH;
+      return { items, bands, contentBottom };
+    }
+
+    function renderAll(){
+      report.replaceChildren();
+      openers.length = 0;
+      for (const sc of model.scenarios) report.appendChild(renderScenario(sc));
+
+      // pre-expand the first failing step's scenario drill so its detail is visible by default
+      for (const sc of model.scenarios){
+        const failing = sc.steps.find((s) => s.status === "failed");
+        if (failing){
+          const o = openers.find((x) => x.scenarioId === sc.scenarioId);
+          if (o){ o.open(failing.stepId); break; }
+        }
       }
     }
+    // First paint uses the fallback font so the page is never blank; re-measure + re-render
+    // once Source Serif 4 is ready (its metrics, hence node widths, differ from the fallback).
+    renderAll();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(renderAll);
 
     // small helper: create a namespaced SVG element with a set of attributes
     function svgEl(tag, attrs){
@@ -438,34 +554,18 @@
       return e;
     }
 
-    // ---- activity diagram: frame (swimlane bands + tabs + rotated labels), a centred control
-    //      spine, and the initial + final nodes. The interior (actions / forks / object cards)
-    //      is filled in by later tasks; this is the <svg class="actdiag"> scaffold only. ----
+    // ---- activity diagram: swimlane frame (bands + tabs + rotated labels) carrying the
+    //      classified layout (layoutScenario): content-sized action/assert nodes on a centred
+    //      spine, joined by control-flow edges, with each fork group's slot reserved for the
+    //      fork cell (Task 5). Plus the initial + final nodes. <svg class="actdiag">. ----
     function buildActivityDiagram(sc){
-      const W = 680, MARGIN = 20;
-      const bandX = MARGIN, bandW = W - 2 * MARGIN, cx = W / 2;
-      const BAND_TOP = 40, ROW_H = 40, BAND_VPAD = 16, MIN_BH = 64;
+      const W = AD_W, bandX = AD_MARGIN, bandW = AD_BAND_W, cx = W / 2;
       const TAB_DX = 7, TAB_W = 2.5, LABEL_DX = 24;
       const INITIAL_CY = 22, INITIAL_R = 5.5, FINAL_R = 8, FINAL_CORE_R = 3.4;
 
-      // one band per phase actually present, in canonical Given -> When -> Then order;
-      // height is content-driven by the step count so setup-heavy phases get more room.
-      const PHASES = [
-        { key: "given", label: "GIVEN", color: "var(--ph-given)" },
-        { key: "when",  label: "WHEN",  color: "var(--ph-when)" },
-        { key: "then",  label: "THEN",  color: "var(--ph-then)" },
-      ];
-      const bands = [];
-      let y = BAND_TOP;
-      for (const ph of PHASES){
-        const count = sc.steps.filter((s) => (s.phase || "").toLowerCase() === ph.key).length;
-        if (!count) continue;
-        const h = Math.max(MIN_BH, count * ROW_H + 2 * BAND_VPAD);
-        bands.push({ label: ph.label, color: ph.color, y, h });
-        y += h;
-      }
-      const lastBottom = bands.length ? y : BAND_TOP + MIN_BH;
-      const finalCy = lastBottom + 28;
+      const layout = layoutScenario(sc);
+      const bands = layout.bands, items = layout.items;
+      const finalCy = layout.contentBottom + 28;
       const H = finalCy + 24;
 
       const svg = svgEl("svg", {
@@ -475,6 +575,19 @@
         "aria-label": "Activity diagram: " + sc.displayName,
         preserveAspectRatio: "xMidYMid meet",
       });
+
+      // arrowhead marker for control-flow edges (id unique per scenario svg)
+      const arrowId = "ad-arrow-" + sc.scenarioId;
+      const defs = svgEl("defs");
+      const marker = svgEl("marker", {
+        id: arrowId, viewBox: "0 0 8 8", refX: "6.8", refY: "4",
+        markerWidth: "4.4", markerHeight: "4.4", orient: "auto",
+      });
+      const arrow = svgEl("path", { d: "M0,0 L8,4 L0,8 z" });
+      arrow.style.fill = "var(--ad-control)";
+      marker.appendChild(arrow);
+      defs.appendChild(marker);
+      svg.appendChild(defs);
 
       // swimlane bands (tinted phase fill at the theme band opacity)
       for (const b of bands){
@@ -507,20 +620,35 @@
         svg.appendChild(t);
       }
 
-      // control-flow spine: a centred hairline from the initial node down to the final node
-      const spineTop = INITIAL_CY + INITIAL_R, spineBottom = finalCy - FINAL_R;
-      if (spineBottom > spineTop){
-        const spine = svgEl("path", {
-          d: "M" + cx + "," + spineTop + " V" + spineBottom,
-          fill: "none", "stroke-width": "1", "stroke-linecap": "round",
-        });
-        spine.style.stroke = "var(--ad-control)";
-        svg.appendChild(spine);
-      }
       // initial node (filled circle, top of the spine)
       const initial = svgEl("circle", { cx: cx, cy: INITIAL_CY, r: INITIAL_R });
       initial.style.fill = "var(--ad-card-ink)";
       svg.appendChild(initial);
+
+      // control-flow edges: initial -> each layout item -> final. Arrowheads point into every
+      // target except a fork slot (the fork bar is the join, mirroring the mock spine).
+      const edges = svgEl("g", {
+        fill: "none", "stroke-width": "1", "stroke-linecap": "round", "stroke-linejoin": "round",
+      });
+      edges.style.stroke = "var(--ad-control)";
+      const addEdge = (y1, y2, head) => {
+        if (y2 <= y1) return;
+        const p = svgEl("path", { d: "M" + cx + "," + y1 + " V" + y2 });
+        if (head) p.setAttribute("marker-end", "url(#" + arrowId + ")");
+        edges.appendChild(p);
+      };
+      let prevBottom = INITIAL_CY + INITIAL_R;
+      for (const it of items){
+        addEdge(prevBottom, it.y, it.kind !== "fork");
+        prevBottom = it.y + it.h;
+      }
+      addEdge(prevBottom, finalCy - FINAL_R, true);
+      svg.appendChild(edges);
+
+      // item bodies: content-sized action/assert boxes; fork slots reserved for Task 5
+      for (const it of items)
+        svg.appendChild(it.kind === "fork" ? forkSlot(it) : actionNode(it));
+
       // final node (ring + filled core, bottom of the spine)
       const ring = svgEl("circle", { cx: cx, cy: finalCy, r: FINAL_R, fill: "none", "stroke-width": "1.4" });
       ring.style.stroke = "var(--ad-card-ink)";
@@ -530,6 +658,56 @@
       svg.appendChild(core);
 
       return svg;
+    }
+
+    // a content-sized action/assert node: phase-tinted box (rx 3) + centred .ad-nm label,
+    // styled by step status (failed -> red stroke; skipped -> muted grey).
+    function actionNode(it){
+      const st = it.steps[0];
+      const status = (st.status || "").toLowerCase();
+      const tint = phaseColor(it.phase);
+      const g = svgEl("g");
+      const box = svgEl("rect", { x: it.x, y: it.y, width: it.w, height: it.h, rx: 3 });
+      if (status === "skipped"){
+        box.style.fill = "color-mix(in srgb, var(--ad-grey) 12%, var(--ad-panel))";
+        box.style.stroke = "var(--ad-grey)";
+        box.setAttribute("stroke-width", "1");
+      } else if (status === "failed"){
+        box.style.fill = "color-mix(in srgb, " + tint + " 15%, var(--ad-panel))";
+        box.style.stroke = "var(--fail)";
+        box.setAttribute("stroke-width", "1.3");
+      } else {
+        box.style.fill = "color-mix(in srgb, " + tint + " 15%, var(--ad-panel))";
+        box.style.stroke = "color-mix(in srgb, " + tint + " 32%, transparent)";
+        box.setAttribute("stroke-width", "1");
+      }
+      g.appendChild(box);
+      const label = svgEl("text", {
+        class: "ad-nm", x: it.x + it.w / 2, y: it.y + it.h / 2,
+        "text-anchor": "middle", "dominant-baseline": "central",
+      });
+      if (status === "skipped") label.style.fill = "var(--ad-grey)";
+      label.textContent = nodeLabel(st);
+      g.appendChild(label);
+      return g;
+    }
+
+    // reserved fork slot — a faint dashed placeholder; Task 5 renders the parallel cell here.
+    function forkSlot(it){
+      const g = svgEl("g");
+      const r = svgEl("rect", {
+        x: it.x, y: it.y, width: it.w, height: it.h, rx: 4,
+        fill: "none", "stroke-width": "1", "stroke-dasharray": "3 3",
+      });
+      r.style.stroke = "var(--ad-grid)";
+      g.appendChild(r);
+      const t = svgEl("text", {
+        class: "ad-tk", x: it.x + it.w / 2, y: it.y + it.h / 2,
+        "text-anchor": "middle", "dominant-baseline": "central",
+      });
+      t.textContent = "parallel · " + it.steps.length + " steps";
+      g.appendChild(t);
+      return g;
     }
 
     // renderScenario(sc) -> <section> with the header, the <svg class="actdiag">
