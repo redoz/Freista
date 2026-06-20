@@ -290,25 +290,26 @@
   /* ---------- OBJECT-FLOW OVERLAY ("lifelines dock into bars") ---------- */
   .timeline{ position:relative; }                 /* anchor for the absolute SVG overlay */
   .flow-svg{ position:absolute; left:0; top:0; pointer-events:none; overflow:visible; z-index:5; }
+  /* connectors: always-on at a readable strength; hover only thickens the traced ones */
   .conn{
-    fill:none; stroke-width:1.6; opacity:.10;
-    stroke-linecap:round; stroke-dasharray:3 4;
+    fill:none; stroke-width:1.7; opacity:.7;
+    stroke-linecap:round;
     transition:opacity .14s ease, stroke-width .14s ease;
   }
-  .conn.lit{ opacity:.96; stroke-width:2.4; stroke-dasharray:none; }
+  .conn.lit{ opacity:1; stroke-width:2.6; }
   .dock{
-    stroke:var(--surface); stroke-width:1.5; paint-order:stroke; opacity:.15;
+    stroke:var(--surface); stroke-width:1.5; paint-order:stroke; opacity:.92;
     transition:opacity .14s ease;
   }
   .dock.lit{ opacity:1; }
-  /* lifelines: faint by default, brighten + thicken when their object is traced */
-  .res-row .lifeline{ opacity:.42; transition:opacity .14s ease, height .14s ease, top .14s ease; }
+  /* lifelines: readable by default, brighten + thicken when their object is traced */
+  .res-row .lifeline{ opacity:.85; transition:opacity .14s ease, height .14s ease, top .14s ease; }
   .lifeline.lit{ opacity:1; height:3px; top:11px; box-shadow:0 0 0 1px rgba(255,255,255,.45); }
-  /* a bar that currently has object flow threaded through it gets outlined */
+  /* a bar that currently has object flow threaded through it gets outlined (hover emphasis only) */
   .bar.flow-bar{ box-shadow:0 0 0 2px var(--surface), 0 0 0 3.6px var(--accent), 0 2px 9px rgba(0,0,0,.20); }
-  /* connector identity chips: the object's Type:Key, riding its flow — hidden until that flow is revealed */
-  .flow-label{ opacity:0; pointer-events:none; transition:opacity .14s ease; }
-  .flow-label.lit{ opacity:1; pointer-events:auto; cursor:default; }
+  /* connector identity chips: the object's Type:Key, riding its flow — shown by default */
+  .flow-label{ opacity:1; pointer-events:auto; cursor:default; transition:opacity .14s ease; }
+  .flow-label.lit text{ font-weight:700; }
   .flow-label rect{ stroke-width:1.2; filter:drop-shadow(0 1px 1.4px rgba(0,0,0,.22)); }
   .flow-label text{
     fill:var(--ink); letter-spacing:-.01em;
@@ -321,7 +322,7 @@
   .flow-legend{ display:flex; align-items:center; gap:13px; flex-wrap:wrap; margin-top:8px; }
   .flow-legend .ttl{ font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); }
   .flow-legend .it{ display:inline-flex; align-items:center; gap:7px; font-size:12px; color:var(--muted); }
-  .flow-legend i{ width:17px; height:0; border-top:2.4px dashed var(--fc); border-radius:2px; display:inline-block; }
+  .flow-legend i{ width:17px; height:0; border-top:2.4px solid var(--fc); border-radius:2px; display:inline-block; }
   .flow-hint{ font-size:11.5px; color:var(--faint); }
 </style>
 </head>
@@ -344,7 +345,7 @@
     <div class="flow-legend" id="flowlegend" aria-label="Object flow colors per resource type">
       <span class="ttl">Object flows</span>
       <span class="flow-types"></span>
-      <span class="flow-hint">hover a step bar to trace the objects flowing through it &middot; hover a resource to trace its full path</span>
+      <span class="flow-hint">object flows shown by default &middot; hover a step or resource to emphasise its path</span>
     </div>
   </div>
   <main id="report"></main>
@@ -454,7 +455,7 @@
     for (const sc of model.scenarios) report.appendChild(renderScenario(sc));
 
     // pre-expand the first failing step's scenario drill so detail is visible by default
-    // (flows stay faint — only an explicit hover/click traces them)
+    // (object flows are always visible; hover/click only emphasises a single path)
     for (const sc of model.scenarios){
       const failing = sc.steps.find((s) => s.status === "failed");
       if (failing){
@@ -465,7 +466,7 @@
 
     // ---- object-flow overlay pass (runs after the timeline has been laid out) ----
     for (const ctx of flowCtx) buildFlowOverlay(ctx);
-    refresh();   // faint by default (or re-apply a pin)
+    refresh();   // resting state already shows every flow; this only re-applies a pin if one exists
     // keep connectors anchored if the viewport width changes
     let raf = 0;
     window.addEventListener("resize", () => {
@@ -562,11 +563,8 @@
         // produce: bar -> lifeline (dips DOWN); consume: lifeline -> bar (rises UP)
         const p0 = produce ? { x: dockX, y: yBar } : { x: x, y: yMark };
         const p1 = produce ? { x: x, y: yMark } : { x: dockX, y: yBar };
-        const dy = p1.y - p0.y;
-        const d = "M " + p0.x + " " + p0.y +
-                  " C " + p0.x + " " + (p0.y + dy * 0.45) +
-                  " " + p1.x + " " + (p1.y - dy * 0.45) +
-                  " " + p1.x + " " + p1.y;
+        // STRAIGHT direct-diagonal connector: bar dock -> lifeline marker (no curves)
+        const d = "M " + p0.x + " " + p0.y + " L " + p1.x + " " + p1.y;
 
         const path = document.createElementNS(SVGNS, "path");
         path.setAttribute("d", d);
