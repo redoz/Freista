@@ -232,26 +232,6 @@
   .bar.ph-then  .ph{ color:var(--ph-then-ink); }
   .bar .lbl{ overflow:hidden; text-overflow:ellipsis; text-shadow:0 1px 1px rgba(0,0,0,.22); }
 
-  /* resource lane */
-  .res-head{
-    display:flex; align-items:center; justify-content:space-between; gap:12px;
-    margin:14px 0 6px; padding-top:12px; border-top:1px dashed var(--border-strong);
-  }
-  .res-head .t{ font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--faint); }
-  .legend{ display:flex; gap:14px; flex-wrap:wrap; }
-  .legend span{ display:inline-flex; align-items:center; gap:6px; font-size:11px; color:var(--muted); }
-  .legend i{ width:9px; height:9px; border-radius:50%; display:inline-block; }
-  .res-row .tl-track{ height:26px; }
-  .res-row .tl-gutter{ color:var(--muted); }
-  .lifeline{ position:absolute; top:12px; height:2px; background:var(--lifeline); border-radius:2px; }
-  .marker{
-    position:absolute; top:7px; width:13px; height:13px; border-radius:50%;
-    transform:translateX(-50%); border:2px solid var(--surface); box-shadow:0 0 0 1px rgba(0,0,0,.06);
-    background:var(--mcolor); cursor:default;
-  }
-  .marker.create{ --mcolor:var(--v-create); } .marker.read,.marker.load{ --mcolor:var(--v-read); }
-  .marker.edit{ --mcolor:var(--v-edit); } .marker.delete{ --mcolor:var(--v-delete); }
-
   /* ---------- DRILL PANEL (scenario-level: every step in run order) ---------- */
   .drill-host{ margin-top:4px; }
   .drill{
@@ -309,43 +289,14 @@
   .skipnote::before{ content:"\26A0"; font-size:14px; }
   .hint{ color:var(--faint); font-size:11.5px; margin:2px 0 10px; }
 
-  /* ---------- OBJECT-FLOW OVERLAY ("lifelines dock into bars") ---------- */
-  .timeline{ position:relative; }                 /* anchor for the absolute SVG overlay */
-  .flow-svg{ position:absolute; left:0; top:0; pointer-events:none; overflow:visible; z-index:5; }
-  /* connectors: always-on at a readable strength; hover only thickens the traced ones */
-  .conn{
-    fill:none; stroke-width:1.7; opacity:.7;
-    stroke-linecap:round;
-    transition:opacity .14s ease, stroke-width .14s ease;
-  }
-  .conn.lit{ opacity:1; stroke-width:2.6; }
-  .dock{
-    stroke:var(--surface); stroke-width:1.5; paint-order:stroke; opacity:.92;
-    transition:opacity .14s ease;
-  }
-  .dock.lit{ opacity:1; }
-  /* lifelines: readable by default, brighten + thicken when their object is traced */
-  .res-row .lifeline{ opacity:.85; transition:opacity .14s ease, height .14s ease, top .14s ease; }
-  .lifeline.lit{ opacity:1; height:3px; top:11px; box-shadow:0 0 0 1px rgba(255,255,255,.45); }
-  /* a bar that currently has object flow threaded through it gets outlined (hover emphasis only) */
-  .bar.flow-bar{ box-shadow:0 0 0 2px var(--surface), 0 0 0 3.6px var(--accent), 0 2px 9px rgba(0,0,0,.20); }
-  /* connector identity chips: the object's Type:Key, riding its flow — shown by default */
-  .flow-label{ opacity:1; pointer-events:auto; cursor:default; transition:opacity .14s ease; }
-  .flow-label.lit text{ font-weight:700; }
-  .flow-label rect{ stroke-width:1.2; filter:drop-shadow(0 1px 1.4px rgba(0,0,0,.22)); }
-  .flow-label text{
-    fill:var(--ink); letter-spacing:-.01em;
-    font:600 10px/1 ui-monospace, "Cascadia Code", Consolas, monospace;
-  }
-  .res-row{ cursor:pointer; }
-  .res-row:hover .tl-gutter{ color:var(--ink); font-weight:600; }
-
-  /* flows legend (resource-type colours, populated from the model) */
-  .flow-legend{ display:flex; align-items:center; gap:13px; flex-wrap:wrap; margin-top:8px; }
-  .flow-legend .ttl{ font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); }
-  .flow-legend .it{ display:inline-flex; align-items:center; gap:7px; font-size:12px; color:var(--muted); }
-  .flow-legend i{ width:17px; height:0; border-top:2.4px solid var(--fc); border-radius:2px; display:inline-block; }
-  .flow-hint{ font-size:11.5px; color:var(--faint); }
+  /* ---------- ACTIVITY DIAGRAM (pure SVG; built per scenario) ---------- */
+  .actdiag{ display:block; width:100%; height:auto; font-family:var(--ad-font); }
+  .ad-nm{ font-weight:400; font-size:7.5px; fill:var(--ad-card-ink); }        /* node label */
+  .ad-oth{ font-weight:600; font-size:5.5px; letter-spacing:.05em; fill:var(--ad-panel); } /* card type header text (on colored band) */
+  .ad-okn{ font-weight:400; font-size:7.5px; fill:var(--ad-card-ink); }       /* card identifier */
+  .ad-vb{ font-style:italic; font-weight:500; font-size:5.5px; paint-order:stroke; stroke:var(--ad-panel); stroke-width:2.4; stroke-linejoin:round; } /* verb label + halo */
+  .ad-phl{ font-weight:500; font-size:7px; letter-spacing:.16em; }            /* rotated phase label */
+  .ad-tk{ font:500 6.5px ui-monospace,Consolas; fill:var(--ad-control); }     /* ruler ticks */
 </style>
 </head>
 <body>
@@ -363,11 +314,6 @@
       <span class="it"><b class="g">G</b>Given</span>
       <span class="it"><b class="w">W</b>When</span>
       <span class="it"><b class="t">T</b>Then</span>
-    </div>
-    <div class="flow-legend" id="flowlegend" aria-label="Object flow colors per resource type">
-      <span class="ttl">Object flows</span>
-      <span class="flow-types"></span>
-      <span class="flow-hint">object flows shown by default &middot; hover a step or resource to emphasise its path</span>
     </div>
   </div>
   <main id="report"></main>
@@ -465,37 +411,18 @@
     }
     function labelColor(objColor){ return shade(objColor, currentTheme()==="dark" ? 0.22 : -0.22); }
 
-    // object-flow legend (one swatch per distinct resource type in the run)
-    const flowLegend = document.getElementById("flowlegend");
-    if (typeColorMap.size){
-      const types = flowLegend.querySelector(".flow-types");
-      for (const [t, color] of typeColorMap){
-        const it = el("span", "it");
-        it.innerHTML = '<i style="--fc:' + color + '"></i>' + esc(t);
-        types.appendChild(it);
-      }
-    } else {
-      flowLegend.style.display = "none";
-    }
-
     // ---- scenarios --------------------------------------------------------
     const VCOLOR = { create: "var(--v-create)", read: "var(--v-read)", load: "var(--v-read)", edit: "var(--v-edit)", delete: "var(--v-delete)" };
     const PHCOLOR = { given: "var(--ph-given)", when: "var(--ph-when)", then: "var(--ph-then)" };
-    // readable past-tense verbs for the connector identity chips ("Read Patient:Jane")
-    const VERB_PAST = { create: "Created", read: "Read", edit: "Edited", delete: "Deleted", load: "Loaded" };
     const report = document.getElementById("report");
     const openers = [];
 
-    // ---- object-flow overlay state ---------------------------------------
+    // SVG namespace for the activity diagram (built with document.createElementNS)
     const SVGNS = "http://www.w3.org/2000/svg";
-    const flowCtx = [];    // per-scenario render context, consumed by the overlay pass after layout
-    const flows = [];      // every connector { path, dock, bar, res, stepId, lifeline, scenarioId }
-    let pinned = null;     // { type:"step"|"res", scenarioId, id } or null  (explicit, sticky highlight)
 
     for (const sc of model.scenarios) report.appendChild(renderScenario(sc));
 
-    // pre-expand the first failing step's scenario drill so detail is visible by default
-    // (object flows are always visible; hover/click only emphasises a single path)
+    // pre-expand the first failing step's scenario drill so its detail is visible by default
     for (const sc of model.scenarios){
       const failing = sc.steps.find((s) => s.status === "failed");
       if (failing){
@@ -504,181 +431,110 @@
       }
     }
 
-    // ---- object-flow overlay pass (runs after the timeline has been laid out) ----
-    for (const ctx of flowCtx) buildFlowOverlay(ctx);
-    refresh();   // resting state already shows every flow; this only re-applies a pin if one exists
-    // keep connectors anchored if the viewport width changes
-    let raf = 0;
-    window.addEventListener("resize", () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        flows.length = 0;
-        document.querySelectorAll(".flow-svg").forEach((s) => s.remove());
-        for (const ctx of flowCtx) buildFlowOverlay(ctx);
-        refresh();
+    // small helper: create a namespaced SVG element with a set of attributes
+    function svgEl(tag, attrs){
+      const e = document.createElementNS(SVGNS, tag);
+      if (attrs) for (const k in attrs) e.setAttribute(k, attrs[k]);
+      return e;
+    }
+
+    // ---- activity diagram: frame (swimlane bands + tabs + rotated labels), a centred control
+    //      spine, and the initial + final nodes. The interior (actions / forks / object cards)
+    //      is filled in by later tasks; this is the <svg class="actdiag"> scaffold only. ----
+    function buildActivityDiagram(sc){
+      const W = 680, MARGIN = 20;
+      const bandX = MARGIN, bandW = W - 2 * MARGIN, cx = W / 2;
+      const BAND_TOP = 40, ROW_H = 40, BAND_VPAD = 16, MIN_BH = 64;
+      const TAB_DX = 7, TAB_W = 2.5, LABEL_DX = 24;
+      const INITIAL_CY = 22, INITIAL_R = 5.5, FINAL_R = 8, FINAL_CORE_R = 3.4;
+
+      // one band per phase actually present, in canonical Given -> When -> Then order;
+      // height is content-driven by the step count so setup-heavy phases get more room.
+      const PHASES = [
+        { key: "given", label: "GIVEN", color: "var(--ph-given)" },
+        { key: "when",  label: "WHEN",  color: "var(--ph-when)" },
+        { key: "then",  label: "THEN",  color: "var(--ph-then)" },
+      ];
+      const bands = [];
+      let y = BAND_TOP;
+      for (const ph of PHASES){
+        const count = sc.steps.filter((s) => (s.phase || "").toLowerCase() === ph.key).length;
+        if (!count) continue;
+        const h = Math.max(MIN_BH, count * ROW_H + 2 * BAND_VPAD);
+        bands.push({ label: ph.label, color: ph.color, y, h });
+        y += h;
+      }
+      const lastBottom = bands.length ? y : BAND_TOP + MIN_BH;
+      const finalCy = lastBottom + 28;
+      const H = finalCy + 24;
+
+      const svg = svgEl("svg", {
+        class: "actdiag",
+        viewBox: "0 0 " + W + " " + H,
+        role: "img",
+        "aria-label": "Activity diagram: " + sc.displayName,
+        preserveAspectRatio: "xMidYMid meet",
       });
-    });
 
-    // clicking empty space clears any pinned highlight
-    document.addEventListener("click", (e) => {
-      if (e.target.closest(".bar, .res-row")) return;   // handled by their own listeners
-      if (pinned){ pinned = null; refresh(); }
-    });
-
-    // ---- highlight machinery (strictly scoped; always clears) -------------
-    function clearLit(){
-      for (const f of flows){
-        f.path.classList.remove("lit"); f.dock.classList.remove("lit");
-        f.bar.classList.remove("flow-bar"); if (f.lifeline) f.lifeline.classList.remove("lit");
-        if (f.label) f.label.classList.remove("lit");
+      // swimlane bands (tinted phase fill at the theme band opacity)
+      for (const b of bands){
+        const r = svgEl("rect", { x: bandX, y: b.y, width: bandW, height: b.h });
+        r.style.fill = b.color;
+        r.style.opacity = "var(--ad-band-op)";
+        svg.appendChild(r);
       }
-    }
-    function applyLit(pred){
-      clearLit();
-      for (const f of flows){
-        if (!pred(f)) continue;
-        f.path.classList.add("lit"); f.dock.classList.add("lit");
-        f.bar.classList.add("flow-bar"); if (f.lifeline) f.lifeline.classList.add("lit");
-        if (f.label) f.label.classList.add("lit");
+      // dividers between consecutive bands
+      for (let i = 1; i < bands.length; i++){
+        const ln = svgEl("line", { x1: bandX, y1: bands[i].y, x2: bandX + bandW, y2: bands[i].y });
+        ln.style.stroke = "var(--ad-grid)";
+        svg.appendChild(ln);
       }
-    }
-    // hovering a step traces every object it produces/consumes (lifelines + all their
-    // dock-connectors + the bars at the far ends), scoped to this one scenario.
-    function litByStep(scenarioId, stepId){
-      const resIds = new Set();
-      for (const f of flows) if (f.scenarioId === scenarioId && f.stepId === stepId) resIds.add(f.res);
-      applyLit((f) => f.scenarioId === scenarioId && resIds.has(f.res));
-    }
-    // hovering a resource traces that one object's full path.
-    function litByRes(scenarioId, resId){
-      applyLit((f) => f.scenarioId === scenarioId && f.res === resId);
-    }
-    // revert to the resting state: the pinned highlight if any, otherwise everything faint.
-    function refresh(){
-      if (!pinned){ clearLit(); return; }
-      if (pinned.type === "step") litByStep(pinned.scenarioId, pinned.id);
-      else litByRes(pinned.scenarioId, pinned.id);
-    }
-
-    // ---- build one scenario's SVG connector overlay -----------------------
-    function buildFlowOverlay(ctx){
-      const { sc, timeline, barByStep, markerInfos, lifelineByRes } = ctx;
-      const tl = timeline.getBoundingClientRect();
-      const W = timeline.scrollWidth, H = timeline.scrollHeight;
-      const svg = document.createElementNS(SVGNS, "svg");
-      svg.setAttribute("class", "flow-svg");
-      svg.setAttribute("width", W); svg.setAttribute("height", H);
-      svg.setAttribute("viewBox", "0 0 " + W + " " + H);
-
-      const defs = document.createElementNS(SVGNS, "defs");
-      svg.appendChild(defs);
-      const arrowByColor = new Map();
-      function arrowFor(color){
-        if (arrowByColor.has(color)) return arrowByColor.get(color);
-        const id = "arr-" + sc.scenarioId + "-" + arrowByColor.size;
-        const mk = document.createElementNS(SVGNS, "marker");
-        mk.setAttribute("id", id); mk.setAttribute("viewBox", "0 0 10 10");
-        mk.setAttribute("refX", "7.5"); mk.setAttribute("refY", "5");
-        mk.setAttribute("markerWidth", "5.5"); mk.setAttribute("markerHeight", "5.5");
-        mk.setAttribute("orient", "auto");
-        const tip = document.createElementNS(SVGNS, "path");
-        tip.setAttribute("d", "M0,0 L10,5 L0,10 z"); tip.setAttribute("fill", color);
-        mk.appendChild(tip); defs.appendChild(mk);
-        arrowByColor.set(color, id); return id;
-      }
-
-      const labels = [];   // identity chips, positioned after a de-overlap pass below
-      for (const mi of markerInfos){
-        const bar = barByStep.get(mi.stepId);
-        if (!bar) continue;
-        const mr = mi.markerEl.getBoundingClientRect();
-        const br = bar.getBoundingClientRect();
-        const x = mr.left + mr.width / 2 - tl.left;       // marker centre x
-        const yMark = mr.top - tl.top;                     // marker top edge
-        const barLeft = br.left - tl.left, barRight = br.right - tl.left;
-        const yBar = br.bottom - tl.top;                   // bar bottom edge (the dock line)
-        const dockX = Math.min(Math.max(x, barLeft + 5), barRight - 5);
-        const color = typeColor(mi.type);
-        const produce = mi.verb.toLowerCase() === "create";
-        // produce: bar -> lifeline (dips DOWN); consume: lifeline -> bar (rises UP)
-        const p0 = produce ? { x: dockX, y: yBar } : { x: x, y: yMark };
-        const p1 = produce ? { x: x, y: yMark } : { x: dockX, y: yBar };
-        // STRAIGHT direct-diagonal connector: bar dock -> lifeline marker (no curves)
-        const d = "M " + p0.x + " " + p0.y + " L " + p1.x + " " + p1.y;
-
-        const path = document.createElementNS(SVGNS, "path");
-        path.setAttribute("d", d);
-        path.setAttribute("class", "conn");
-        path.setAttribute("stroke", color);
-        path.setAttribute("marker-end", "url(#" + arrowFor(color) + ")");
-        svg.appendChild(path);
-
-        const dock = document.createElementNS(SVGNS, "circle");
-        dock.setAttribute("cx", dockX); dock.setAttribute("cy", yBar);
-        dock.setAttribute("r", "3.4"); dock.setAttribute("fill", color);
-        dock.setAttribute("class", "dock");
-        svg.appendChild(dock);
-
-        // identity chip ("{Verb} Type:Key") riding this connector. Anchored along the bar->marker
-        // line, biased toward the resource end so chips of the same step spread out by lane/row depth.
-        const verbPast = VERB_PAST[mi.verb.toLowerCase()] || mi.verb;
-        const full = verbPast + " " + mi.resId, MAXC = 30, CW = 6.2;
-        const disp = full.length > MAXC ? full.slice(0, MAXC - 1) + "…" : full;
-        const lw = Math.round(disp.length * CW + 14), lh = 16, fr = 0.78;
-        const cx = dockX + (x - dockX) * fr;
-        const cy = yBar + (yMark - yBar) * fr;
-        const g = document.createElementNS(SVGNS, "g");
-        g.setAttribute("class", "flow-label");
-        const ti = document.createElementNS(SVGNS, "title"); ti.textContent = full; g.appendChild(ti);
-        const rc = document.createElementNS(SVGNS, "rect");
-        rc.setAttribute("rx", "5"); rc.setAttribute("ry", "5");
-        rc.style.fill = "color-mix(in srgb, " + color + " 17%, var(--surface))";
-        rc.style.stroke = color;
-        g.appendChild(rc);
-        const tx = document.createElementNS(SVGNS, "text");
-        tx.setAttribute("text-anchor", "middle"); tx.setAttribute("dominant-baseline", "central");
-        tx.textContent = disp;
-        g.appendChild(tx);
-        // hovering a lit chip keeps its object traced (so it stays readable / shows its title)
-        g.addEventListener("mouseenter", () => litByRes(sc.scenarioId, mi.resId));
-        g.addEventListener("mouseleave", refresh);
-        labels.push({ g, rc, tx, cx, cy, w: lw, h: lh });
-
-        flows.push({
-          path, dock, bar, label: g, res: mi.resId, stepId: mi.stepId,
-          lifeline: lifelineByRes.get(mi.resId), scenarioId: sc.scenarioId,
+      // phase tabs + rotated labels (coloured per phase)
+      for (const b of bands){
+        const tab = svgEl("rect", {
+          x: bandX + TAB_DX, y: b.y + 12, width: TAB_W, height: Math.max(8, b.h - 24), rx: 1,
         });
+        tab.style.fill = b.color;
+        svg.appendChild(tab);
+        const lx = bandX + LABEL_DX, ly = b.y + b.h / 2;
+        const t = svgEl("text", {
+          class: "ad-phl", x: lx, y: ly,
+          transform: "rotate(-90 " + lx + " " + ly + ")",
+          "text-anchor": "middle",
+        });
+        t.style.fill = b.color;
+        t.textContent = b.label;
+        svg.appendChild(t);
       }
 
-      // de-overlap the chips (greedy vertical nudge within this scenario), then commit positions.
-      // Chips overlap only when several flows share an x band (e.g. multiple objects docking the same
-      // step bar); nudging the lower ones down keeps each Type:Key legible without stacking.
-      const placed = [];
-      for (const L of labels.sort((a, b) => a.cy - b.cy)){
-        let moved = true;
-        while (moved){
-          moved = false;
-          for (const P of placed){
-            if (Math.abs(L.cx - P.cx) < (L.w + P.w) / 2 + 4 &&
-                Math.abs(L.cy - P.cy) < (L.h + P.h) / 2 + 3){
-              L.cy = P.cy + (L.h + P.h) / 2 + 3; moved = true;
-            }
-          }
-        }
-        placed.push(L);
+      // control-flow spine: a centred hairline from the initial node down to the final node
+      const spineTop = INITIAL_CY + INITIAL_R, spineBottom = finalCy - FINAL_R;
+      if (spineBottom > spineTop){
+        const spine = svgEl("path", {
+          d: "M" + cx + "," + spineTop + " V" + spineBottom,
+          fill: "none", "stroke-width": "1", "stroke-linecap": "round",
+        });
+        spine.style.stroke = "var(--ad-control)";
+        svg.appendChild(spine);
       }
-      const labelsLayer = document.createElementNS(SVGNS, "g");
-      labelsLayer.setAttribute("class", "flow-labels");
-      for (const L of labels){
-        L.rc.setAttribute("x", L.cx - L.w / 2); L.rc.setAttribute("y", L.cy - L.h / 2);
-        L.rc.setAttribute("width", L.w); L.rc.setAttribute("height", L.h);
-        L.tx.setAttribute("x", L.cx); L.tx.setAttribute("y", L.cy);
-        labelsLayer.appendChild(L.g);
-      }
-      svg.appendChild(labelsLayer);   // chips ride on top of all connectors
-      timeline.appendChild(svg);
+      // initial node (filled circle, top of the spine)
+      const initial = svgEl("circle", { cx: cx, cy: INITIAL_CY, r: INITIAL_R });
+      initial.style.fill = "var(--ad-card-ink)";
+      svg.appendChild(initial);
+      // final node (ring + filled core, bottom of the spine)
+      const ring = svgEl("circle", { cx: cx, cy: finalCy, r: FINAL_R, fill: "none", "stroke-width": "1.4" });
+      ring.style.stroke = "var(--ad-card-ink)";
+      svg.appendChild(ring);
+      const core = svgEl("circle", { cx: cx, cy: finalCy, r: FINAL_CORE_R });
+      core.style.fill = "var(--ad-card-ink)";
+      svg.appendChild(core);
+
+      return svg;
     }
 
+    // renderScenario(sc) -> <section> with the header, the <svg class="actdiag">
+    // (buildActivityDiagram), and the per-scenario drill panel <div class="drill">
+    // (buildScenarioDrill, unchanged).
     function renderScenario(sc){
       const card = el("section", "card s-" + sc.status);
 
@@ -696,165 +552,33 @@
         "</div>";
       card.appendChild(head);
 
-      // axis
-      const axisMaxRaw = sc.steps.reduce((m, s) => Math.max(m, s.offsetMs + s.durationMs), 0);
-      const { step, axisMax } = niceAxis(axisMaxRaw);
-      const px = TRACK / axisMax;             // px per ms (auto-scaled per scenario)
-      const tickPx = step * px;
-
-      // ---- LOGICAL activity-pin positions (input/output pins by verb) -------
-      // Position every resource event by its STEP's window, not its recorded offset:
-      //   read / load          -> the step's START (input pin / leading edge)
-      //   create / edit/delete -> the step's END   (output pin / trailing edge)
-      const stepById = new Map();
-      for (const s of sc.steps) stepById.set(s.stepId, s);
-      const INPUT_VERBS = new Set(["read", "load"]);
-      function eventPinMs(ev){
-        const st = stepById.get(ev.stepId);
-        if (!st) return ev.offsetMs;                       // defensive fallback
-        return INPUT_VERBS.has(ev.verb.toLowerCase())
-          ? st.offsetMs                                     // leading edge (input pin)
-          : st.offsetMs + st.durationMs;                    // trailing edge (output pin)
-      }
-
-      const timeline = el("div", "timeline");
-      timeline.style.setProperty("--tick", tickPx + "px");
-
-      // ruler
-      const ruler = el("div", "tl-row tl-ruler");
-      const rg = el("div", "tl-gutter");
-      rg.textContent = axisMax >= 1000 ? "s" : "ms";
-      const rt = el("div", "tl-track");
-      for (let v = 0; v <= axisMax + 0.5; v += step){
-        const f = v / axisMax;
-        const t = el("div", "tick");
-        t.style.left = (f * TRACK) + "px";
-        const lab = el("div", "lab"); lab.style.setProperty("--f", f); lab.textContent = fmtTick(v, axisMax);
-        const line = el("div", "line");
-        t.appendChild(lab); t.appendChild(line);
-        rt.appendChild(t);
-      }
-      ruler.appendChild(rg); ruler.appendChild(rt);
-      timeline.appendChild(ruler);
-
-      // lane rows
-      const lanesWrap = el("div", "lanes");
-      const laneCount = sc.steps.reduce((m, s) => Math.max(m, s.lane), 0) + 1;
-      const bars = [];     // { stepId, bar }
-
-      // object-flow bookkeeping for this scenario
-      const barByStep = new Map();
-      const markerInfos = [];
-      const lifelineByRes = new Map();
+      // activity diagram (frame + centred spine + initial/final; interior nodes come in later tasks)
+      card.appendChild(buildActivityDiagram(sc));
 
       // one scenario-level drill panel: every step in run order
       const drill = buildScenarioDrill(sc);
 
-      function setActiveBar(stepId){
-        for (const { bar } of bars) bar.classList.toggle("active", stepId != null && bar.dataset.step === stepId);
-      }
       // open the panel and focus/scroll to a step; toggle closes when re-focusing the same step
       function focusStep(stepId, { toggle = false } = {}){
         const open = drill.classList.contains("open");
         const same = drill.dataset.focus === stepId;
         if (toggle && open && same){
           drill.classList.remove("open"); drill.dataset.focus = "";
-          setActiveBar(null);
           return false;
         }
         drill.classList.add("open"); drill.dataset.focus = stepId;
         for (const entry of drill.querySelectorAll(".step-entry"))
           entry.classList.toggle("focus", entry.dataset.step === stepId);
-        setActiveBar(stepId);
         const entry = drill.querySelector('.step-entry[data-step="' + stepId + '"]');
         if (entry) entry.scrollIntoView({ block: "nearest" });
         return true;
       }
 
-      for (let lane = 0; lane < laneCount; lane++){
-        const row = el("div", "tl-row");
-        const g = el("div", "tl-gutter");
-        const track = el("div", "tl-track");
-        for (const s of sc.steps.filter((s) => s.lane === lane)){
-          const bar = el("div", "bar " + s.status + " ph-" + s.phase.toLowerCase());
-          bar.dataset.step = s.stepId;
-          barByStep.set(s.stepId, bar);
-          bar.style.left = (s.offsetMs * px) + "px";
-          bar.style.width = Math.max(MIN_BAR, s.durationMs * px) + "px";
-          bar.innerHTML = '<span class="ph">' + s.phase[0] + '</span><span class="lbl">' + esc(s.displayName) + "</span>";
-          bar.title = s.phase + " · " + s.displayName + "  (" + fmtDur(s.durationMs) + " @ +" + s.offsetMs + "ms)";
-          bar.onclick = () => {
-            const nowOpen = focusStep(s.stepId, { toggle: true });
-            pinned = nowOpen ? { type: "step", scenarioId: sc.scenarioId, id: s.stepId } : null;
-            refresh();
-          };
-          bar.addEventListener("mouseenter", () => litByStep(sc.scenarioId, s.stepId));
-          bar.addEventListener("mouseleave", refresh);
-          bars.push({ stepId: s.stepId, bar });
-          track.appendChild(bar);
-        }
-        row.appendChild(g); row.appendChild(track);
-        lanesWrap.appendChild(row);
-      }
-      timeline.appendChild(lanesWrap);
-
-      // resources
-      if (sc.resources.length){
-        const rh = el("div", "res-head");
-        rh.innerHTML = '<span class="t">Resources</span>' +
-          '<span class="legend">' +
-            '<span><i style="background:var(--v-create)"></i>create</span>' +
-            '<span><i style="background:var(--v-read)"></i>read</span>' +
-            '<span><i style="background:var(--v-edit)"></i>edit</span>' +
-            '<span><i style="background:var(--v-delete)"></i>delete</span>' +
-          "</span>";
-        timeline.appendChild(rh);
-
-        for (const r of sc.resources){
-          const row = el("div", "tl-row res-row");
-          const g = el("div", "tl-gutter"); const label = r.type + ":" + r.key;
-          g.textContent = label; g.title = label;
-          const track = el("div", "tl-track");
-          const pins = r.events.map(eventPinMs);
-          const createEv = r.events.find((e) => e.verb.toLowerCase() === "create");
-          const deleteEv = r.events.find((e) => e.verb.toLowerCase() === "delete");
-          // lifeline: from first appearance (Create's output pin, else the earliest pin)
-          //   to its Delete pin, else all the way to the scenario end (rightmost step end).
-          const lo = createEv ? eventPinMs(createEv) : Math.min(...pins);
-          const hi = deleteEv ? eventPinMs(deleteEv) : axisMaxRaw;
-          const tc = typeColor(r.type);
-          const line = el("div", "lifeline");
-          line.style.left = (lo * px) + "px"; line.style.width = Math.max(2, (hi - lo) * px) + "px";
-          line.style.background = tc;                 // colour the lifeline by resource type
-          track.appendChild(line);
-          lifelineByRes.set(label, line);
-          for (const ev of r.events){
-            const m = el("div", "marker " + ev.verb.toLowerCase());
-            m.style.left = (eventPinMs(ev) * px) + "px";
-            m.title = ev.verb + " " + label + " @ +" + ev.offsetMs + "ms";
-            track.appendChild(m);
-            markerInfos.push({ resId: label, type: r.type, stepId: ev.stepId, verb: ev.verb, markerEl: m });
-          }
-          row.addEventListener("mouseenter", () => litByRes(sc.scenarioId, label));
-          row.addEventListener("mouseleave", refresh);
-          row.addEventListener("click", () => {
-            const isPin = pinned && pinned.type === "res" && pinned.scenarioId === sc.scenarioId && pinned.id === label;
-            pinned = isPin ? null : { type: "res", scenarioId: sc.scenarioId, id: label };
-            refresh();
-          });
-          row.appendChild(g); row.appendChild(track);
-          timeline.appendChild(row);
-        }
-      }
-
-      flowCtx.push({ sc, timeline, barByStep, markerInfos, lifelineByRes });
-
-      card.appendChild(timeline);
       const drillHost = el("div", "drill-host");
       drillHost.appendChild(drill);
       card.appendChild(drillHost);
 
-      // opener for the pre-expand pass: open the drill focused on a step (no flow pin)
+      // opener for the pre-expand pass: open the drill focused on a step
       openers.push({ scenarioId: sc.scenarioId, open: (stepId) => focusStep(stepId) });
 
       return card;

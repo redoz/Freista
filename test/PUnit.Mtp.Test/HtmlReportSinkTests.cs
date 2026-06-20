@@ -113,6 +113,28 @@ public sealed class HtmlReportSinkTests : IDisposable
         Assert.DoesNotContain("<script src=\"http", html, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Renders_the_activity_diagram_and_drops_the_old_overlay()
+    {
+        var path = Path.Combine(_dir, "punit-report.html");
+        var sink = new HtmlReport.HtmlReportSink(path, new TestTimeProviderUtc(T0));
+        var def = Def();
+        await sink.PublishAsync(new RunStarted(1));
+        await sink.PublishAsync(new ScenarioStarted(def));
+        await sink.PublishAsync(new StepFinished(def, Passed(def.Nodes[0])));
+        await sink.PublishAsync(new ScenarioFinished(def, [Passed(def.Nodes[0])]));
+        await sink.PublishAsync(new RunFinished());
+
+        var html = await File.ReadAllTextAsync(path);
+        Assert.Contains("class=\"actdiag\"", html, StringComparison.Ordinal);   // new SVG diagram
+        Assert.Contains("buildActivityDiagram", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("buildFlowOverlay", html, StringComparison.Ordinal); // old overlay gone
+        Assert.DoesNotContain("flow-svg", html, StringComparison.Ordinal);
+        // preserved shell (already asserted elsewhere, re-checked here for this render path)
+        Assert.Contains("class=\"drill", html, StringComparison.Ordinal);
+        Assert.Contains("data-theme", html, StringComparison.Ordinal);
+    }
+
     private sealed class TestTimeProviderUtc(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
