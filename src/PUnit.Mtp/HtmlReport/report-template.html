@@ -306,6 +306,14 @@
   .lifeline.lit{ opacity:1; height:3px; top:11px; box-shadow:0 0 0 1px rgba(255,255,255,.45); }
   /* a bar that currently has object flow threaded through it gets outlined */
   .bar.flow-bar{ box-shadow:0 0 0 2px var(--surface), 0 0 0 3.6px var(--accent), 0 2px 9px rgba(0,0,0,.20); }
+  /* connector identity chips: the object's Type:Key, riding its flow — hidden until that flow is revealed */
+  .flow-label{ opacity:0; pointer-events:none; transition:opacity .14s ease; }
+  .flow-label.lit{ opacity:1; pointer-events:auto; cursor:default; }
+  .flow-label rect{ stroke-width:1.2; filter:drop-shadow(0 1px 1.4px rgba(0,0,0,.22)); }
+  .flow-label text{
+    fill:var(--ink); letter-spacing:-.01em;
+    font:600 10px/1 ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
   .res-row{ cursor:pointer; }
   .res-row:hover .tl-gutter{ color:var(--ink); font-weight:600; }
 
@@ -479,6 +487,7 @@
       for (const f of flows){
         f.path.classList.remove("lit"); f.dock.classList.remove("lit");
         f.bar.classList.remove("flow-bar"); if (f.lifeline) f.lifeline.classList.remove("lit");
+        if (f.label) f.label.classList.remove("lit");
       }
     }
     function applyLit(pred){
@@ -487,6 +496,7 @@
         if (!pred(f)) continue;
         f.path.classList.add("lit"); f.dock.classList.add("lit");
         f.bar.classList.add("flow-bar"); if (f.lifeline) f.lifeline.classList.add("lit");
+        if (f.label) f.label.classList.add("lit");
       }
     }
     // hovering a step traces every object it produces/consumes (lifelines + all their
@@ -534,6 +544,7 @@
         arrowByColor.set(color, id); return id;
       }
 
+      const labels = [];   // identity chips, positioned after a de-overlap pass below
       for (const mi of markerInfos){
         const bar = barByStep.get(mi.stepId);
         if (!bar) continue;
@@ -568,11 +579,62 @@
         dock.setAttribute("class", "dock");
         svg.appendChild(dock);
 
+        // identity chip ("Type:Key") riding this connector. Anchored along the bar->marker line,
+        // biased toward the resource end so chips of the same step spread out by lane/row depth.
+        const full = mi.resId, MAXC = 26, CW = 6.2;
+        const disp = full.length > MAXC ? full.slice(0, MAXC - 1) + "…" : full;
+        const lw = Math.round(disp.length * CW + 14), lh = 16, fr = 0.78;
+        const cx = dockX + (x - dockX) * fr;
+        const cy = yBar + (yMark - yBar) * fr;
+        const g = document.createElementNS(SVGNS, "g");
+        g.setAttribute("class", "flow-label");
+        const ti = document.createElementNS(SVGNS, "title"); ti.textContent = full; g.appendChild(ti);
+        const rc = document.createElementNS(SVGNS, "rect");
+        rc.setAttribute("rx", "5"); rc.setAttribute("ry", "5");
+        rc.style.fill = "color-mix(in srgb, " + color + " 17%, var(--surface))";
+        rc.style.stroke = color;
+        g.appendChild(rc);
+        const tx = document.createElementNS(SVGNS, "text");
+        tx.setAttribute("text-anchor", "middle"); tx.setAttribute("dominant-baseline", "central");
+        tx.textContent = disp;
+        g.appendChild(tx);
+        // hovering a lit chip keeps its object traced (so it stays readable / shows its title)
+        g.addEventListener("mouseenter", () => litByRes(sc.scenarioId, mi.resId));
+        g.addEventListener("mouseleave", refresh);
+        labels.push({ g, rc, tx, cx, cy, w: lw, h: lh });
+
         flows.push({
-          path, dock, bar, res: mi.resId, stepId: mi.stepId,
+          path, dock, bar, label: g, res: mi.resId, stepId: mi.stepId,
           lifeline: lifelineByRes.get(mi.resId), scenarioId: sc.scenarioId,
         });
       }
+
+      // de-overlap the chips (greedy vertical nudge within this scenario), then commit positions.
+      // Chips overlap only when several flows share an x band (e.g. multiple objects docking the same
+      // step bar); nudging the lower ones down keeps each Type:Key legible without stacking.
+      const placed = [];
+      for (const L of labels.sort((a, b) => a.cy - b.cy)){
+        let moved = true;
+        while (moved){
+          moved = false;
+          for (const P of placed){
+            if (Math.abs(L.cx - P.cx) < (L.w + P.w) / 2 + 4 &&
+                Math.abs(L.cy - P.cy) < (L.h + P.h) / 2 + 3){
+              L.cy = P.cy + (L.h + P.h) / 2 + 3; moved = true;
+            }
+          }
+        }
+        placed.push(L);
+      }
+      const labelsLayer = document.createElementNS(SVGNS, "g");
+      labelsLayer.setAttribute("class", "flow-labels");
+      for (const L of labels){
+        L.rc.setAttribute("x", L.cx - L.w / 2); L.rc.setAttribute("y", L.cy - L.h / 2);
+        L.rc.setAttribute("width", L.w); L.rc.setAttribute("height", L.h);
+        L.tx.setAttribute("x", L.cx); L.tx.setAttribute("y", L.cy);
+        labelsLayer.appendChild(L.g);
+      }
+      svg.appendChild(labelsLayer);   // chips ride on top of all connectors
       timeline.appendChild(svg);
     }
 
