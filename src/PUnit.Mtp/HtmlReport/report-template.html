@@ -406,6 +406,8 @@
     const CARD_GAP_TOP = 13, CARD_GAP_BOT = 14;          // straight-down room above / S-curve room below a card
     const CARD_TYPE_FS = 5.5, CARD_KEY_FS = 7.5;
     const PORT_INSET = 13, PORT_PITCH = 11, RING_R = 3, DISC_R = 2.6, HALO_R = 4; // clamp/stack node ports
+    // verb-label geometry (placement ladder): font size, halo-aware box half-padding, leader threshold
+    const VB_FS = 5.5, VB_PAD_X = 1.2, VB_HALF_H = 3.2, VB_LEADER_MIN = 13;
     const phaseColor = (p) => PHCOLOR[p] || "var(--faint)";
 
     // ---- text measurement for content-sized nodes ------------------------
@@ -1031,7 +1033,152 @@
         g.appendChild(disc);
       }
 
+      // 5) verb labels — the placement ladder (spec §3.2): center the verb in the longest clear
+      //    on-path gap; on collision step along the path normal to the open side; if boxed in, drop a
+      //    dashed leader back to the wire. Halo = local bg (panel, or cell where the label is in a cell).
+      placeVerbLabels(edges, cards, layout, g);
+
       return { g, cards, edges };
+    }
+
+    // ---- verb-label placement ladder (spec §3.2) -----------------------------------------------
+    // Drops a .ad-vb verb (italic 500 / 5.5 / bg-knockout halo 2.4) on every object-flow edge.
+    // Anchors on the TRUE on-path midpoint (getPointAtLength, not the Euclidean edge.mid which drifts
+    // off S-curves), centered in the longest collision-free run of the wire; steps along the path
+    // normal on collision; draws a dashed leader only when boxed-in past a threshold with something
+    // crowding the wire. Greedy single pass; later labels dodge earlier ones. (VB_* consts up top.)
+    function placeVerbLabels(edges, cards, layout, g){
+      if (!edges.length) return;
+      const cx0 = AD_W / 2;
+      // static obstacles: entity cards, fork cells, action/assert nodes
+      const obstacles = [], cellRects = [];
+      for (const c of cards) obstacles.push({ x: c.x, y: c.y, w: c.w, h: c.h });
+      for (const it of layout.items || []){
+        const r = { x: it.x, y: it.y, w: it.w, h: it.h };
+        if (it.kind === "fork"){ obstacles.push(r); cellRects.push(r); }
+        else if (it.kind === "node") obstacles.push(r);
+      }
+      // ports (discs/rings): not hard collisions (the wire threads them) but count for the leader test
+      const portRects = [];
+      for (const e of edges){
+        if (e.ring) portRects.push(ptRect(e.ring, RING_R + 0.5));
+        portRects.push(ptRect(e.from, DISC_R + 0.5));
+      }
+      const placed = [];                              // boxes of labels already dropped this pass
+      const overlap = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+      const boxAt = (x, y, halfW) => ({ x: x - halfW, y: y - VB_HALF_H, w: 2 * halfW, h: 2 * VB_HALF_H });
+      const blocked = (box) => obstacles.some((o) => overlap(box, o)) || placed.some((o) => overlap(box, o));
+      const clearTo = (a, o) => {
+        const dx = Math.max(o.x - (a.x + a.w), a.x - (o.x + o.w));
+        const dy = Math.max(o.y - (a.y + a.h), a.y - (o.y + o.h));
+        return (dx >= 0 || dy >= 0) ? Math.max(dx, dy) : Math.max(dx, dy);
+      };
+      const clearance = (box) => {
+        let m = Infinity;
+        for (const o of obstacles){ const c = clearTo(box, o); if (c < m) m = c; }
+        for (const o of placed){ const c = clearTo(box, o); if (c < m) m = c; }
+        return m;
+      };
+      const segBlocked = (x1, y1, x2, y2) => {        // does any obstacle/port/label cross this leader?
+        for (let i = 1; i < 6; i++){
+          const t = i / 6, px = x1 + (x2 - x1) * t, py = y1 + (y2 - y1) * t;
+          const hit = (o) => px > o.x && px < o.x + o.w && py > o.y && py < o.y + o.h;
+          if (obstacles.some(hit) || portRects.some(hit) || placed.some(hit)) return true;
+        }
+        return false;
+      };
+
+      const leaderG = svgEl("g", { class: "ad-vb-leaders", fill: "none", "stroke-width": "0.7", "stroke-dasharray": "2.2 1.8" });
+      leaderG.style.opacity = ".75";
+      const textG = svgEl("g", { class: "ad-vb-labels" });
+
+      const drop = (verb, color, x, y, halfW, leaderFrom) => {
+        const t = svgEl("text", { class: "ad-vb", x, y, "text-anchor": "middle", "dominant-baseline": "central" });
+        t.style.fill = labelColor(color);
+        // knockout halo = the LOCAL background: cell where the verb sits inside a fork cell, else panel
+        if (cellRects.some((r) => x > r.x && x < r.x + r.w && y > r.y && y < r.y + r.h))
+          t.style.stroke = "var(--ad-cell)";
+        t.textContent = verb;
+        if (leaderFrom){
+          const ld = svgEl("path", { d: "M" + leaderFrom.x + "," + leaderFrom.y + " L" + x + "," + y });
+          ld.style.stroke = labelColor(color);
+          leaderG.appendChild(ld);
+        }
+        textG.appendChild(t);
+        placed.push(boxAt(x, y, halfW));
+      };
+
+      for (const e of edges){
+        const verb = (e.verb || "").toLowerCase();   // locked visual is lowercase (spec §3 / labels-r3)
+        if (!verb) continue;
+        const halfW = measureText(verb, VB_FS, 500, true) / 2 + VB_PAD_X;
+        // sample the actual rendered path: position + unit normal at N points along its length
+        const probe = withPath(e.pathD, (p) => {
+          const L = p.getTotalLength();
+          if (!L || !isFinite(L)) return null;
+          const N = 28, eps = Math.max(0.4, Math.min(2, L / (N * 1.5))), pts = [];
+          const at = (s) => { const q = p.getPointAtLength(Math.max(0, Math.min(L, s))); return { x: q.x, y: q.y }; };
+          for (let i = 0; i <= N; i++){
+            const s = (i / N) * L, c = at(s), a = at(s - eps), b = at(s + eps);
+            const tx = b.x - a.x, ty = b.y - a.y, tl = Math.hypot(tx, ty) || 1;
+            pts.push({ x: c.x, y: c.y, nx: -ty / tl, ny: tx / tl });
+          }
+          return pts;
+        });
+        if (!probe){ drop(verb, e.color, e.mid.x, e.mid.y, halfW, null); continue; }
+
+        // ① on the line: center in the LONGEST collision-free run of the wire (halo tolerates a short
+        //    run — step ②); tie-break toward the path midpoint.
+        const clear = probe.map((a) => !blocked(boxAt(a.x, a.y, halfW)));
+        const midIdx = probe.length >> 1;
+        let run = null, start = -1;
+        for (let i = 0; i <= probe.length; i++){
+          if (i < probe.length && clear[i]){ if (start < 0) start = i; }
+          else if (start >= 0){
+            const a = start, b = i - 1, mid = (a + b) / 2, score = (b - a) * 1000 - Math.abs(mid - midIdx);
+            if (!run || score > run.score) run = { mid, score };
+            start = -1;
+          }
+        }
+        if (run){ const a = probe[Math.round(run.mid)]; drop(verb, e.color, a.x, a.y, halfW, null); continue; }
+
+        // ③ collision: step along the path normal from the midpoint, preferring the side that points
+        //    away from the spine (toward the open margin); take the first clear offset.
+        const base = probe[midIdx];
+        const sides = ((base.nx >= 0) === (base.x >= cx0)) ? [1, -1] : [-1, 1];
+        let bestSpot = null, bestClr = -Infinity;
+        let doneNormal = false;
+        for (const d of [4, 7, 10, 13, 16, 20, 24]){
+          for (const s of sides){
+            const x = base.x + base.nx * d * s, y = base.y + base.ny * d * s, box = boxAt(x, y, halfW);
+            const clr = clearance(box);
+            if (clr >= 0){ drop(verb, e.color, x, y, halfW, null); doneNormal = true; break; }
+            if (clr > bestClr){ bestClr = clr; bestSpot = { x, y, d }; }
+          }
+          if (doneNormal) break;
+        }
+        if (doneNormal) continue;
+
+        // ④ boxed in: least-bad spot + a dashed leader back to the wire — but only when displaced past
+        //    the threshold AND a label/port sits between the verb and its wire (else it floats clean).
+        const sp = bestSpot || { x: base.x, y: base.y, d: 0 };
+        const wantLeader = sp.d >= VB_LEADER_MIN && segBlocked(base.x, base.y, sp.x, sp.y);
+        drop(verb, e.color, sp.x, sp.y, halfW, wantLeader ? base : null);
+      }
+
+      g.appendChild(leaderG);
+      g.appendChild(textG);
+    }
+    // a small axis-aligned rect centered on a point (for port obstacles).
+    function ptRect(p, r){ return { x: p.x - r, y: p.y - r, w: 2 * r, h: 2 * r }; }
+    // run a fn with a temp <path d=...> attached to the hidden measure SVG so getTotalLength /
+    // getPointAtLength are available; the path is removed afterwards (geometry only, never rendered).
+    function withPath(d, fn){
+      const p = svgEl("path", { d });
+      measureSvg().appendChild(p);
+      let r = null;
+      try { r = fn(p); } catch (e) { r = null; } finally { p.remove(); }
+      return r;
     }
 
     // content-sized entity card: measured type header + identifier, both with horizontal padding.
