@@ -30,7 +30,6 @@
     --ph-given:#2f74d0; --ph-when:#8350c4; --ph-then:#0c8576;
     --ph-given-ink:#2562c2; --ph-when-ink:#7237bd; --ph-then-ink:#0a7567;
     --v-create:#2563eb; --v-read:#0d9488; --v-edit:#e07a14; --v-delete:#9333ea;
-    --grid:rgba(20,28,40,.06); --lifeline:#cdd4dc; --ruler-text:#8b929c;
     --accent:#3b62e8;
     --shadow:0 1px 2px rgba(17,24,39,.06), 0 6px 16px rgba(17,24,39,.06);
     --shadow-sm:0 1px 2px rgba(17,24,39,.07);
@@ -53,7 +52,6 @@
       --ph-given:#3f82e6; --ph-when:#9a6ae0; --ph-then:#1aa48d;
       --ph-given-ink:#2562c2; --ph-when-ink:#7237bd; --ph-then-ink:#0a7567;
       --v-create:#4f8bff; --v-read:#2dd4bf; --v-edit:#f59e3c; --v-delete:#c07bf0;
-      --grid:rgba(180,200,230,.07); --lifeline:#39414e; --ruler-text:#6c7682;
       --accent:#5b86ff;
       --shadow:0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.35);
       --shadow-sm:0 1px 2px rgba(0,0,0,.4);
@@ -76,7 +74,6 @@
     --ph-given:#2f74d0; --ph-when:#8350c4; --ph-then:#0c8576;
     --ph-given-ink:#2562c2; --ph-when-ink:#7237bd; --ph-then-ink:#0a7567;
     --v-create:#2563eb; --v-read:#0d9488; --v-edit:#e07a14; --v-delete:#9333ea;
-    --grid:rgba(20,28,40,.06); --lifeline:#cdd4dc; --ruler-text:#8b929c;
     --accent:#3b62e8;
     --shadow:0 1px 2px rgba(17,24,39,.06), 0 6px 16px rgba(17,24,39,.06);
     --shadow-sm:0 1px 2px rgba(17,24,39,.07);
@@ -97,7 +94,6 @@
     --ph-given:#3f82e6; --ph-when:#9a6ae0; --ph-then:#1aa48d;
     --ph-given-ink:#2562c2; --ph-when-ink:#7237bd; --ph-then-ink:#0a7567;
     --v-create:#4f8bff; --v-read:#2dd4bf; --v-edit:#f59e3c; --v-delete:#c07bf0;
-    --grid:rgba(180,200,230,.07); --lifeline:#39414e; --ruler-text:#6c7682;
     --accent:#5b86ff;
     --shadow:0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.35);
     --shadow-sm:0 1px 2px rgba(0,0,0,.4);
@@ -184,53 +180,6 @@
   .pill.passed{ color:var(--pass-text); background:var(--pass-bg); } .pill.passed .pd{ background:var(--pass); }
   .pill.failed{ color:var(--fail-text); background:var(--fail-bg); } .pill.failed .pd{ background:var(--fail); }
   .pill.skipped{ color:var(--skip-text); background:var(--skip-bg); } .pill.skipped .pd{ background:var(--skip); }
-
-  /* ---------- TIMELINE ---------- */
-  .timeline{ --gutter:92px; --track:900px; }
-  .tl-row{ display:grid; grid-template-columns:var(--gutter) var(--track); align-items:center; }
-  .tl-gutter{
-    font:11px/1 ui-monospace, Consolas, monospace; color:var(--faint);
-    padding-right:12px; text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-  }
-  .tl-track{ position:relative; height:30px; }
-
-  /* ruler */
-  .tl-ruler .tl-track{ height:26px; }
-  .tl-ruler .tl-gutter{ color:var(--ruler-text); font-weight:600; }
-  .tick{ position:absolute; top:0; bottom:0; }
-  .tick .line{ position:absolute; left:0; top:14px; bottom:0; width:1px; background:var(--border-strong); }
-  .tick .lab{ position:absolute; top:1px; left:0; font-size:10.5px; color:var(--ruler-text); white-space:nowrap; transform:translateX(calc(var(--f) * -100%)); }
-
-  /* lane track gridlines */
-  .lanes .tl-track{
-    background:repeating-linear-gradient(to right, var(--grid) 0, var(--grid) 1px, transparent 1px, transparent var(--tick));
-  }
-
-  .bar{
-    position:absolute; top:4px; height:22px; border-radius:6px; background:var(--bcolor);
-    color:var(--bar-text); display:flex; align-items:center; gap:6px; padding:0 8px;
-    font-size:11.5px; white-space:nowrap; overflow:hidden; cursor:pointer;
-    box-shadow:var(--shadow-sm); border:1px solid rgba(0,0,0,.07);
-    transition:filter .12s ease, box-shadow .12s ease;
-  }
-  .bar.passed{ --bcolor:var(--bar-pass); }              /* fallback for unknown phases */
-  .bar.passed.ph-given{ --bcolor:var(--ph-given); }     /* passing bars carry the phase hue */
-  .bar.passed.ph-when{  --bcolor:var(--ph-when); }
-  .bar.passed.ph-then{  --bcolor:var(--ph-then); }
-  .bar.failed{ --bcolor:var(--bar-fail); }              /* status OVERRIDES phase: failed = red */
-  .bar.skipped{ --bcolor:var(--bar-skip); }             /* status OVERRIDES phase: skipped = grey */
-  .bar:hover{ filter:brightness(1.07); box-shadow:0 2px 8px rgba(0,0,0,.18); }
-  .bar.active{ outline:2px solid var(--accent); outline-offset:1px; }
-  .bar .ph{
-    font:700 9.5px/1 ui-monospace, Consolas, monospace; letter-spacing:.04em;
-    background:rgba(255,255,255,.92); color:var(--faint); border-radius:4px; padding:3px 4px; flex:none;
-    text-shadow:none; box-shadow:0 0 0 .5px rgba(0,0,0,.06);
-  }
-  /* phase-tinted glyph stays decodable even when status (red/grey) overrides the bar fill */
-  .bar.ph-given .ph{ color:var(--ph-given-ink); }
-  .bar.ph-when  .ph{ color:var(--ph-when-ink); }
-  .bar.ph-then  .ph{ color:var(--ph-then-ink); }
-  .bar .lbl{ overflow:hidden; text-overflow:ellipsis; text-shadow:0 1px 1px rgba(0,0,0,.22); }
 
   /* ---------- DRILL PANEL (scenario-level: every step in run order) ---------- */
   .drill-host{ margin-top:4px; }
@@ -328,7 +277,6 @@
       if (p === "dark" || p === "light") document.documentElement.dataset.theme = p;
     })();
 
-    const TRACK = 900, MIN_BAR = 30;
     const model = JSON.parse(document.getElementById("model").textContent);
 
     const esc = (x) => { const d = document.createElement("div"); d.textContent = x == null ? "" : String(x); return d.innerHTML; };
@@ -410,10 +358,22 @@
         || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
     }
     function labelColor(objColor){ return shade(objColor, currentTheme()==="dark" ? 0.22 : -0.22); }
+    // resource a step produces: its own `create` effect's type, else a resource whose create-event
+    // carries this stepId. null if the step creates nothing. (Drives the fork lane's disc-port colour.)
+    function producedResourceType(step, sc){
+      const ce = (step.effects || []).find((e) => (e.verb || "").toLowerCase() === "create");
+      if (ce) return ce.type;
+      for (const r of sc.resources || [])
+        if ((r.events || []).some((ev) => ev.stepId === step.stepId && (ev.verb || "").toLowerCase() === "create"))
+          return r.type;
+      return null;
+    }
 
     // ---- scenarios --------------------------------------------------------
     const VCOLOR = { create: "var(--v-create)", read: "var(--v-read)", load: "var(--v-read)", edit: "var(--v-edit)", delete: "var(--v-delete)" };
     const PHCOLOR = { given: "var(--ph-given)", when: "var(--ph-when)", then: "var(--ph-then)" };
+    // phase-ink (darker, decodable on a white chip riding a saturated lane bar)
+    const PHINK = { given: "var(--ph-given-ink)", when: "var(--ph-when-ink)", then: "var(--ph-then-ink)" };
     const report = document.getElementById("report");
     const openers = [];
 
@@ -466,13 +426,13 @@
       return n || step.displayName || step.label || "";
     }
 
-    // ---- layout classification (THE interface Task 5's fork cell consumes) ----
+    // ---- layout classification (THE interface the fork cell consumes) ----
     // Walks a scenario's steps in index order and classifies them into an ordered list of
     // spine items:  { kind:'node'|'fork', steps:[…], phase, x, y, w, h }  (y = absolute top).
     //   • 'node' — an ordinary sequential step, rendered as a content-sized action/assert box.
     //   • 'fork' — a MAXIMAL run of parallel steps (same phase, sharing a groupId or
-    //              overlapping in time on different lanes). It reserves ONE vertical slot,
-    //              left empty here; Task 5 drops the fork cell into {x,y,w,h}.
+    //              overlapping in time on different lanes). It reserves ONE vertical slot
+    //              ({x,y,w,h}, centred on the spine) that buildForkCell fills with the cell.
     // Also derives the phase swimlane bands, sized to contain the items they hold.
     // Returns { items, bands, contentBottom }.
     function layoutScenario(sc){
@@ -485,11 +445,13 @@
         (a.phase || "").toLowerCase() === (b.phase || "").toLowerCase() &&
         ((a.groupId != null && a.groupId === b.groupId) || (a.lane !== b.lane && overlap(a, b)));
 
-      // greedy maximal runs of mutually co-parallel, index-contiguous steps
+      // maximal runs of index-contiguous, MUTUALLY co-parallel steps. A step joins the open run
+      // only if it is co-parallel with EVERY current member (all-pairs concurrency) — not merely
+      // with one, which could over-merge a transitive chain (A∥B, B∥C, but ¬A∥C).
       const groups = [];
       for (const s of steps){
         const run = groups.length ? groups[groups.length - 1] : null;
-        if (run && run.some((m) => coParallel(m, s))) run.push(s);
+        if (run && run.every((m) => coParallel(m, s))) run.push(s);
         else groups.push([s]);
       }
 
@@ -556,8 +518,8 @@
 
     // ---- activity diagram: swimlane frame (bands + tabs + rotated labels) carrying the
     //      classified layout (layoutScenario): content-sized action/assert nodes on a centred
-    //      spine, joined by control-flow edges, with each fork group's slot reserved for the
-    //      fork cell (Task 5). Plus the initial + final nodes. <svg class="actdiag">. ----
+    //      spine, joined by control-flow edges, with each fork group rendered as the packaged
+    //      inline-timeline cell (buildForkCell). Plus the initial + final nodes. <svg class="actdiag">. ----
     function buildActivityDiagram(sc){
       const W = AD_W, bandX = AD_MARGIN, bandW = AD_BAND_W, cx = W / 2;
       const TAB_DX = 7, TAB_W = 2.5, LABEL_DX = 24;
@@ -645,9 +607,9 @@
       addEdge(prevBottom, finalCy - FINAL_R, true);
       svg.appendChild(edges);
 
-      // item bodies: content-sized action/assert boxes; fork slots reserved for Task 5
+      // item bodies: content-sized action/assert boxes; fork groups get the packaged inline-timeline cell
       for (const it of items)
-        svg.appendChild(it.kind === "fork" ? forkSlot(it) : actionNode(it));
+        svg.appendChild(it.kind === "fork" ? buildForkCell(it, sc) : actionNode(it));
 
       // final node (ring + filled core, bottom of the spine)
       const ring = svgEl("circle", { cx: cx, cy: finalCy, r: FINAL_R, fill: "none", "stroke-width": "1.4" });
@@ -692,21 +654,159 @@
       return g;
     }
 
-    // reserved fork slot — a faint dashed placeholder; Task 5 renders the parallel cell here.
-    function forkSlot(it){
+    // Fork cell — the diagram's centrepiece: a 4-walled "package" wrapping an inline SVG timeline of
+    // the parallel lanes (mirrors the v17 mock, themed via the --ad-* vars so it works light + dark).
+    // It fills the slot Task 4 reserved (it.x/y/w/h, already centred on the spine): the heavy fork bar
+    // (top) meets the incoming control edge, the join bar (bottom) the outgoing one. The time axis is
+    // auto-scaled to the lanes' max end (niceAxis), so the cell is cropped to its own content. Records
+    // each lane's disc-port geometry on it.ports = [{x,y,color,resourceType,stepId}] for Task 6 to
+    // attach object-flow edges, and leaves a clean gap in the join wall at each such port's x.
+    function buildForkCell(it, sc){
       const g = svgEl("g");
-      const r = svgEl("rect", {
-        x: it.x, y: it.y, width: it.w, height: it.h, rx: 4,
-        fill: "none", "stroke-width": "1", "stroke-dasharray": "3 3",
-      });
-      r.style.stroke = "var(--ad-grid)";
-      g.appendChild(r);
-      const t = svgEl("text", {
-        class: "ad-tk", x: it.x + it.w / 2, y: it.y + it.h / 2,
-        "text-anchor": "middle", "dominant-baseline": "central",
-      });
-      t.textContent = "parallel · " + it.steps.length + " steps";
-      g.appendChild(t);
+      const cellX = it.x, cellY = it.y, cellW = it.w, cellH = it.h;
+      const cellRight = cellX + cellW, cellBottom = cellY + cellH;
+      const WALL = 2.5, HEADER = 13, BOTTOM_PAD = 4, LEFT_INSET = 16, RIGHT_INSET = 12, MIN_BAR = 14, GAP = 5;
+
+      // one lane per fork-member step, ordered by lane
+      const lanes = it.steps.slice().sort((a, b) => a.lane - b.lane);
+      const n = lanes.length;
+
+      // time axis — absolute scenario offsets, cropped to the lanes' max end via niceAxis (reused)
+      const maxEnd = Math.max(1, ...lanes.map((s) => s.offsetMs + s.durationMs));
+      const { step, axisMax } = niceAxis(maxEnd);
+      const trackLeft = cellX + LEFT_INSET, trackRight = cellRight - RIGHT_INSET;
+      const trackW = trackRight - trackLeft, px = trackW / axisMax;
+
+      // vertical bands: fork bar + tick header on top, lanes in the middle, join bar at the bottom
+      const lanesTop = cellY + WALL + HEADER, lanesBottom = cellBottom - WALL - BOTTOM_PAD;
+      const rowPitch = (lanesBottom - lanesTop) / n;
+      const BAR_H = Math.max(7, Math.min(12, rowPitch - 3));
+
+      // cell panel
+      const panel = svgEl("rect", { x: cellX, y: cellY, width: cellW, height: cellH, rx: 2 });
+      panel.style.fill = "var(--ad-cell)";
+      g.appendChild(panel);
+
+      // inner zebra rows (every other lane)
+      for (let i = 0; i < n; i += 2){
+        const z = svgEl("rect", {
+          x: cellX + WALL, y: lanesTop + i * rowPitch, width: cellW - 2 * WALL, height: rowPitch,
+        });
+        z.style.fill = "var(--ad-cell-row)";
+        g.appendChild(z);
+      }
+
+      // vertical gridlines at each tick
+      const grid = svgEl("g", { "stroke-width": "1" });
+      grid.style.stroke = "var(--ad-grid)";
+      for (let t = 0; t <= axisMax + 1e-6; t += step){
+        const gx = trackLeft + t * px;
+        grid.appendChild(svgEl("line", { x1: gx, y1: lanesTop - 2, x2: gx, y2: cellBottom - WALL }));
+      }
+      g.appendChild(grid);
+
+      // tag + ms gutter + tick labels (.ad-tk)
+      const tickBase = cellY + WALL + 9;
+      const tag = svgEl("text", { class: "ad-tk", x: cellX + WALL + 2, y: cellY - 3 });
+      tag.style.letterSpacing = ".12em";
+      tag.textContent = "PARALLEL";
+      g.appendChild(tag);
+      const ms = svgEl("text", { class: "ad-tk", x: trackLeft - 7, y: tickBase, "text-anchor": "end" });
+      ms.textContent = "ms";
+      g.appendChild(ms);
+      for (let t = 0; t <= axisMax + 1e-6; t += step){
+        const lab = svgEl("text", { class: "ad-tk", x: trackLeft + t * px, y: tickBase, "text-anchor": "middle" });
+        lab.textContent = fmtTick(t, axisMax);
+        g.appendChild(lab);
+      }
+
+      // lane bars (phase-hued) + white G/W/T chip + serif label; collect each lane's disc port
+      const tint = phaseColor(it.phase);
+      const ink = PHINK[it.phase] || "var(--ad-card-ink)";
+      const letter = (it.phase || "?").charAt(0).toUpperCase();
+      const ports = [];
+      for (let i = 0; i < n; i++){
+        const s = lanes[i];
+        const barCY = lanesTop + i * rowPitch + rowPitch / 2;
+        const barX = trackLeft + s.offsetMs * px;
+        const barW = Math.max(MIN_BAR, s.durationMs * px);
+
+        const bar = svgEl("rect", { x: barX, y: barCY - BAR_H / 2, width: barW, height: BAR_H, rx: 1.5 });
+        bar.style.fill = tint;
+        g.appendChild(bar);
+
+        const chipS = Math.min(9, BAR_H - 1.5);
+        const chip = svgEl("rect", { x: barX + 1.2, y: barCY - chipS / 2, width: chipS, height: chipS, rx: 1.5 });
+        chip.style.fill = "#eef3fa";
+        g.appendChild(chip);
+        const gl = svgEl("text", {
+          x: barX + 1.2 + chipS / 2, y: barCY, "text-anchor": "middle", "dominant-baseline": "central",
+          "font-family": "ui-monospace, Consolas, monospace",
+        });
+        gl.style.cssText = "font-weight:700;font-size:" + (chipS - 3.5) + "px;fill:" + ink + ";";
+        gl.textContent = letter;
+        g.appendChild(gl);
+
+        const lbl = svgEl("text", { class: "ad-okn", x: barX + chipS + 4, y: barCY, "dominant-baseline": "central" });
+        lbl.style.cssText = "font-size:6.5px;fill:#ffffff;";
+        lbl.textContent = nodeLabel(s);
+        g.appendChild(lbl);
+
+        // disc port at the production (right) end, coloured by the resource the step creates
+        const rtype = producedResourceType(s, sc);
+        ports.push({
+          x: trackLeft + (s.offsetMs + s.durationMs) * px, y: barCY,
+          color: rtype ? typeColor(rtype) : "var(--ad-control)", resourceType: rtype, stepId: s.stepId,
+        });
+      }
+
+      // ---- walls -----------------------------------------------------------
+      // fork bar (top): solid full width + small ruler notches at the interior ticks
+      const fork = svgEl("rect", { x: cellX, y: cellY, width: cellW, height: WALL });
+      fork.style.fill = "var(--ad-wall)";
+      g.appendChild(fork);
+      const notch = svgEl("g", { "stroke-width": "0.7" });
+      notch.style.stroke = "var(--ad-panel)";
+      for (let t = step; t < axisMax - 1e-6; t += step){
+        const nx = trackLeft + t * px;
+        notch.appendChild(svgEl("line", { x1: nx, y1: cellY, x2: nx, y2: cellY + WALL }));
+      }
+      g.appendChild(notch);
+
+      // join bar (bottom): segmented, leaving a clean gap at each resource disc-port x (Task 6 routes through)
+      const joinY = cellBottom - WALL;
+      const gapXs = ports.filter((p) => p.resourceType).map((p) => p.x).sort((a, b) => a - b);
+      const join = svgEl("g");
+      join.style.fill = "var(--ad-wall)";
+      let segX = cellX;
+      for (const gx of gapXs){
+        const gs = gx - GAP / 2;
+        if (gs > segX) join.appendChild(svgEl("rect", { x: segX, y: joinY, width: gs - segX, height: WALL }));
+        segX = gx + GAP / 2;
+      }
+      if (cellRight > segX) join.appendChild(svgEl("rect", { x: segX, y: joinY, width: cellRight - segX, height: WALL }));
+      g.appendChild(join);
+
+      // left + right walls
+      const lw = svgEl("rect", { x: cellX, y: cellY, width: WALL, height: cellH });
+      lw.style.fill = "var(--ad-wall)";
+      g.appendChild(lw);
+      const rw = svgEl("rect", { x: cellRight - WALL, y: cellY, width: WALL, height: cellH });
+      rw.style.fill = "var(--ad-wall)";
+      g.appendChild(rw);
+
+      // ---- disc ports (filled disc + faint halo), drawn on top of the walls ----
+      for (const p of ports){
+        const halo = svgEl("circle", { cx: p.x, cy: p.y, r: 4, fill: "none", "stroke-width": "0.8" });
+        halo.style.stroke = p.color;
+        halo.style.opacity = ".35";
+        g.appendChild(halo);
+        const disc = svgEl("circle", { cx: p.x, cy: p.y, r: 2.6 });
+        disc.style.fill = p.color;
+        g.appendChild(disc);
+      }
+
+      it.ports = ports;   // expose disc-port geometry for Task 6 (object-flow edges)
       return g;
     }
 
