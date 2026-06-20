@@ -243,8 +243,9 @@
   .ad-nm{ font-weight:400; font-size:7.5px; fill:var(--ad-card-ink); }        /* node label */
   .ad-oth{ font-weight:600; font-size:5.5px; letter-spacing:.05em; fill:var(--ad-panel); } /* card type header text (on colored band) */
   .ad-okn{ font-weight:400; font-size:7.5px; fill:var(--ad-card-ink); }       /* card identifier */
-  .ad-vb{ font-style:italic; font-weight:500; font-size:5.5px; paint-order:stroke; stroke:var(--ad-panel); stroke-width:2.4; stroke-linejoin:round; } /* verb label + halo */
-  .ad-gv{ font-style:italic; font-weight:500; font-size:5.5px; fill:var(--ad-grey-badge); paint-order:stroke; stroke:var(--ad-panel); stroke-width:2.4; stroke-linejoin:round; } /* grey verb×count (collapse Tier 3) */
+  .ad-vb{ font-style:italic; font-weight:500; font-size:5.5px; paint-order:stroke; stroke:var(--ad-panel); stroke-width:2.4; stroke-linejoin:round; pointer-events:none; } /* verb label + halo */
+  .ad-gv{ font-style:italic; font-weight:500; font-size:5.5px; fill:var(--ad-grey-badge); paint-order:stroke; stroke:var(--ad-panel); stroke-width:2.4; stroke-linejoin:round; pointer-events:none; } /* grey verb×count (collapse Tier 3) */
+  .ad-vb-leaders{ pointer-events:none; }                                      /* dashed label leaders never absorb hover */
   .ad-bdg{ font-weight:700; font-size:6.5px; }                                /* collapse count badge */
   .ad-phl{ font-weight:500; font-size:7px; letter-spacing:.16em; }            /* rotated phase label */
   .ad-tk{ font:500 6.5px ui-monospace,Consolas; fill:var(--ad-control); }     /* ruler ticks */
@@ -1310,7 +1311,7 @@
       const clearTo = (a, o) => {
         const dx = Math.max(o.x - (a.x + a.w), a.x - (o.x + o.w));
         const dy = Math.max(o.y - (a.y + a.h), a.y - (o.y + o.h));
-        return (dx >= 0 || dy >= 0) ? Math.max(dx, dy) : Math.max(dx, dy);
+        return Math.max(dx, dy);
       };
       const clearance = (box) => {
         let m = Infinity;
