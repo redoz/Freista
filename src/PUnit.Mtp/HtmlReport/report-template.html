@@ -244,6 +244,8 @@
   .ad-oth{ font-weight:600; font-size:5.5px; letter-spacing:.05em; fill:var(--ad-panel); } /* card type header text (on colored band) */
   .ad-okn{ font-weight:400; font-size:7.5px; fill:var(--ad-card-ink); }       /* card identifier */
   .ad-vb{ font-style:italic; font-weight:500; font-size:5.5px; paint-order:stroke; stroke:var(--ad-panel); stroke-width:2.4; stroke-linejoin:round; } /* verb label + halo */
+  .ad-gv{ font-style:italic; font-weight:500; font-size:5.5px; fill:var(--ad-grey-badge); paint-order:stroke; stroke:var(--ad-panel); stroke-width:2.4; stroke-linejoin:round; } /* grey verb×count (collapse Tier 3) */
+  .ad-bdg{ font-weight:700; font-size:6.5px; }                                /* collapse count badge */
   .ad-phl{ font-weight:500; font-size:7px; letter-spacing:.16em; }            /* rotated phase label */
   .ad-tk{ font:500 6.5px ui-monospace,Consolas; fill:var(--ad-control); }     /* ruler ticks */
 </style>
@@ -390,6 +392,14 @@
     const PHINK = { given: "var(--ph-given-ink)", when: "var(--ph-when-ink)", then: "var(--ph-then-ink)" };
     const report = document.getElementById("report");
     const openers = [];
+    // per-scenario object-flow collapse state: scenarioId -> Map(bundleKey -> expansionLevel).
+    // A collapsed node click bumps its level; effective tier = max(1, naturalTier - level) (Tier3->2->1).
+    const adExpansion = new Map();
+    function expansionFor(scenarioId){
+      let m = adExpansion.get(scenarioId);
+      if (!m){ m = new Map(); adExpansion.set(scenarioId, m); }
+      return m;
+    }
 
     // SVG namespace for the activity diagram (built with document.createElementNS)
     const SVGNS = "http://www.w3.org/2000/svg";
@@ -409,6 +419,25 @@
     // verb-label geometry (placement ladder): font size, halo-aware box half-padding, leader threshold
     const VB_FS = 5.5, VB_PAD_X = 1.2, VB_HALF_H = 3.2, VB_LEADER_MIN = 13;
     const phaseColor = (p) => PHCOLOR[p] || "var(--faint)";
+
+    // ---- collapse tiers (spec §4): decide per producer-bundle. Thresholds are tunable defaults.
+    const TIER_INDIVIDUAL_MAX = 4;   // <= this many objects total -> Tier 1 (individual cards)
+    const TIER_TYPEGROUPS_MAX = 4;   // >  this many type-groups   -> Tier 3 (grey bundle)
+    const TIER_TOTAL_MAX = 12;       // >  this many total objects -> Tier 3 (grey bundle)
+    function groupBy(arr, keyOf){
+      const m = new Map();
+      for (const x of arr){ const k = keyOf(x); const a = m.get(k); if (a) a.push(x); else m.set(k, [x]); }
+      return m;
+    }
+    // objs = one per resource in the bundle, each {type, verb}. byType groups by type; a type-group
+    // with >1 distinct verb is "mixed" -> Tier 3. ≤4 -> Tier 1; else Tier 2 unless mixed / explodes.
+    function tierBundle(objs){
+      const byType = groupBy(objs, (o) => o.type);
+      const mixed = [...byType.values()].some((g) => new Set(g.map((o) => o.verb)).size > 1);
+      if (objs.length <= TIER_INDIVIDUAL_MAX) return { tier: 1, byType };
+      if (mixed || byType.size > TIER_TYPEGROUPS_MAX || objs.length > TIER_TOTAL_MAX) return { tier: 3, byType };
+      return { tier: 2, byType };
+    }
 
     // ---- text measurement for content-sized nodes ------------------------
     // Source Serif 4's metrics differ from the fallback, so node widths are measured
@@ -566,7 +595,7 @@
     //      classified layout (layoutScenario): content-sized action/assert nodes on a centred
     //      spine, joined by control-flow edges, with each fork group rendered as the packaged
     //      inline-timeline cell (buildForkCell). Plus the initial + final nodes. <svg class="actdiag">. ----
-    function buildActivityDiagram(sc){
+    function buildActivityDiagram(sc, rerender){
       const W = AD_W, bandX = AD_MARGIN, bandW = AD_BAND_W, cx = W / 2;
       const TAB_DX = 7, TAB_W = 2.5, LABEL_DX = 24;
       const INITIAL_CY = 22, INITIAL_R = 5.5, FINAL_R = 8, FINAL_CORE_R = 3.4;
@@ -659,7 +688,7 @@
         svg.appendChild(it.kind === "fork" ? buildForkCell(it, sc) : actionNode(it));
 
       // object flow: entity cards + flow edges + ring/disc ports, drawn on top of the spine/nodes.
-      const flow = buildObjectFlow(sc, layout);
+      const flow = buildObjectFlow(sc, layout, rerender);
       svg.appendChild(flow.g);
       layout.flow = flow;   // expose {cards, edges} for Task 7 (verb labels) + Task 8 (collapse)
 
@@ -871,7 +900,7 @@
     //   PORT_PITCH (ordered by counterpart x so lines don't cross); the control edge owns the centre.
     // Returns { g, cards, edges } — `edges` is the rendered geometry/verb metadata for Task 7 (verb
     // labels) and Task 8 (collapse). See the report for the edge/card schema.
-    function buildObjectFlow(sc, layout){
+    function buildObjectFlow(sc, layout, rerender){
       const g = svgEl("g", { class: "ad-flow" });
       const flows = (layout.flows || []).map((f) => Object.assign({}, f));  // local copy (geometry added here)
       const cards = [], edges = [];
@@ -906,10 +935,9 @@
         return id;
       };
 
-      // 1) resolve producer points. Fork lanes already drew their disc (reuse it.ports); node
-      //    producers get an output disc clamp/stacked on the producing node's bottom edge.
+      // 1) resolve producer points for ALL flows. Fork lanes already drew their disc (reuse it.ports);
+      //    node producers get an output disc (tier-1 below; collapsed bundles synthesize one).
       for (const f of flows) f.color = typeColor(f.type);
-      const nodeOut = new Map();
       for (const f of flows){
         if (f.prodItem.kind === "fork"){
           const port = (f.prodItem.ports || []).find((p) => p.stepId === f.producerStepId);
@@ -917,18 +945,49 @@
           f.producerInFork = true;
         } else {
           f.producerInFork = false;
-          pushMap(nodeOut, f.prodItem, f);
         }
       }
+
+      // ---- collapse tiers (spec §4): group flows into producer bundles, decide a tier per bundle.
+      //   Tier 1 = individual cards (current behavior); Tier 2 = one stack+badge per type (uniform
+      //   verb); Tier 3 = a grey blank-header bundle + verb×count. Click a collapsed card -> expand
+      //   ONE tier (3->2->1) via the per-scenario expansion level, then re-layout the scenario.
+      const expMap = expansionFor(sc.scenarioId);
+      const repVerb = (f) => {                          // a resource's representative verb for uniformity
+        const cv = (f.consumers || []).map((c) => (c.verb || "").toLowerCase());
+        if (!cv.length) return (f.createVerb || "create").toLowerCase();
+        return new Set(cv).size === 1 ? cv[0] : "@mixed";
+      };
+      const bundleMap = new Map();
+      for (const f of flows){
+        let b = bundleMap.get(f.prodItem);
+        if (!b){ b = { key: f.prodItem.steps.map((s) => s.stepId).sort().join("|"), prodItem: f.prodItem, flows: [] };
+          bundleMap.set(f.prodItem, b); }
+        b.flows.push(f);
+      }
+      const bundles = [...bundleMap.values()];
+      for (const b of bundles){
+        const decided = tierBundle(b.flows.map((f) => ({ type: f.type, verb: repVerb(f) })));
+        b.natural = decided.tier;
+        b.tier = Math.max(1, decided.tier - (expMap.get(b.key) || 0));
+      }
+      const collapsedFlows = new Set();
+      for (const b of bundles) if (b.tier > 1) for (const f of b.flows) collapsedFlows.add(f);
+      const tier1Flows = flows.filter((f) => !collapsedFlows.has(f));
+      const tier1Cards = [];
+
+      // node producers (tier 1): output disc clamp/stacked on the producing node's bottom edge.
+      const nodeOut = new Map();
+      for (const f of tier1Flows) if (!f.producerInFork) pushMap(nodeOut, f.prodItem, f);
       for (const [it, fs] of nodeOut){
         const placed = clampStack(it, fs.map((f, i) => ({ f, cx: i })));   // stable order; counterpart unknown
         for (const e of placed) e.f.producerPt = { x: e.x, y: it.y + it.h };
       }
 
-      // 2) entity cards. Fork-produced cards form ONE row below the cell (packed, centred on the disc
-      //    centroid); a node's cards sit just below it. Both clear the spine + stay inside the band.
+      // 2) entity cards (tier 1). Fork-produced cards form ONE row below the cell (packed, centred on
+      //    the disc centroid); a node's cards sit just below it. Both clear the spine + stay in-band.
       const byFork = new Map();
-      for (const f of flows) if (f.producerInFork && f.producerPt) pushMap(byFork, f.prodItem, f);
+      for (const f of tier1Flows) if (f.producerInFork && f.producerPt) pushMap(byFork, f.prodItem, f);
       for (const [it, fs] of byFork){
         fs.sort((a, b) => a.producerPt.x - b.producerPt.x);
         const boxes = fs.map((f) => Object.assign({ f }, cardBox(f.type, f.key)));
@@ -940,10 +999,10 @@
         let x = left;
         for (const b of boxes){
           const card = { type: b.f.type, key: b.f.key, color: b.f.color, x, y: top, w: b.w, h: b.h, cx: x + b.w / 2 };
-          b.f.card = card; cards.push(card); x += b.w + CARD_HGAP;
+          b.f.card = card; cards.push(card); tier1Cards.push(card); x += b.w + CARD_HGAP;
         }
       }
-      for (const f of flows){
+      for (const f of tier1Flows){
         if (f.producerInFork || !f.producerPt || f.card) continue;
         const b = cardBox(f.type, f.key);
         // corridor x: by default below the output disc; if the straight drop to the nearest consumer
@@ -961,12 +1020,12 @@
         x = Math.max(AD_MARGIN + 6, Math.min(x, AD_W - AD_MARGIN - 6 - b.w));
         const top = prodBot + CARD_GAP_TOP;
         const card = { type: f.type, key: f.key, color: f.color, x, y: top, w: b.w, h: b.h, cx: x + b.w / 2 };
-        f.card = card; cards.push(card);
+        f.card = card; cards.push(card); tier1Cards.push(card);
       }
 
-      // 3) consumer input rings: clamp/stacked on each consuming node's top edge, ordered by producer x.
+      // 3) consumer input rings (tier 1): clamp/stacked on each consuming node's top edge, by producer x.
       const ringNodes = new Map();
-      for (const f of flows) for (const c of f.consumers){
+      for (const f of tier1Flows) for (const c of f.consumers){
         const cx = f.producerPt ? f.producerPt.x : (f.card ? f.card.cx : c.item.x + c.item.w);
         pushMap(ringNodes, c.item, { f, c, cx });
       }
@@ -975,7 +1034,7 @@
         for (const e of placed) e.c.ring = { x: e.x, y: it.y };
       }
 
-      // 4) draw — lines first (under the cards), then cards, then ports (rings/discs) on top.
+      // 4) draw (tier 1) — lines first (under the cards), then cards, then ports (rings/discs) on top.
       const lineG = svgEl("g", { fill: "none", "stroke-linecap": "round", "stroke-width": "1.3" });
       lineG.style.opacity = ".9";
       const addLine = (d, color, head) => {
@@ -985,7 +1044,7 @@
         lineG.appendChild(p);
         return p;
       };
-      for (const f of flows){
+      for (const f of tier1Flows){
         if (!f.producerPt || !f.card) continue;
         // producer -> card: straight down through the join-wall gap (fork), then a gentle curve in.
         const throughY = f.producerInFork ? f.prodItem.y + f.prodItem.h : f.producerPt.y;
@@ -1012,18 +1071,14 @@
         }
       }
       g.appendChild(lineG);
-
-      // cards (on top of the line ends)
-      for (const card of cards) g.appendChild(cardEl(card));
-
-      // ports: hollow consumer rings + node-producer discs (fork discs were drawn by buildForkCell)
-      for (const f of flows) for (const c of f.consumers){
+      for (const card of tier1Cards) g.appendChild(cardEl(card));
+      for (const f of tier1Flows) for (const c of f.consumers){
         if (!c.ring) continue;
         const ring = svgEl("circle", { cx: c.ring.x, cy: c.ring.y, r: RING_R, fill: "none", "stroke-width": "1.3" });
         ring.style.stroke = f.color;
         g.appendChild(ring);
       }
-      for (const f of flows){
+      for (const f of tier1Flows){
         if (f.producerInFork || !f.producerPt) continue;
         const halo = svgEl("circle", { cx: f.producerPt.x, cy: f.producerPt.y, r: HALO_R, fill: "none", "stroke-width": "0.8" });
         halo.style.stroke = f.color; halo.style.opacity = ".35";
@@ -1033,10 +1088,145 @@
         g.appendChild(disc);
       }
 
-      // 5) verb labels — the placement ladder (spec §3.2): center the verb in the longest clear
-      //    on-path gap; on collision step along the path normal to the open side; if boxed in, drop a
-      //    dashed leader back to the wire. Halo = local bg (panel, or cell where the label is in a cell).
+      // 5) verb labels (tier 1) — the placement ladder (spec §3.2).
       placeVerbLabels(edges, cards, layout, g);
+
+      // 6) collapsed bundles (Tier 2 stack+badge per type / Tier 3 grey blank-header bundle + verb×count).
+      const collapsed = bundles.filter((b) => b.tier > 1);
+      if (collapsed.length){
+        const cLineG = svgEl("g", { fill: "none", "stroke-linecap": "round", "stroke-width": "1.3" });
+        cLineG.style.opacity = ".9";
+        const cCardEls = [];          // collapsed card <g>s (drawn above the lines)
+        const discList = [];          // node-producer discs to draw (fork discs already drawn by the cell)
+        const portsG = svgEl("g"), labelsG = svgEl("g");
+        const consSpecs = [];         // deferred consumer edges (need cross-item ring clamp/stack)
+        const sampleKey = (k) => (k == null ? "" : String(k)) + "…";
+        const tally = (verbs) => {    // [verb,…] -> [[verb,count],…] sorted by count desc
+          const m = new Map();
+          for (const v of verbs){ const k = (v || "").toLowerCase(); m.set(k, (m.get(k) || 0) + 1); }
+          return [...m.entries()].sort((a, b) => b[1] - a[1]);
+        };
+        const drawVb = (text, color, x, y, grey) => {
+          const t = svgEl("text", { class: grey ? "ad-gv" : "ad-vb", x, y, "text-anchor": "middle", "dominant-baseline": "central" });
+          if (!grey) t.style.fill = labelColor(color);
+          t.textContent = text;
+          labelsG.appendChild(t);
+        };
+        // producer disc(s) for a set of flows: fork -> distinct lane discs (already on-canvas);
+        // node -> one synthesized output disc at the node's bottom centre (marked .node so it's drawn).
+        const discsFor = (it, fs, cellBottom) => {
+          if (it.kind === "fork"){
+            const seen = new Map();
+            for (const f of fs) if (f.producerPt) seen.set(f.producerStepId, f.producerPt);
+            return [...seen.values()];
+          }
+          return [{ x: it.x + it.w / 2, y: cellBottom, node: true }];
+        };
+        const centroid = (pts, fbx, fby) =>
+          pts.length ? { x: pts.reduce((s, p) => s + p.x, 0) / pts.length, y: pts.reduce((s, p) => s + p.y, 0) / pts.length }
+                     : { x: fbx, y: fby };
+
+        for (const b of collapsed){
+          const it = b.prodItem, cellBottom = it.y + it.h, top = cellBottom + CARD_GAP_TOP;
+          const onClick = (ev) => { ev.stopPropagation(); expMap.set(b.key, (expMap.get(b.key) || 0) + 1); if (rerender) rerender(); };
+
+          if (b.tier === 2){
+            // one stack per type, laid in a row centred on the bundle's disc centroid.
+            const byType = new Map();
+            for (const f of b.flows) pushMap(byType, f.type, f);
+            const groups = [...byType.entries()].map(([type, fs]) => {
+              const box = cardBox(type, sampleKey(fs[0].key));
+              return { type, fs, color: fs[0].color, w: box.w, h: box.h };
+            });
+            const totalW = groups.reduce((s, gp) => s + gp.w, 0) + (groups.length - 1) * CARD_HGAP;
+            const cen = centroid(discsFor(it, b.flows, cellBottom), it.x + it.w / 2, cellBottom);
+            let left = cen.x - totalW / 2;
+            left = Math.max(AD_MARGIN + 6, Math.min(left, AD_W - AD_MARGIN - 6 - totalW));
+            let x = left;
+            for (const gp of groups){
+              const card = { type: gp.type, key: sampleKey(gp.fs[0].key), color: gp.color,
+                x, y: top, w: gp.w, h: gp.h, cx: x + gp.w / 2, collapsed: 2, count: gp.fs.length, bundle: b };
+              cards.push(card); cCardEls.push(stackCardEl(card, onClick));
+              // producer edge from this type's disc centroid -> card top (colored).
+              const tDiscs = discsFor(it, gp.fs, cellBottom);
+              const pc = centroid(tDiscs, card.cx, cellBottom);
+              const pPath = producerToCardPath(pc, card, cellBottom);
+              const pl = svgEl("path", { d: pPath }); pl.style.stroke = gp.color; cLineG.appendChild(pl);
+              if (tDiscs.some((d) => d.node)) discList.push({ x: pc.x, y: cellBottom, color: gp.color });
+              drawVb((gp.fs[0].createVerb || "create").toLowerCase(), gp.color, (pc.x + card.cx) / 2, (pc.y + top) / 2, false);
+              edges.push({ kind: "produce", verb: gp.fs[0].createVerb, type: gp.type, color: gp.color, tier: 2, count: card.count, card, pathD: pPath });
+              // consumer edge(s): one per distinct consumer item, carrying that type-group's verb(s).
+              const consByItem = new Map();
+              for (const f of gp.fs) for (const c of f.consumers) pushMap(consByItem, c.item, c.verb);
+              for (const [citem, verbs] of consByItem)
+                consSpecs.push({ card, item: citem, color: gp.color, grey: false, verbCounts: tally(verbs), cx: card.cx });
+              x += gp.w + CARD_HGAP;
+            }
+          } else {
+            // Tier 3 — ONE grey blank-header bundle for the whole producer bundle.
+            const box = cardBox("XXXXXX", "");
+            const allDiscs = discsFor(it, b.flows, cellBottom);
+            let ccx = centroid(allDiscs, it.x + it.w / 2, cellBottom).x;
+            ccx = Math.max(AD_MARGIN + 6 + box.w / 2, Math.min(ccx, AD_W - AD_MARGIN - 6 - box.w / 2));
+            const card = { type: "", key: "", color: "var(--ad-grey)", x: ccx - box.w / 2, y: top,
+              w: box.w, h: box.h, cx: ccx, collapsed: 3, count: b.flows.length, bundle: b };
+            cards.push(card); cCardEls.push(greyCardEl(card, onClick));
+            // grey producer edge(s): one per distinct producer disc (each passes its join-wall gap).
+            for (const d of allDiscs){
+              const pl = svgEl("path", { d: producerToCardPath(d, card, cellBottom) });
+              pl.style.stroke = "var(--ad-grey)"; pl.style.opacity = ".75"; cLineG.appendChild(pl);
+              if (d.node) discList.push({ x: d.x, y: cellBottom, color: "var(--ad-grey-badge)" });
+            }
+            // producer-side tally (create ×N), stacked above the card.
+            const pTally = tally(b.flows.map((f) => f.createVerb));
+            pTally.forEach(([v, n], i) => drawVb(v + " ×" + n, null, card.cx + 2, top - 8 - i * 9, true));
+            edges.push({ kind: "produce", type: "*", color: "var(--ad-grey)", tier: 3, count: card.count, card, verbCounts: pTally });
+            // grey consumer edge(s): one per distinct consumer item (no per-edge label).
+            const consByItem = new Map();
+            for (const f of b.flows) for (const c of f.consumers) pushMap(consByItem, c.item, c.verb);
+            for (const [citem] of consByItem)
+              consSpecs.push({ card, item: citem, color: "var(--ad-grey)", grey: true, verbCounts: null, cx: card.cx });
+            // one shared consumer-side verb×count tally for the whole bundle, stacked below the card.
+            const cTally = tally([...consByItem.values()].flat());
+            cTally.forEach(([v, n], i) => drawVb(v + " ×" + n, null, card.cx, top + card.h + 9 + i * 9, true));
+          }
+        }
+
+        // consumer rings: clamp/stack across all collapsed consume edges per consuming node.
+        const cRingMap = new Map();
+        for (const cs of consSpecs) pushMap(cRingMap, cs.item, cs);
+        for (const [item, specs] of cRingMap){
+          const placed = clampStack(item, specs.map((s) => ({ s, cx: s.cx })));
+          for (const e of placed) e.s.ring = { x: e.x, y: item.y };
+        }
+        for (const cs of consSpecs){
+          if (!cs.ring) continue;
+          const x1 = cs.card.cx, y1 = cs.card.y + cs.card.h;
+          const pl = svgEl("path", { d: flowEdgeDown(x1, y1, cs.ring.x, cs.ring.y) });
+          pl.style.stroke = cs.color;
+          if (cs.grey) pl.style.opacity = ".75";
+          pl.setAttribute("marker-end", "url(#" + markerFor(cs.color) + ")");
+          cLineG.appendChild(pl);
+          const ring = svgEl("circle", { cx: cs.ring.x, cy: cs.ring.y, r: RING_R, fill: "none", "stroke-width": "1.3" });
+          ring.style.stroke = cs.color; portsG.appendChild(ring);
+          // tier-2 consumer verb label(s) per edge (tier-3 uses the shared bundle tally drawn above).
+          if (cs.verbCounts)
+            cs.verbCounts.forEach(([v, n], i) =>
+              drawVb(cs.verbCounts.length > 1 ? v + " ×" + n : v, cs.color, x1, y1 + 9 + i * 9, false));
+        }
+
+        // node-producer discs (fork discs were already drawn by buildForkCell)
+        for (const d of discList){
+          const halo = svgEl("circle", { cx: d.x, cy: d.y, r: HALO_R, fill: "none", "stroke-width": "0.8" });
+          halo.style.stroke = d.color; halo.style.opacity = ".35"; portsG.appendChild(halo);
+          const disc = svgEl("circle", { cx: d.x, cy: d.y, r: DISC_R }); disc.style.fill = d.color; portsG.appendChild(disc);
+        }
+
+        g.appendChild(cLineG);
+        for (const cel of cCardEls) g.appendChild(cel);
+        g.appendChild(portsG);
+        g.appendChild(labelsG);
+      }
 
       return { g, cards, edges };
     }
@@ -1217,6 +1407,54 @@
       g.appendChild(kt);
       return g;
     }
+    // Tier-2 collapsed card: a normal entity card (one per type) drawn as a small STACK (two offset
+    // cards behind, up-right) with a corner COUNT BADGE (object-color circle + count). card.key is a
+    // sample identifier (e.g. "Jane…"). The whole <g> is the click-to-expand target.
+    function stackCardEl(card, onClick){
+      const g = svgEl("g");
+      g.style.cursor = "pointer";
+      for (const off of [{ dx: 6, dy: -6 }, { dx: 3, dy: -3 }]){    // back cards (farthest first)
+        const r = svgEl("rect", { x: card.x + off.dx, y: card.y + off.dy, width: card.w, height: card.h, rx: 1 });
+        r.style.fill = "var(--ad-card)"; r.style.stroke = "var(--ad-card-border)"; r.setAttribute("stroke-width", "0.8");
+        g.appendChild(r);
+      }
+      g.appendChild(cardEl(card));                                  // main (front) card
+      const bx = card.x + card.w, by = card.y;                      // corner count badge (top-right)
+      const circ = svgEl("circle", { cx: bx, cy: by, r: 7 });
+      circ.style.fill = card.color; circ.style.stroke = "var(--ad-panel)"; circ.setAttribute("stroke-width", "1.3");
+      g.appendChild(circ);
+      const bt = svgEl("text", { class: "ad-bdg", x: bx, y: by + 0.2, "text-anchor": "middle", "dominant-baseline": "central" });
+      bt.style.fill = contrastInk(card.color); bt.textContent = String(card.count);
+      g.appendChild(bt);
+      if (onClick) g.addEventListener("click", onClick);
+      return g;
+    }
+    // Tier-3 collapsed card: a card in the NORMAL shape but greyed — a grey blank header band (no
+    // text), blank body, grey count badge (total), grey stack behind. The whole <g> is the click target.
+    function greyCardEl(card, onClick){
+      const g = svgEl("g");
+      g.style.cursor = "pointer";
+      for (const off of [{ dx: 6, dy: -6 }, { dx: 3, dy: -3 }]){    // grey stack behind (hint of "many")
+        const r = svgEl("rect", { x: card.x + off.dx, y: card.y + off.dy, width: card.w, height: card.h, rx: 1 });
+        r.style.fill = "var(--ad-card)"; r.style.stroke = "var(--ad-grey)"; r.setAttribute("stroke-width", "0.8"); r.style.opacity = ".9";
+        g.appendChild(r);
+      }
+      const body = svgEl("rect", { x: card.x, y: card.y, width: card.w, height: card.h, rx: 1 });
+      body.style.fill = "var(--ad-card)"; body.style.stroke = "var(--ad-grey)"; body.setAttribute("stroke-width", "1");
+      g.appendChild(body);
+      const hdr = svgEl("rect", { x: card.x, y: card.y, width: card.w, height: CARD_HEADER_H, rx: 1 });
+      hdr.style.fill = "var(--ad-grey)";                            // blank grey header (no text)
+      g.appendChild(hdr);
+      const bx = card.x + card.w, by = card.y;                      // grey count badge (top-right)
+      const circ = svgEl("circle", { cx: bx, cy: by, r: 7 });
+      circ.style.fill = "var(--ad-grey-badge)"; circ.style.stroke = "var(--ad-panel)"; circ.setAttribute("stroke-width", "1.3");
+      g.appendChild(circ);
+      const bt = svgEl("text", { class: "ad-bdg", x: bx, y: by + 0.2, "text-anchor": "middle", "dominant-baseline": "central" });
+      bt.style.fill = "var(--ad-panel)"; bt.textContent = String(card.count);
+      g.appendChild(bt);
+      if (onClick) g.addEventListener("click", onClick);
+      return g;
+    }
     // producer disc -> card top: straight down to throughY (passes through the join-wall gap for a fork
     // producer), then a vertical-tangent cubic into the card's top centre (no arrowhead — the disc is the source).
     function producerToCardPath(P, card, throughY){
@@ -1242,10 +1480,24 @@
         " L" + x2 + "," + ringTop;
     }
 
-    // renderScenario(sc) -> <section> with the header, the <svg class="actdiag">
+    // renderScenario(sc) -> <section>; returns the section and rebuilds it in place when a collapsed
+    // object-flow node is clicked (expand-one-tier re-layout). The section identity is swapped on
+    // rerender via parentNode.replaceChild, so the diagram re-lays-out without disturbing the page.
+    function renderScenario(sc){
+      let section;
+      function rerender(){
+        const fresh = buildScenarioCard(sc, rerender);
+        if (section && section.parentNode) section.parentNode.replaceChild(fresh, section);
+        section = fresh;
+      }
+      section = buildScenarioCard(sc, rerender);
+      return section;
+    }
+
+    // buildScenarioCard(sc, rerender) -> <section> with the header, the <svg class="actdiag">
     // (buildActivityDiagram), and the per-scenario drill panel <div class="drill">
     // (buildScenarioDrill, unchanged).
-    function renderScenario(sc){
+    function buildScenarioCard(sc, rerender){
       const card = el("section", "card s-" + sc.status);
 
       // header
@@ -1263,7 +1515,7 @@
       card.appendChild(head);
 
       // activity diagram (frame + centred spine + initial/final; interior nodes come in later tasks)
-      card.appendChild(buildActivityDiagram(sc));
+      card.appendChild(buildActivityDiagram(sc, rerender));
 
       // one scenario-level drill panel: every step in run order
       const drill = buildScenarioDrill(sc);
