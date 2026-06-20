@@ -385,6 +385,13 @@
     const AD_BAND_TOP = 40, AD_BAND_VPAD = 16, AD_GAP = 22, AD_MIN_BH = 64;
     const NODE_FS = 7.5, NODE_H = 36, NODE_MINW = 64, NODE_PADX = 14;
     const AD_FORK_HEAD = 22, AD_FORK_ROW = 16, AD_FORK_PAD = 12, AD_FORK_W = 300;
+    // object-flow geometry (entity cards + ports). CARD_H is reserved by layoutScenario as
+    // vertical room below each producing item and re-used verbatim by buildObjectFlow.
+    const CARD_HEADER_H = 9, CARD_BODY_H = 16, CARD_H = CARD_HEADER_H + CARD_BODY_H;
+    const CARD_PADX = 7, CARD_MINW = 38, CARD_HGAP = 9;
+    const CARD_GAP_TOP = 13, CARD_GAP_BOT = 14;          // straight-down room above / S-curve room below a card
+    const CARD_TYPE_FS = 5.5, CARD_KEY_FS = 7.5;
+    const PORT_INSET = 13, PORT_PITCH = 11, RING_R = 3, DISC_R = 2.6, HALO_R = 4; // clamp/stack node ports
     const phaseColor = (p) => PHCOLOR[p] || "var(--faint)";
 
     // ---- text measurement for content-sized nodes ------------------------
@@ -467,6 +474,26 @@
         return { kind: "node", steps: g, phase, w: b.w, h: b.h, x: cx - b.w / 2, y: 0 };
       });
 
+      // ---- object-flow plan (drives card placement + the vertical room cards need) -------
+      // For each resource that is created somewhere, resolve the producing layout item and the
+      // consuming items, then mark each producing item so the placement loop reserves a card row
+      // (CARD_H + gaps) directly below it. buildObjectFlow re-uses `flows` verbatim for geometry.
+      const stepItem = new Map();
+      for (const it of items) for (const s of it.steps) stepItem.set(s.stepId, it);
+      const flows = [];
+      for (const r of (sc.resources || [])){
+        const ce = (r.events || []).find((e) => (e.verb || "").toLowerCase() === "create");
+        if (!ce) continue;
+        const prodItem = stepItem.get(ce.stepId);
+        if (!prodItem) continue;
+        const consumers = (r.events || [])
+          .filter((e) => (e.verb || "").toLowerCase() !== "create")
+          .map((e) => ({ stepId: e.stepId, verb: e.verb, item: stepItem.get(e.stepId) }))
+          .filter((c) => c.item);
+        flows.push({ type: r.type, key: r.key, createVerb: ce.verb, producerStepId: ce.stepId, prodItem, consumers });
+      }
+      const producesCards = new Set(flows.map((f) => f.prodItem));
+
       // place items top-to-bottom, opening a swimlane band per contiguous phase run
       const bands = [];
       let y = AD_BAND_TOP, cur = null;
@@ -483,11 +510,14 @@
         it.y = y;
         cur.items.push(it);
         y += it.h;
+        // reserve a card row below any item that produces object(s): one row regardless of count
+        // (fork lanes share one row; a node's cards stack in one row beneath it).
+        if (producesCards.has(it)){ it.gapAfter = CARD_GAP_TOP + CARD_H + CARD_GAP_BOT; y += it.gapAfter; }
       }
       closeBand();
 
       const contentBottom = items.length ? y : AD_BAND_TOP + AD_MIN_BH;
-      return { items, bands, contentBottom };
+      return { items, bands, contentBottom, flows };
     }
 
     function renderAll(){
@@ -608,8 +638,14 @@
       svg.appendChild(edges);
 
       // item bodies: content-sized action/assert boxes; fork groups get the packaged inline-timeline cell
+      // (buildForkCell populates each fork it.ports — consumed by buildObjectFlow next).
       for (const it of items)
         svg.appendChild(it.kind === "fork" ? buildForkCell(it, sc) : actionNode(it));
+
+      // object flow: entity cards + flow edges + ring/disc ports, drawn on top of the spine/nodes.
+      const flow = buildObjectFlow(sc, layout);
+      svg.appendChild(flow.g);
+      layout.flow = flow;   // expose {cards, edges} for Task 7 (verb labels) + Task 8 (collapse)
 
       // final node (ring + filled core, bottom of the spine)
       const ring = svgEl("circle", { cx: cx, cy: finalCy, r: FINAL_R, fill: "none", "stroke-width": "1.4" });
@@ -808,6 +844,239 @@
 
       it.ports = ports;   // expose disc-port geometry for Task 6 (object-flow edges)
       return g;
+    }
+
+    // ---- object flow: entity cards + flow edges + ring/disc ports (the v17 grammar) -------------
+    // For every created resource it draws: a producer port (fork lane disc — reused from buildForkCell
+    // — or a node output disc on the producer's bottom edge), a content-sized entity CARD off the spine,
+    // and uniform-width object-color S-curves producer -> card -> each consumer input ring. Wall
+    // crossings are a straight pass through the clean join-wall gap Task 5 left at the disc x.
+    //   Clamp/stack: node data ports clamp to PORT_INSET from the node's right edge and stack inward at
+    //   PORT_PITCH (ordered by counterpart x so lines don't cross); the control edge owns the centre.
+    // Returns { g, cards, edges } — `edges` is the rendered geometry/verb metadata for Task 7 (verb
+    // labels) and Task 8 (collapse). See the report for the edge/card schema.
+    function buildObjectFlow(sc, layout){
+      const g = svgEl("g", { class: "ad-flow" });
+      const flows = (layout.flows || []).map((f) => Object.assign({}, f));  // local copy (geometry added here)
+      const cards = [], edges = [];
+      if (!flows.length) return { g, cards, edges };
+
+      const pushMap = (m, k, v) => { const a = m.get(k); if (a) a.push(v); else m.set(k, [v]); };
+      // clamp data ports to a fixed inset from the node's right edge, stacking inward; assign .x in
+      // counterpart-x order (left counterpart -> innermost slot) so producer/consumer lines don't cross.
+      const clampStack = (it, entries) => {
+        const right = it.x + it.w, n = entries.length;
+        const sorted = entries.slice().sort((a, b) => a.cx - b.cx);
+        sorted.forEach((e, i) => { e.x = right - PORT_INSET - (n - 1 - i) * PORT_PITCH; });
+        return sorted;
+      };
+
+      // arrowhead marker per object colour (centreline aims at the ring centre; tip lands just outside)
+      const flowDefs = svgEl("defs");
+      g.appendChild(flowDefs);
+      const markerCache = new Map();
+      const markerFor = (color) => {
+        if (markerCache.has(color)) return markerCache.get(color);
+        const id = "ad-of-" + sc.scenarioId + "-" + markerCache.size;
+        const m = svgEl("marker", {
+          id, viewBox: "0 0 8 8", refX: "6.6", refY: "4",
+          markerWidth: "3.6", markerHeight: "3.6", orient: "auto",
+        });
+        const p = svgEl("path", { d: "M0,0 L8,4 L0,8 z" });
+        p.style.fill = color;
+        m.appendChild(p);
+        flowDefs.appendChild(m);
+        markerCache.set(color, id);
+        return id;
+      };
+
+      // 1) resolve producer points. Fork lanes already drew their disc (reuse it.ports); node
+      //    producers get an output disc clamp/stacked on the producing node's bottom edge.
+      for (const f of flows) f.color = typeColor(f.type);
+      const nodeOut = new Map();
+      for (const f of flows){
+        if (f.prodItem.kind === "fork"){
+          const port = (f.prodItem.ports || []).find((p) => p.stepId === f.producerStepId);
+          f.producerPt = port ? { x: port.x, y: port.y } : null;
+          f.producerInFork = true;
+        } else {
+          f.producerInFork = false;
+          pushMap(nodeOut, f.prodItem, f);
+        }
+      }
+      for (const [it, fs] of nodeOut){
+        const placed = clampStack(it, fs.map((f, i) => ({ f, cx: i })));   // stable order; counterpart unknown
+        for (const e of placed) e.f.producerPt = { x: e.x, y: it.y + it.h };
+      }
+
+      // 2) entity cards. Fork-produced cards form ONE row below the cell (packed, centred on the disc
+      //    centroid); a node's cards sit just below it. Both clear the spine + stay inside the band.
+      const byFork = new Map();
+      for (const f of flows) if (f.producerInFork && f.producerPt) pushMap(byFork, f.prodItem, f);
+      for (const [it, fs] of byFork){
+        fs.sort((a, b) => a.producerPt.x - b.producerPt.x);
+        const boxes = fs.map((f) => Object.assign({ f }, cardBox(f.type, f.key)));
+        const totalW = boxes.reduce((s, b) => s + b.w, 0) + (boxes.length - 1) * CARD_HGAP;
+        const centroid = fs.reduce((s, f) => s + f.producerPt.x, 0) / fs.length;
+        let left = centroid - totalW / 2;
+        left = Math.max(AD_MARGIN + 6, Math.min(left, AD_W - AD_MARGIN - 6 - totalW));
+        const top = it.y + it.h + CARD_GAP_TOP;
+        let x = left;
+        for (const b of boxes){
+          const card = { type: b.f.type, key: b.f.key, color: b.f.color, x, y: top, w: b.w, h: b.h, cx: x + b.w / 2 };
+          b.f.card = card; cards.push(card); x += b.w + CARD_HGAP;
+        }
+      }
+      for (const f of flows){
+        if (f.producerInFork || !f.producerPt || f.card) continue;
+        const b = cardBox(f.type, f.key);
+        // corridor x: by default below the output disc; if the straight drop to the nearest consumer
+        // would cross an intervening node, slide the card (and thus its line) right to clear it.
+        let corridor = f.producerPt.x;
+        const prod = f.prodItem, prodBot = prod.y + prod.h;
+        const isConsumer = (it) => f.consumers.some((c) => c.item === it);
+        const lowestTop = f.consumers.length ? Math.min(...f.consumers.map((c) => c.item.y)) : Infinity;
+        for (const it2 of layout.items){
+          if (it2 === prod || isConsumer(it2)) continue;
+          if (it2.y + it2.h > prodBot && it2.y < lowestTop && corridor <= it2.x + it2.w + 6)
+            corridor = Math.max(corridor, it2.x + it2.w + 10 + b.w / 2);
+        }
+        let x = corridor - b.w / 2;
+        x = Math.max(AD_MARGIN + 6, Math.min(x, AD_W - AD_MARGIN - 6 - b.w));
+        const top = prodBot + CARD_GAP_TOP;
+        const card = { type: f.type, key: f.key, color: f.color, x, y: top, w: b.w, h: b.h, cx: x + b.w / 2 };
+        f.card = card; cards.push(card);
+      }
+
+      // 3) consumer input rings: clamp/stacked on each consuming node's top edge, ordered by producer x.
+      const ringNodes = new Map();
+      for (const f of flows) for (const c of f.consumers){
+        const cx = f.producerPt ? f.producerPt.x : (f.card ? f.card.cx : c.item.x + c.item.w);
+        pushMap(ringNodes, c.item, { f, c, cx });
+      }
+      for (const [it, entries] of ringNodes){
+        const placed = clampStack(it, entries);
+        for (const e of placed) e.c.ring = { x: e.x, y: it.y };
+      }
+
+      // 4) draw — lines first (under the cards), then cards, then ports (rings/discs) on top.
+      const lineG = svgEl("g", { fill: "none", "stroke-linecap": "round", "stroke-width": "1.3" });
+      lineG.style.opacity = ".9";
+      const addLine = (d, color, head) => {
+        const p = svgEl("path", { d });
+        p.style.stroke = color;
+        if (head) p.setAttribute("marker-end", "url(#" + markerFor(color) + ")");
+        lineG.appendChild(p);
+        return p;
+      };
+      for (const f of flows){
+        if (!f.producerPt || !f.card) continue;
+        // producer -> card: straight down through the join-wall gap (fork), then a gentle curve in.
+        const throughY = f.producerInFork ? f.prodItem.y + f.prodItem.h : f.producerPt.y;
+        f.producerPathD = producerToCardPath(f.producerPt, f.card, throughY);
+        addLine(f.producerPathD, f.color, false);
+        edges.push({
+          kind: "produce", verb: f.createVerb, type: f.type, key: f.key, color: f.color,
+          stepId: f.producerStepId, from: { x: f.producerPt.x, y: f.producerPt.y },
+          to: { x: f.card.cx, y: f.card.y }, card: f.card, pathD: f.producerPathD,
+          mid: { x: (f.producerPt.x + f.card.cx) / 2, y: (f.producerPt.y + f.card.y) / 2 },
+        });
+        // card -> each consumer ring: S-curve with a short straight tail so the arrowhead lands square.
+        for (const c of f.consumers){
+          if (!c.ring) continue;
+          const x1 = f.card.cx, y1 = f.card.y + f.card.h;
+          const d = flowEdgeDown(x1, y1, c.ring.x, c.ring.y);
+          addLine(d, f.color, true);
+          edges.push({
+            kind: "consume", verb: c.verb, type: f.type, key: f.key, color: f.color,
+            stepId: c.stepId, from: { x: x1, y: y1 }, to: { x: c.ring.x, y: c.ring.y },
+            card: f.card, ring: c.ring, pathD: d,
+            mid: { x: (x1 + c.ring.x) / 2, y: (y1 + c.ring.y) / 2 },
+          });
+        }
+      }
+      g.appendChild(lineG);
+
+      // cards (on top of the line ends)
+      for (const card of cards) g.appendChild(cardEl(card));
+
+      // ports: hollow consumer rings + node-producer discs (fork discs were drawn by buildForkCell)
+      for (const f of flows) for (const c of f.consumers){
+        if (!c.ring) continue;
+        const ring = svgEl("circle", { cx: c.ring.x, cy: c.ring.y, r: RING_R, fill: "none", "stroke-width": "1.3" });
+        ring.style.stroke = f.color;
+        g.appendChild(ring);
+      }
+      for (const f of flows){
+        if (f.producerInFork || !f.producerPt) continue;
+        const halo = svgEl("circle", { cx: f.producerPt.x, cy: f.producerPt.y, r: HALO_R, fill: "none", "stroke-width": "0.8" });
+        halo.style.stroke = f.color; halo.style.opacity = ".35";
+        g.appendChild(halo);
+        const disc = svgEl("circle", { cx: f.producerPt.x, cy: f.producerPt.y, r: DISC_R });
+        disc.style.fill = f.color;
+        g.appendChild(disc);
+      }
+
+      return { g, cards, edges };
+    }
+
+    // content-sized entity card: measured type header + identifier, both with horizontal padding.
+    function cardBox(type, key){
+      const t = (type || "").toUpperCase();
+      const tw = measureText(t, CARD_TYPE_FS, 600) + Math.max(0, t.length - 1) * CARD_TYPE_FS * 0.05;
+      const kw = measureText(key == null ? "" : String(key), CARD_KEY_FS, 400);
+      const w = Math.max(CARD_MINW, Math.round(Math.max(tw, kw) + 2 * CARD_PADX));
+      return { w, h: CARD_H };
+    }
+    // a card <g>: --ad-card body (border, rx 1) under a colored type-header band; .ad-oth type + .ad-okn key.
+    function cardEl(card){
+      const g = svgEl("g");
+      const body = svgEl("rect", { x: card.x, y: card.y, width: card.w, height: card.h, rx: 1 });
+      body.style.fill = "var(--ad-card)";
+      body.style.stroke = "var(--ad-card-border)";
+      body.setAttribute("stroke-width", "0.8");
+      g.appendChild(body);
+      const hdr = svgEl("rect", { x: card.x, y: card.y, width: card.w, height: CARD_HEADER_H, rx: 1 });
+      hdr.style.fill = card.color;
+      g.appendChild(hdr);
+      const tt = svgEl("text", {
+        class: "ad-oth", x: card.x + card.w / 2, y: card.y + CARD_HEADER_H / 2 + 0.3,
+        "text-anchor": "middle", "dominant-baseline": "central",
+      });
+      tt.textContent = (card.type || "").toUpperCase();
+      g.appendChild(tt);
+      const kt = svgEl("text", {
+        class: "ad-okn", x: card.x + card.w / 2, y: card.y + CARD_HEADER_H + (card.h - CARD_HEADER_H) / 2,
+        "text-anchor": "middle", "dominant-baseline": "central",
+      });
+      kt.style.fontSize = CARD_KEY_FS + "px";
+      kt.textContent = card.key == null ? "" : String(card.key);
+      g.appendChild(kt);
+      return g;
+    }
+    // producer disc -> card top: straight down to throughY (passes through the join-wall gap for a fork
+    // producer), then a vertical-tangent cubic into the card's top centre (no arrowhead — the disc is the source).
+    function producerToCardPath(P, card, throughY){
+      const x1 = P.x, y1 = P.y, x2 = card.cx, y2 = card.y;
+      const sy = throughY == null ? y1 : Math.max(y1, throughY);
+      if (Math.abs(x2 - x1) < 0.5) return "M" + x1 + "," + y1 + " V" + y2;
+      const dy = y2 - sy;
+      return "M" + x1 + "," + y1 + " V" + sy +
+        " C" + x1 + "," + (sy + dy * 0.5) + " " + x2 + "," + (y2 - dy * 0.5) + " " + x2 + "," + y2;
+    }
+    // card bottom -> consumer ring: vertical-tangent S-curve ending in a short straight tail so the
+    // arrowhead arrives square; tip lands just outside the ring, centreline through the ring centre.
+    function flowEdgeDown(x1, y1, x2, y2){
+      const ringTop = y2 - RING_R - 0.5;            // where the tip should land (just above the ring)
+      if (ringTop <= y1 + 2){
+        const my = (y1 + ringTop) / 2;
+        return "M" + x1 + "," + y1 + " C" + x1 + "," + my + " " + x2 + "," + my + " " + x2 + "," + ringTop;
+      }
+      const tail = Math.max(3, Math.min(7, (ringTop - y1) * 0.3));
+      const ye = ringTop - tail, dy = ye - y1;
+      return "M" + x1 + "," + y1 +
+        " C" + x1 + "," + (y1 + dy * 0.55) + " " + x2 + "," + (ye - dy * 0.55) + " " + x2 + "," + ye +
+        " L" + x2 + "," + ringTop;
     }
 
     // renderScenario(sc) -> <section> with the header, the <svg class="actdiag">
