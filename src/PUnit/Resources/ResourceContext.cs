@@ -18,6 +18,7 @@ public sealed class ResourceContext
     readonly object _lock = new();
     // Effects in first-seen order; _index maps identity → its position in _effects.
     readonly List<ResourceEffect> _effects = [];
+    readonly List<ResourceLineageEdge> _edges = [];
     readonly Dictionary<ResourceIdentity, int> _index = [];
     readonly ResourceIdentityResolver _resolver;
     readonly TimeProvider _timeProvider;
@@ -43,6 +44,12 @@ public sealed class ResourceContext
     public IReadOnlyList<ResourceEffect> Effects
     {
         get { lock (_lock) { return _effects.ToArray(); } }
+    }
+
+    /// <summary>Lineage edges recorded by this step's [References]/[Consumes] subjects.</summary>
+    public IReadOnlyList<ResourceLineageEdge> Edges
+    {
+        get { lock (_lock) { return _edges.ToArray(); } }
     }
 
     /// <summary>
@@ -71,15 +78,25 @@ public sealed class ResourceContext
         where T : notnull
         => Record(LifecycleVerb.Read, _resolver.Resolve(resource), resource);
 
-    /// <summary>Records the produced resource keeping a durable reference to <paramref name="resource"/> (shared).</summary>
-    public ValueTask Reference<T>(T resource)
+    /// <summary>Records the produced resource keeping a durable reference to <paramref name="resource"/> (shared),
+    /// plus a lineage edge from each subject to it.</summary>
+    public ValueTask Reference<T>(T resource, params object[] subjects)
         where T : notnull
-        => Record(LifecycleVerb.Reference, _resolver.Resolve(resource), resource);
+    {
+        var target = _resolver.Resolve(resource);
+        RecordEdges(LifecycleVerb.Reference, target, subjects);
+        return Record(LifecycleVerb.Reference, target, resource);
+    }
 
-    /// <summary>Records consuming/using-up <paramref name="resource"/> into the produced resource (shared in C1).</summary>
-    public ValueTask Consume<T>(T resource)
+    /// <summary>Records consuming/using-up <paramref name="resource"/> into the produced resource (shared in C1),
+    /// plus a lineage edge from each subject to it.</summary>
+    public ValueTask Consume<T>(T resource, params object[] subjects)
         where T : notnull
-        => Record(LifecycleVerb.Consume, _resolver.Resolve(resource), resource);
+    {
+        var target = _resolver.Resolve(resource);
+        RecordEdges(LifecycleVerb.Consume, target, subjects);
+        return Record(LifecycleVerb.Consume, target, resource);
+    }
 
     /// <summary>Records a mutation of an existing <paramref name="resource"/> (exclusive).</summary>
     public ValueTask Edit<T>(T resource)
@@ -90,6 +107,23 @@ public sealed class ResourceContext
     public ValueTask Delete<T>(T resource)
         where T : notnull
         => Record(LifecycleVerb.Delete, _resolver.Resolve(resource), resource);
+
+    void RecordEdges(LifecycleVerb kind, ResourceIdentity target, object[] subjects)
+    {
+        if (subjects is null || subjects.Length == 0)
+        {
+            return;
+        }
+
+        lock (_lock)
+        {
+            foreach (var subject in subjects)
+            {
+                var subjectIdentity = _resolver.Resolve(subject.GetType(), subject);
+                _edges.Add(new ResourceLineageEdge { Subject = subjectIdentity, Target = target, Kind = kind });
+            }
+        }
+    }
 
     ValueTask Record(LifecycleVerb verb, ResourceIdentity identity, object? data)
     {

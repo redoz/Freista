@@ -150,6 +150,53 @@ public class ResourceContextTests
         Assert.Equal(LifecycleVerb.Consume, effect.Verb);
     }
 
+    [Fact]
+    public async Task Reference_with_a_subject_records_a_lineage_edge_and_the_effect()
+    {
+        var ctx = NewContext(out _);
+        var subject = new User("appt@acme.com");   // stands in for the produced resource
+        var target = new User("jane@acme.com");
+
+        await ctx.Reference(target, subject);
+
+        var effect = Assert.Single(ctx.Effects);            // the Reference effect is still recorded
+        Assert.Equal(LifecycleVerb.Reference, effect.Verb);
+        Assert.Equal(new ResourceIdentity(typeof(User), "jane@acme.com"), effect.Identity);
+
+        var edge = Assert.Single(ctx.Edges);                // and a subject -> target edge
+        Assert.Equal(new ResourceIdentity(typeof(User), "appt@acme.com"), edge.Subject);
+        Assert.Equal(new ResourceIdentity(typeof(User), "jane@acme.com"), edge.Target);
+        Assert.Equal(LifecycleVerb.Reference, edge.Kind);
+    }
+
+    [Fact]
+    public async Task Consume_with_two_subjects_records_two_edges()
+    {
+        var ctx = NewContext(out _);
+        var a = new User("a@acme.com");
+        var b = new User("b@acme.com");
+        var target = new User("slot@acme.com");
+
+        await ctx.Consume(target, a, b);
+
+        Assert.Equal(2, ctx.Edges.Count);
+        Assert.All(ctx.Edges, e => Assert.Equal(LifecycleVerb.Consume, e.Kind));
+        Assert.All(ctx.Edges, e => Assert.Equal(new ResourceIdentity(typeof(User), "slot@acme.com"), e.Target));
+        Assert.Contains(ctx.Edges, e => e.Subject == new ResourceIdentity(typeof(User), "a@acme.com"));
+        Assert.Contains(ctx.Edges, e => e.Subject == new ResourceIdentity(typeof(User), "b@acme.com"));
+    }
+
+    [Fact]
+    public async Task Reference_without_subjects_records_no_edge()
+    {
+        var ctx = NewContext(out _);
+
+        await ctx.Reference(new User("jane@acme.com"));
+
+        Assert.Single(ctx.Effects);
+        Assert.Empty(ctx.Edges);
+    }
+
     sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
