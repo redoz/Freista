@@ -1,4 +1,5 @@
 using System.Globalization;
+using PUnit;
 using PUnit.Model;
 
 namespace PUnit.Mtp.HtmlReport;
@@ -110,6 +111,47 @@ internal sealed class HtmlReportModelBuilder
                 })
                 .ToList();
 
+            // Lineage edges (2026-06-21 spec): per step, the Create/Edit effect is the subject; each
+            // Reference/Consume effect is a target. Derived here, not stored. A step with no subject
+            // yields no edge; deduped by (subject, target) across the scenario.
+            var references = new List<ReportReference>();
+            var seenEdges = new HashSet<(string, string, string, string)>();
+            foreach (var r in ordered)
+            {
+                var subject = r.Effects.FirstOrDefault(
+                    e => e.Verb is LifecycleVerb.Create or LifecycleVerb.Edit);
+                if (subject is null)
+                {
+                    continue;
+                }
+
+                foreach (var e in r.Effects)
+                {
+                    if (e.Verb is not (LifecycleVerb.Reference or LifecycleVerb.Consume))
+                    {
+                        continue;
+                    }
+
+                    var subjectType = subject.Identity.Type.Name;
+                    var subjectKey = subject.Identity.Key.ToString();
+                    var targetType = e.Identity.Type.Name;
+                    var targetKey = e.Identity.Key.ToString();
+                    if (!seenEdges.Add((subjectType, subjectKey, targetType, targetKey)))
+                    {
+                        continue;
+                    }
+
+                    references.Add(new ReportReference
+                    {
+                        SubjectType = subjectType,
+                        SubjectKey = subjectKey,
+                        TargetType = targetType,
+                        TargetKey = targetKey,
+                        Kind = e.Verb.ToString(),
+                    });
+                }
+            }
+
             var status = steps.Any(s => s.Status == "failed") ? "failed"
                 : steps.Any(s => s.Status == "skipped") ? "skipped"
                 : "passed";
@@ -127,6 +169,7 @@ internal sealed class HtmlReportModelBuilder
                 Status = status,
                 Steps = steps,
                 Resources = resources,
+                References = references,
             };
         }
 

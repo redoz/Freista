@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.Json;
 using PUnit;
 using PUnit.Model;
@@ -113,5 +114,56 @@ public class HtmlReportModelBuilderTests
         Assert.Equal("String", resource.Type);
         Assert.Equal("Jane", resource.Key);
         Assert.Equal("Create", Assert.Single(resource.Events).Verb);
+    }
+
+    [Fact]
+    public void References_and_consumes_derive_lineage_edges_from_the_step_subject()
+    {
+        var n0 = Node(0, "c", "When", "When creating an appointment");
+        var def = Def(n0);
+        var appointment = new ResourceIdentity(typeof(string), "appt-1");
+        var patient = new ResourceIdentity(typeof(string), "Jane");
+        var slot = new ResourceIdentity(typeof(int), "7");
+
+        var builder = new HtmlReport.HtmlReportModelBuilder();
+        builder.OnScenarioStarted(def);
+        builder.OnStepFinished(def, Result(n0, T0, 10, effects:
+        [
+            new ResourceEffect { Verb = LifecycleVerb.Reference, Identity = patient, StepId = "c", Timestamp = T0.AddMilliseconds(1) },
+            new ResourceEffect { Verb = LifecycleVerb.Consume, Identity = slot, StepId = "c", Timestamp = T0.AddMilliseconds(2) },
+            new ResourceEffect { Verb = LifecycleVerb.Create, Identity = appointment, StepId = "c", Timestamp = T0.AddMilliseconds(3) },
+        ]));
+
+        var scenario = Assert.Single(builder.Build("x").Scenarios);
+        Assert.Equal(2, scenario.References.Count);
+
+        var aggregation = scenario.References.Single(e => e.Kind == "Reference");
+        Assert.Equal("String", aggregation.SubjectType);
+        Assert.Equal("appt-1", aggregation.SubjectKey);
+        Assert.Equal("String", aggregation.TargetType);
+        Assert.Equal("Jane", aggregation.TargetKey);
+
+        var composition = scenario.References.Single(e => e.Kind == "Consume");
+        Assert.Equal("appt-1", composition.SubjectKey);
+        Assert.Equal("Int32", composition.TargetType);
+        Assert.Equal("7", composition.TargetKey);
+    }
+
+    [Fact]
+    public void A_reference_effect_without_a_subject_yields_no_edge()
+    {
+        var n0 = Node(0, "t", "Then", "Then the appointment should exist");
+        var def = Def(n0);
+        var patient = new ResourceIdentity(typeof(string), "Jane");
+
+        var builder = new HtmlReport.HtmlReportModelBuilder();
+        builder.OnScenarioStarted(def);
+        builder.OnStepFinished(def, Result(n0, T0, 10, effects:
+        [
+            new ResourceEffect { Verb = LifecycleVerb.Reference, Identity = patient, StepId = "t", Timestamp = T0.AddMilliseconds(1) },
+        ]));
+
+        var scenario = Assert.Single(builder.Build("x").Scenarios);
+        Assert.Empty(scenario.References);
     }
 }

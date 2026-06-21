@@ -28,6 +28,7 @@ public sealed record ReportScenario
     public required string Status { get; init; }
     public required IReadOnlyList<ReportStep> Steps { get; init; }
     public required IReadOnlyList<ReportResource> Resources { get; init; }
+    public required IReadOnlyList<ReportReference> References { get; init; }
 }
 
 public sealed record ReportStep
@@ -70,4 +71,15 @@ public sealed record ReportResourceEvent
     public required string Verb { get; init; }
     public required double OffsetMs { get; init; }
     public required string StepId { get; init; }
+}
+
+/// <summary>One resource→resource lineage edge, derived from a step's Create/Edit subject and its
+/// Reference/Consume effects. Endpoints are (Type, Key) pairs matching <see cref="ReportResource"/>.</summary>
+public sealed record ReportReference
+{
+    public required string SubjectType { get; init; }
+    public required string SubjectKey { get; init; }
+    public required string TargetType { get; init; }
+    public required string TargetKey { get; init; }
+    public required string Kind { get; init; } // "Reference" | "Consume" (from the verb)
 }
