@@ -20,7 +20,14 @@ public sealed class ReadsAttribute : Attribute;
 /// one resource forms no lineage edge for its referenced inputs.
 /// </summary>
 [AttributeUsage(AttributeTargets.Parameter)]
-public sealed class ReferencesAttribute : Attribute;
+public sealed class ReferencesAttribute : Attribute
+{
+    /// <summary>Lineage subjects: each is a parameter name (via <c>nameof</c>) or <see cref="Subject.Return"/>.</summary>
+    public ReferencesAttribute(params string[] subjects) => Subjects = subjects;
+
+    /// <summary>The produced/edited resources that hold this reference; empty ⇒ no lineage edge.</summary>
+    public string[] Subjects { get; }
+}
 
 /// <summary>
 /// Parameter role: the step consumes/uses-up this resource into the one it produces (composition;
@@ -30,7 +37,14 @@ public sealed class ReferencesAttribute : Attribute;
 /// or edits more than one resource forms no lineage edge for its consumed inputs.
 /// </summary>
 [AttributeUsage(AttributeTargets.Parameter)]
-public sealed class ConsumesAttribute : Attribute;
+public sealed class ConsumesAttribute : Attribute
+{
+    /// <summary>Lineage subjects: each is a parameter name (via <c>nameof</c>) or <see cref="Subject.Return"/>.</summary>
+    public ConsumesAttribute(params string[] subjects) => Subjects = subjects;
+
+    /// <summary>The produced/edited resources that consume this resource; empty ⇒ no lineage edge.</summary>
+    public string[] Subjects { get; }
+}
 
 /// <summary>Parameter or return/method role: the step mutates the resource (exclusive in C2).</summary>
 [AttributeUsage(AttributeTargets.Parameter | AttributeTargets.ReturnValue | AttributeTargets.Method)]
