@@ -32,3 +32,11 @@ Thumbs.db
 
 # Superpowers brainstorming companion (transient mockups)
 .superpowers/
+
+# Headless report-verification scratch (transient; root-level renders + driver scripts)
+/*.png
+/out-*.png
+/task*.cjs
+/task*.mjs
+/gate*.cjs
+/playwright-*.tgz
