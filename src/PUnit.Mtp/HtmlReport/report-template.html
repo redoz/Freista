@@ -534,6 +534,19 @@
       return g;
     }
 
+    // a structural bar/wall: slate directional fill only (no sheen/glint/focus). Returns a <rect>; the caller
+    // must also append the returned gradient (use litBar(parent, …) to append both).
+    function litBar(parent, x, y, w, h, rx){
+      const [id, grad] = dirGrad(
+        [{ o: 0, c: "color-mix(in srgb, var(--ad-wall) 70%, #fff)" }, { o: 1, c: "var(--ad-wall)" }],
+        x + w / 2, y + h / 2, Math.max(w, h));
+      parent.appendChild(grad);
+      const r = svgEl("rect", { x, y, width: w, height: h, fill: "url(#" + id + ")" });
+      if (rx != null) r.setAttribute("rx", rx);
+      parent.appendChild(r);
+      return r;
+    }
+
     // recompute the sun from the LOCAL clock (self-contained) and re-aim every live tile gradient.
     function applySun(){
       let beta;
@@ -935,7 +948,10 @@
         seg.setAttribute("data-fork-set", s.t);
         seg.setAttribute("aria-label", "show this fork as " + s.t);
         const box = svgEl("rect", { x: sx, y: trackY + 1.5, width: s.w, height: H - 8, rx: RX - 2 });
-        box.style.fill = active ? "var(--accent)" : "transparent";
+        if (active){
+          const [ai, ag] = dirGrad([{ o: 0, c: "color-mix(in srgb, var(--accent) 78%, #fff)" }, { o: 1, c: "var(--accent)" }], sx + s.w / 2, trackY + 1.5 + (H - 8) / 2, Math.max(s.w, H - 8));
+          seg.appendChild(ag); box.setAttribute("fill", "url(#" + ai + ")");
+        } else { box.style.fill = "transparent"; }
         seg.appendChild(box);
         const tx = svgEl("text", { x: sx + s.w / 2, y: py + H / 2, "text-anchor": "middle", "dominant-baseline": "central" });
         tx.style.cssText = "font-size:" + FS + "px;font-weight:500;fill:" + (active ? "#fff" : "var(--muted)") + ";";
@@ -972,10 +988,8 @@
       tag.style.letterSpacing = ".12em"; tag.textContent = "PARALLEL";
       g.appendChild(tag);
 
-      // fork bar (top, full slot width, slate)
-      const fork = svgEl("rect", { x: it.x, y: forkBarY, width: it.w, height: AD_GRAPH_BAR_H, rx: 2.5 });
-      fork.style.fill = "var(--ad-wall)";
-      g.appendChild(fork);
+      // fork bar (top, full slot width, slate, sun-lit)
+      litBar(g, it.x, forkBarY, it.w, AD_GRAPH_BAR_H, 2.5);
 
       // branch nodes, content-sized, centred on the spine; collect each lane's producer disc port
       const boxes = lanes.map((s) => Object.assign({ s }, nodeBox(nodeLabel(s))));
@@ -1015,14 +1029,14 @@
 
       // join bar (option A): slate, segmented with a GAP at each producing disc x (mirrors buildForkCell)
       const gapXs = ports.filter((p) => p.resourceType).map((p) => p.x).sort((a, b) => a - b);
-      const join = svgEl("g"); join.style.fill = "var(--ad-wall)";
+      const join = svgEl("g");
       let segX = it.x;
       for (const gx of gapXs){
         const gs = gx - GAP / 2;
-        if (gs > segX) join.appendChild(svgEl("rect", { x: segX, y: joinY, width: gs - segX, height: AD_GRAPH_BAR_H }));
+        if (gs > segX) litBar(join, segX, joinY, gs - segX, AD_GRAPH_BAR_H);
         segX = gx + GAP / 2;
       }
-      if (it.x + it.w > segX) join.appendChild(svgEl("rect", { x: segX, y: joinY, width: it.x + it.w - segX, height: AD_GRAPH_BAR_H }));
+      if (it.x + it.w > segX) litBar(join, segX, joinY, it.x + it.w - segX, AD_GRAPH_BAR_H);
       g.appendChild(join);
 
       // disc ports (filled disc + faint halo) drawn on top
@@ -1068,7 +1082,9 @@
       // cell panel
       const panel = svgEl("rect", { x: cellX, y: cellY, width: cellW, height: cellH, rx: 2 });
       panel.style.fill = "var(--ad-cell)";
-      g.appendChild(panel);
+      const [pbi, pbg] = dirGrad([{ o: 0, c: "var(--ad-card-border-hi, var(--ad-wall))" }, { o: 1, c: "var(--ad-card-border)" }], cellX + cellW / 2, cellY + cellH / 2, Math.max(cellW, cellH));
+      panel.setAttribute("stroke", "url(#" + pbi + ")"); panel.setAttribute("stroke-width", "1");
+      g.appendChild(pbg); g.appendChild(panel);
 
       // inner zebra rows (every other lane)
       for (let i = 0; i < n; i += 2){
@@ -1144,10 +1160,8 @@
       }
 
       // ---- walls -----------------------------------------------------------
-      // fork bar (top): solid full width + small ruler notches at the interior ticks
-      const fork = svgEl("rect", { x: cellX, y: cellY, width: cellW, height: WALL });
-      fork.style.fill = "var(--ad-wall)";
-      g.appendChild(fork);
+      // fork bar (top): sun-lit full width + small ruler notches at the interior ticks
+      litBar(g, cellX, cellY, cellW, WALL);
       const notch = svgEl("g", { "stroke-width": "0.7" });
       notch.style.stroke = "var(--ad-panel)";
       for (let t = step; t < axisMax - 1e-6; t += step){
@@ -1160,23 +1174,18 @@
       const joinY = cellBottom - WALL;
       const gapXs = ports.filter((p) => p.resourceType).map((p) => p.x).sort((a, b) => a - b);
       const join = svgEl("g");
-      join.style.fill = "var(--ad-wall)";
       let segX = cellX;
       for (const gx of gapXs){
         const gs = gx - GAP / 2;
-        if (gs > segX) join.appendChild(svgEl("rect", { x: segX, y: joinY, width: gs - segX, height: WALL }));
+        if (gs > segX) litBar(join, segX, joinY, gs - segX, WALL);
         segX = gx + GAP / 2;
       }
-      if (cellRight > segX) join.appendChild(svgEl("rect", { x: segX, y: joinY, width: cellRight - segX, height: WALL }));
+      if (cellRight > segX) litBar(join, segX, joinY, cellRight - segX, WALL);
       g.appendChild(join);
 
       // left + right walls
-      const lw = svgEl("rect", { x: cellX, y: cellY, width: WALL, height: cellH });
-      lw.style.fill = "var(--ad-wall)";
-      g.appendChild(lw);
-      const rw = svgEl("rect", { x: cellRight - WALL, y: cellY, width: WALL, height: cellH });
-      rw.style.fill = "var(--ad-wall)";
-      g.appendChild(rw);
+      litBar(g, cellX, cellY, WALL, cellH);
+      litBar(g, cellRight - WALL, cellY, WALL, cellH);
 
       // ---- disc ports (filled disc + faint halo), drawn on top of the walls ----
       for (const p of ports){
@@ -1382,7 +1391,7 @@
       g.appendChild(lineG);
       for (const card of tier1Cards){
         const objKey = card.type + ":" + String(card.key);
-        const cardG = cardEl(card);
+        const cardG = cardEl(card, sc.scenarioId);
         tagObj(cardG, objKey);
         g.appendChild(cardG);
       }
@@ -1465,7 +1474,7 @@
             for (const gp of groups){
               const card = { type: gp.type, key: sampleKey(gp.fs[0].key), color: gp.color,
                 x, y: top, w: gp.w, h: gp.h, cx: x + gp.w / 2, collapsed: 2, count: gp.fs.length, bundle: b };
-              cards.push(card); cCardEls.push(stackCardEl(card, onClick));
+              cards.push(card); cCardEls.push(stackCardEl(card, onClick, sc.scenarioId));
               // producer edge from this type's disc centroid -> card top (colored).
               const tDiscs = discsFor(it, gp.fs, cellBottom);
               const pc = centroid(tDiscs, card.cx, cellBottom);
@@ -1489,7 +1498,7 @@
             ccx = Math.max(AD_MARGIN + 6 + box.w / 2, Math.min(ccx, AD_W - AD_MARGIN - 6 - box.w / 2));
             const card = { type: "", key: "", color: "var(--ad-grey)", x: ccx - box.w / 2, y: top,
               w: box.w, h: box.h, cx: ccx, collapsed: 3, count: b.flows.length, bundle: b };
-            cards.push(card); cCardEls.push(greyCardEl(card, onClick));
+            cards.push(card); cCardEls.push(greyCardEl(card, onClick, sc.scenarioId));
             // grey producer edge(s): one per distinct producer disc (each passes its join-wall gap).
             for (const d of allDiscs){
               const pl = svgEl("path", { d: producerToCardPath(d, card, cellBottom) });
@@ -1725,38 +1734,33 @@
       const w = Math.max(CARD_MINW, Math.round(Math.max(tw, kw) + 2 * CARD_PADX));
       return { w, h: CARD_H };
     }
-    // a card <g>: --ad-card body (border, rx 1) under a colored type-header band; .ad-oth type + .ad-okn key.
-    function cardEl(card){
-      const g = svgEl("g");
-      const body = svgEl("rect", { x: card.x, y: card.y, width: card.w, height: card.h, rx: 1 });
-      body.style.fill = "var(--ad-card)";
-      body.style.stroke = "var(--ad-card-border)";
-      body.setAttribute("stroke-width", "0.8");
-      g.appendChild(body);
-      const hdr = svgEl("rect", { x: card.x, y: card.y, width: card.w, height: CARD_HEADER_H, rx: 1 });
-      hdr.style.fill = card.color;
-      g.appendChild(hdr);
-      const tt = svgEl("text", {
-        class: "ad-oth", x: card.x + card.w / 2, y: card.y + CARD_HEADER_H / 2 + 0.3,
-        "text-anchor": "middle", "dominant-baseline": "central",
+    // a card <g>: sun-lit --ad-card body (rx 1) under a colored type-header band; .ad-oth type + .ad-okn key.
+    // sid = scenario id for the per-svg sheen/glint (threaded from buildObjectFlow).
+    function cardEl(card, sid){
+      return litTile({
+        x: card.x, y: card.y, w: card.w, h: card.h, rx: 1, sid, sw: "1.1", gloss: false,
+        fill: [{ o: 0, c: "var(--ad-card)" }, { o: 1, c: "var(--ad-card)", op: 0.95 }],
+        border: [{ o: 0, c: "var(--ad-card-border-hi, var(--ad-wall))" }, { o: 1, c: "var(--ad-card-border)" }],
+        label: "object " + (card.type || "") + " " + (card.key == null ? "" : card.key),
+        body: (g) => {
+          const hdr = svgEl("rect", { x: card.x, y: card.y, width: card.w, height: CARD_HEADER_H, rx: 1 });
+          hdr.style.fill = card.color;
+          g.appendChild(hdr);
+          const tt = svgEl("text", { class: "ad-oth", x: card.x + card.w / 2, y: card.y + CARD_HEADER_H / 2 + 0.3, "text-anchor": "middle", "dominant-baseline": "central" });
+          tt.style.fontSize = CARD_TYPE_FS + "px"; tt.style.fill = contrastInk(card.color);
+          tt.textContent = (card.type || "").toUpperCase();
+          g.appendChild(tt);
+          const kt = svgEl("text", { class: "ad-okn", x: card.x + card.w / 2, y: card.y + CARD_HEADER_H + (card.h - CARD_HEADER_H) / 2, "text-anchor": "middle", "dominant-baseline": "central" });
+          kt.style.fontSize = CARD_KEY_FS + "px";
+          kt.textContent = card.key == null ? "" : String(card.key);
+          g.appendChild(kt);
+        },
       });
-      tt.style.fontSize = CARD_TYPE_FS + "px";
-      tt.style.fill = contrastInk(card.color);
-      tt.textContent = (card.type || "").toUpperCase();
-      g.appendChild(tt);
-      const kt = svgEl("text", {
-        class: "ad-okn", x: card.x + card.w / 2, y: card.y + CARD_HEADER_H + (card.h - CARD_HEADER_H) / 2,
-        "text-anchor": "middle", "dominant-baseline": "central",
-      });
-      kt.style.fontSize = CARD_KEY_FS + "px";
-      kt.textContent = card.key == null ? "" : String(card.key);
-      g.appendChild(kt);
-      return g;
     }
     // Tier-2 collapsed card: a normal entity card (one per type) drawn as a small STACK (two offset
     // cards behind, up-right) with a corner COUNT BADGE (object-color circle + count). card.key is a
     // sample identifier (e.g. "Jane…"). The whole <g> is the click-to-expand target.
-    function stackCardEl(card, onClick){
+    function stackCardEl(card, onClick, sid){
       const g = svgEl("g");
       g.style.cursor = "pointer";
       for (const off of [{ dx: 6, dy: -6 }, { dx: 3, dy: -3 }]){    // back cards (farthest first)
@@ -1764,7 +1768,7 @@
         r.style.fill = "var(--ad-card)"; r.style.stroke = "var(--ad-card-border)"; r.setAttribute("stroke-width", "0.8");
         g.appendChild(r);
       }
-      g.appendChild(cardEl(card));                                  // main (front) card
+      g.appendChild(cardEl(card, sid));                             // main (front) card
       const bx = card.x + card.w, by = card.y;                      // corner count badge (top-right)
       const circ = svgEl("circle", { cx: bx, cy: by, r: 7 });
       circ.style.fill = card.color; circ.style.stroke = "var(--ad-panel)"; circ.setAttribute("stroke-width", "1.3");
@@ -1777,7 +1781,7 @@
     }
     // Tier-3 collapsed card: a card in the NORMAL shape but greyed — a grey blank header band (no
     // text), blank body, grey count badge (total), grey stack behind. The whole <g> is the click target.
-    function greyCardEl(card, onClick){
+    function greyCardEl(card, onClick, sid){
       const g = svgEl("g");
       g.style.cursor = "pointer";
       for (const off of [{ dx: 6, dy: -6 }, { dx: 3, dy: -3 }]){    // grey stack behind (hint of "many")
