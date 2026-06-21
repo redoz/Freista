@@ -71,6 +71,16 @@ public sealed class ResourceContext
         where T : notnull
         => Record(LifecycleVerb.Read, _resolver.Resolve(resource), resource);
 
+    /// <summary>Records the produced resource keeping a durable reference to <paramref name="resource"/> (shared).</summary>
+    public ValueTask Reference<T>(T resource)
+        where T : notnull
+        => Record(LifecycleVerb.Reference, _resolver.Resolve(resource), resource);
+
+    /// <summary>Records consuming/using-up <paramref name="resource"/> into the produced resource (shared in C1).</summary>
+    public ValueTask Consume<T>(T resource)
+        where T : notnull
+        => Record(LifecycleVerb.Consume, _resolver.Resolve(resource), resource);
+
     /// <summary>Records a mutation of an existing <paramref name="resource"/> (exclusive).</summary>
     public ValueTask Edit<T>(T resource)
         where T : notnull

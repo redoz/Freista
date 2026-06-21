@@ -110,6 +110,46 @@ public class ResourceContextTests
         Assert.NotNull(effect.Data);
     }
 
+    [Fact]
+    public async Task Reference_records_a_shared_effect_with_resolved_identity()
+    {
+        var ctx = NewContext(out _);
+
+        await ctx.Reference(new User("jane@acme.com"));
+
+        var effect = Assert.Single(ctx.Effects);
+        Assert.Equal(LifecycleVerb.Reference, effect.Verb);
+        Assert.Equal(LockMode.Shared, effect.Mode);
+        Assert.Equal(new ResourceIdentity(typeof(User), "jane@acme.com"), effect.Identity);
+    }
+
+    [Fact]
+    public async Task Consume_records_a_shared_effect_with_resolved_identity()
+    {
+        var ctx = NewContext(out _);
+
+        await ctx.Consume(new User("jane@acme.com"));
+
+        var effect = Assert.Single(ctx.Effects);
+        Assert.Equal(LifecycleVerb.Consume, effect.Verb);
+        Assert.Equal(LockMode.Shared, effect.Mode);
+        Assert.Equal(new ResourceIdentity(typeof(User), "jane@acme.com"), effect.Identity);
+    }
+
+    [Fact]
+    public async Task Consume_outranks_read_in_dedup()
+    {
+        var ctx = NewContext(out _);
+        var user = new User("jane@acme.com");
+
+        await ctx.Read(user);
+        await ctx.Consume(user);
+
+        // Same identity ⇒ one effect; the usage verb (Consume) outranks plain Read.
+        var effect = Assert.Single(ctx.Effects);
+        Assert.Equal(LifecycleVerb.Consume, effect.Verb);
+    }
+
     sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;

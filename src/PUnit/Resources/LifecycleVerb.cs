@@ -17,29 +17,40 @@ public enum LifecycleVerb
 
     /// <summary>Removes a resource (exclusive).</summary>
     Delete,
+
+    /// <summary>References an independently-living resource — a durable pointer the produced
+    /// resource keeps (aggregation; shared). Carries a lineage edge in the report.</summary>
+    Reference,
+
+    /// <summary>Consumes/uses-up a resource into the one the step produces (composition; shared in
+    /// C1, exclusive in C2). Carries a lineage edge in the report.</summary>
+    Consume,
 }
 
 /// <summary>Maps a <see cref="LifecycleVerb"/> onto its lock mode and dedup precedence.</summary>
 public static class LifecycleVerbExtensions
 {
-    /// <summary>Read/Load yield <see cref="LockMode.Shared"/>; Create/Edit/Delete yield <see cref="LockMode.Exclusive"/>.</summary>
     public static LockMode ToLockMode(this LifecycleVerb verb) => verb switch
     {
-        LifecycleVerb.Read or LifecycleVerb.Load => LockMode.Shared,
+        LifecycleVerb.Read or LifecycleVerb.Load
+            or LifecycleVerb.Reference or LifecycleVerb.Consume => LockMode.Shared,
         _ => LockMode.Exclusive,
     };
 
     /// <summary>
-    /// Lifecycle precedence for dedup (higher wins): Delete &gt; Edit &gt; Create &gt; Load &gt; Read.
-    /// Because exclusive verbs all outrank the shared ones, exclusive wins over shared on the same
-    /// identity automatically.
+    /// Lifecycle precedence for dedup (higher wins):
+    /// Delete &gt; Edit &gt; Create &gt; Load &gt; Consume &gt; Reference &gt; Read.
+    /// All exclusive verbs (Create/Edit/Delete) still outrank all shared ones, so exclusive wins
+    /// over shared on the same identity automatically.
     /// </summary>
     public static int Precedence(this LifecycleVerb verb) => verb switch
     {
-        LifecycleVerb.Delete => 5,
-        LifecycleVerb.Edit => 4,
-        LifecycleVerb.Create => 3,
-        LifecycleVerb.Load => 2,
+        LifecycleVerb.Delete => 7,
+        LifecycleVerb.Edit => 6,
+        LifecycleVerb.Create => 5,
+        LifecycleVerb.Load => 4,
+        LifecycleVerb.Consume => 3,
+        LifecycleVerb.Reference => 2,
         _ => 1,
     };
 }
