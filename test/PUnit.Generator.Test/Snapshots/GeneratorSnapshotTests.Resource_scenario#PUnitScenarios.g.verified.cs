@@ -33,7 +33,7 @@ namespace PUnit.Generated
                 OperationName = "UserExists",
                 DisplayNameTemplate = "user jane@acme.com exists",
                 SourceFile = "",
-                SourceLine = 72,
+                SourceLine = 80,
                 GroupId = null,
                 Timeout = null,
                 DependsOn = new int[]
@@ -56,7 +56,7 @@ namespace PUnit.Generated
                 OperationName = "Suspend",
                 DisplayNameTemplate = "suspending the user",
                 SourceFile = "",
-                SourceLine = 73,
+                SourceLine = 81,
                 GroupId = null,
                 Timeout = null,
                 DependsOn = new int[]
@@ -82,7 +82,7 @@ namespace PUnit.Generated
                 OperationName = "CannotSignIn",
                 DisplayNameTemplate = "the user cannot sign in",
                 SourceFile = "",
-                SourceLine = 74,
+                SourceLine = 82,
                 GroupId = null,
                 Timeout = null,
                 DependsOn = new int[]
@@ -105,7 +105,7 @@ namespace PUnit.Generated
                 MethodName = "ResourceDemo.ResourceScenarios.SuspendedUserCannotSignIn",
                 ClassDisplayName = null,
                 SourceFile = "",
-                SourceLine = 70,
+                SourceLine = 78,
                 Timeout = null,
                 Nodes = nodes
             };

@@ -80,6 +80,8 @@ internal static class AttributeReader
             var verb = attr.AttributeClass?.Name switch
             {
                 "ReadsAttribute" when parameterRoles => "Read",
+                "ReferencesAttribute" when parameterRoles => "Reference",
+                "ConsumesAttribute" when parameterRoles => "Consume",
                 "DeletesAttribute" when parameterRoles => "Delete",
                 "EditsAttribute" => "Edit",
                 "CreatesAttribute" when !parameterRoles => "Create",

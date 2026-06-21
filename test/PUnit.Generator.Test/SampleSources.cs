@@ -246,6 +246,14 @@ public static class SampleSources
                     await Task.Yield();
                     return new Appointment(user, slot);
                 }
+
+                [StepName("booking with lineage")]
+                [return: Creates]
+                public static async Task<Appointment> BookWithLineage([References] User user, [Consumes] Slot slot)
+                {
+                    await Task.Yield();
+                    return new Appointment(user, slot);
+                }
             }
 
             extension(Then)
@@ -286,6 +294,23 @@ public static class SampleSources
                 var user = await Given.UserExists("jane@acme.com");
                 var slot = await Given.SlotExists();
                 var appt = await When.Book(user, slot);
+            }
+        }
+        """;
+
+    // Scenario appended to ResourceDsl: exercises the lineage roles ([References] User, [Consumes]
+    // Slot) plus [return: Creates], proving they lower to shared Reference/Consume effects.
+    public const string LineageScenario =
+        """
+
+        public static class LineageResourceScenarios
+        {
+            [Scenario("booking with lineage")]
+            public static async Task BookWithLineage()
+            {
+                var user = await Given.UserExists("jane@acme.com");
+                var slot = await Given.SlotExists();
+                var appt = await When.BookWithLineage(user, slot);
             }
         }
         """;

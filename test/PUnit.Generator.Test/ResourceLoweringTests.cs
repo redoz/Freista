@@ -89,4 +89,28 @@ public class ResourceLoweringTests
         Assert.Equal(LifecycleVerb.Create, book[2].Verb);
         Assert.Equal("Appointment:jane@acme.com@1", book[2].Identity.ToString());
     }
+
+    [Fact]
+    public async Task Reference_and_consume_params_lower_to_shared_lineage_effects()
+    {
+        var result = GeneratorHarness.Run(SampleSources.ResourceDsl + SampleSources.LineageScenario);
+        result.AssertCompiles();
+        var results = await result.Definitions().Single().RunAsync();
+
+        // Step 2: When.BookWithLineage([References] User, [Consumes] Slot) [return: Creates] —
+        // effects appear in param-declaration order, then the return role.
+        var book = results[2].Effects;
+        Assert.Equal(3, book.Count);
+
+        Assert.Equal(LifecycleVerb.Reference, book[0].Verb);
+        Assert.Equal(LockMode.Shared, book[0].Mode);
+        Assert.Equal("User:jane@acme.com", book[0].Identity.ToString());
+
+        Assert.Equal(LifecycleVerb.Consume, book[1].Verb);
+        Assert.Equal(LockMode.Shared, book[1].Mode);
+        Assert.Equal("Slot:1", book[1].Identity.ToString());
+
+        Assert.Equal(LifecycleVerb.Create, book[2].Verb);
+        Assert.Equal("Appointment:jane@acme.com@1", book[2].Identity.ToString());
+    }
 }
