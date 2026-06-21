@@ -40,5 +40,8 @@ Thumbs.db
 /task*.mjs
 /gate*.cjs
 /drive.cjs
+/*.cjs
+/*.mjs
+/*.ps1
 /playwright-*.tgz
 node_modules/
