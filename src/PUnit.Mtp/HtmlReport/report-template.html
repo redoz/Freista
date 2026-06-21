@@ -835,7 +835,6 @@
       return g;
     }
 
-    // Fork cell — the diagram's centrepiece: a 4-walled "package" wrapping an inline SVG timeline of
     // Graph view of a fork: a short spine stub into a solid slate FORK BAR, a row of content-sized
     // phase-tinted BRANCH NODES (one per lane, click->focusStep via data-step), producer DISC PORTS at each
     // branch-node bottom, then an option-A slate JOIN BAR segmented with a gap at each producing disc x, and a
@@ -927,6 +926,7 @@
       return g;
     }
 
+    // Fork cell — the diagram's centrepiece: a 4-walled "package" wrapping an inline SVG timeline of
     // the parallel lanes (mirrors the v17 mock, themed via the --ad-* vars so it works light + dark).
     // It fills the slot Task 4 reserved (it.x/y/w/h, already centred on the spine): the heavy fork bar
     // (top) meets the incoming control edge, the join bar (bottom) the outgoing one. The time axis is
@@ -1779,8 +1779,15 @@
         if (!seg) return false;
         const fork = seg.closest(".ad-fork");
         if (fork){
-          forkViewFor(sc.scenarioId).set(fork.getAttribute("data-fork-key"), seg.getAttribute("data-fork-set"));
-          rerender();                       // same machinery the collapse-tier click uses
+          const key = fork.getAttribute("data-fork-key"), view = seg.getAttribute("data-fork-set");
+          forkViewFor(sc.scenarioId).set(key, view);
+          rerender();
+          // rerender() replaceChild's the section, detaching the segment that had focus; restore keyboard
+          // focus to the equivalent segment in the fresh card so the toggle stays operable (and :focus-within
+          // re-reveals the pill). Harmless on mouse clicks (:focus-visible won't show for pointer focus).
+          const fresh = [...document.querySelectorAll(".ad-fork")].find((f) => f.getAttribute("data-fork-key") === key);
+          const seg2 = fresh && fresh.querySelector('[data-fork-set="' + view + '"]');
+          if (seg2 && seg2.focus) seg2.focus();
         }
         return true;
       };
