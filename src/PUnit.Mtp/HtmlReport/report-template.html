@@ -253,6 +253,14 @@
   .ad-flow.has-em [data-obj]:not(.em){ opacity:.22 !important; }
   .ad-flow.has-em [data-obj].em{ opacity:1 !important; }
   .actdiag [data-step]{ cursor:pointer; }
+  /* per-fork toggle: zero chrome at rest; revealed on hover or keyboard focus-within */
+  .ad-fork .ad-fork-hl, .ad-fork .ad-fork-pill{ opacity:0; transition:opacity .12s; pointer-events:none; }
+  .ad-fork:hover .ad-fork-hl, .ad-fork:focus-within .ad-fork-hl,
+  .ad-fork:hover .ad-fork-pill, .ad-fork:focus-within .ad-fork-pill{ opacity:1; }
+  .ad-fork:hover .ad-fork-pill, .ad-fork:focus-within .ad-fork-pill{ pointer-events:auto; }
+  .ad-fork-seg{ cursor:pointer; }
+  .ad-fork-seg:focus-visible{ outline:2px solid var(--ring, var(--accent)); outline-offset:2px; border-radius:3px; }
+  @media (prefers-reduced-motion: reduce){ .ad-fork .ad-fork-hl, .ad-fork .ad-fork-pill{ transition:none; } }
 </style>
 </head>
 <body>
@@ -711,10 +719,14 @@
 
       // item bodies: content-sized action/assert boxes; fork groups get the packaged inline-timeline cell
       // (buildForkCell populates each fork it.ports — consumed by buildObjectFlow next).
-      for (const it of items)
-        svg.appendChild(it.kind === "fork"
-          ? (it.view === "timeline" ? buildForkCell(it, sc) : buildForkGraph(it, sc))
-          : actionNode(it));
+      for (const it of items){
+        if (it.kind !== "fork"){ svg.appendChild(actionNode(it)); continue; }
+        const wrap = svgEl("g", { class: "ad-fork" });
+        wrap.setAttribute("data-fork-key", forkKeyOf(it.steps));
+        wrap.appendChild(it.view === "timeline" ? buildForkCell(it, sc) : buildForkGraph(it, sc));
+        wrap.appendChild(buildForkToggle(it));    // hover-revealed highlight + pill (drawn once, both views)
+        svg.appendChild(wrap);
+      }
 
       // object flow: entity cards + flow edges + ring/disc ports, drawn on top of the spine/nodes.
       const flow = buildObjectFlow(sc, layout, rerender);
@@ -762,6 +774,64 @@
       if (status === "skipped") label.style.fill = "var(--ad-grey)";
       label.textContent = nodeLabel(st);
       g.appendChild(label);
+      return g;
+    }
+
+    // Hover/focus-revealed per-fork toggle: a faint accent block highlight + a near-square segmented pill
+    // reading "show as [ graph | timeline ]" (variant i — muted label, then a bordered track of two segments;
+    // active segment highlighted). Reveal/hide is pure CSS (.ad-fork:hover/:focus-within). Clicking/Enter on
+    // a segment is handled by the delegated listener in buildScenarioCard.
+    function buildForkToggle(it){
+      const g = svgEl("g"), cx = AD_W / 2;
+
+      // block highlight: wraps the whole fork slot, behind the pill
+      const hl = svgEl("rect", {
+        class: "ad-fork-hl", x: it.x - 4, y: it.y - 4, width: it.w + 8, height: it.h + 8, rx: 6,
+        fill: "var(--accent)", "fill-opacity": ".06", stroke: "var(--accent)", "stroke-opacity": ".5", "stroke-width": "1.2",
+      });
+      g.appendChild(hl);
+
+      // segmented pill, centred over the fork bar
+      const FS = 8.5, H = 16, SEG_PADX = 9, RX = 4, current = it.view === "timeline" ? "timeline" : "graph";
+      const labW = measureText("show as", FS, 400) + 8;
+      const segs = ["graph", "timeline"].map((t) => ({ t, w: Math.round(measureText(t, FS, 500) + 2 * SEG_PADX) }));
+      const trackW = segs.reduce((a, s) => a + s.w, 0) + 4;          // +inner pad
+      const pillW = 4 + labW + trackW + 6;
+      const px = Math.round(cx - pillW / 2), py = Math.round(it.y + 4);
+
+      const pill = svgEl("g", { class: "ad-fork-pill" });
+      const bg = svgEl("rect", { x: px, y: py, width: pillW, height: H, rx: RX });
+      bg.style.fill = "var(--ad-panel)"; bg.style.stroke = "var(--ad-card-border)"; bg.setAttribute("stroke-width", "1");
+      bg.style.filter = "drop-shadow(0 2px 6px rgba(0,0,0,.30))";
+      pill.appendChild(bg);
+
+      const lab = svgEl("text", { x: px + 4 + labW / 2, y: py + H / 2, "text-anchor": "middle", "dominant-baseline": "central" });
+      lab.style.cssText = "font-size:" + FS + "px;fill:var(--muted);";
+      lab.textContent = "show as";
+      pill.appendChild(lab);
+
+      const trackX = px + 4 + labW, trackY = py + 2.5;
+      const track = svgEl("rect", { x: trackX, y: trackY, width: trackW, height: H - 5, rx: RX - 1 });
+      track.style.fill = "var(--ad-cell)"; track.style.stroke = "var(--ad-card-border)"; track.setAttribute("stroke-width", "1");
+      pill.appendChild(track);
+
+      let sx = trackX + 2;
+      for (const s of segs){
+        const active = s.t === current;
+        const seg = svgEl("g", { class: "ad-fork-seg", role: "button", tabindex: "0" });
+        seg.setAttribute("data-fork-set", s.t);
+        seg.setAttribute("aria-label", "show this fork as " + s.t);
+        const box = svgEl("rect", { x: sx, y: trackY + 1.5, width: s.w, height: H - 8, rx: RX - 2 });
+        box.style.fill = active ? "var(--accent)" : "transparent";
+        seg.appendChild(box);
+        const tx = svgEl("text", { x: sx + s.w / 2, y: py + H / 2, "text-anchor": "middle", "dominant-baseline": "central" });
+        tx.style.cssText = "font-size:" + FS + "px;font-weight:500;fill:" + (active ? "#fff" : "var(--muted)") + ";";
+        tx.textContent = s.t;
+        seg.appendChild(tx);
+        pill.appendChild(seg);
+        sx += s.w;
+      }
+      g.appendChild(pill);
       return g;
     }
 
@@ -1703,12 +1773,28 @@
 
       // node-click → focusStep: delegated listener on the actdiag SVG (built above).
       // Action/assert nodes carry data-step; collapsed-card handlers stop propagation so they don't fire.
+      // Fork toggle: clicking a [data-fork-set] segment swaps that fork's view and rerenders.
+      const onForkSet = (target) => {
+        const seg = target && target.closest ? target.closest("[data-fork-set]") : null;
+        if (!seg) return false;
+        const fork = seg.closest(".ad-fork");
+        if (fork){
+          forkViewFor(sc.scenarioId).set(fork.getAttribute("data-fork-key"), seg.getAttribute("data-fork-set"));
+          rerender();                       // same machinery the collapse-tier click uses
+        }
+        return true;
+      };
       const diagramSvg = card.querySelector("svg.actdiag");
       if (diagramSvg){
         diagramSvg.addEventListener("click", (ev) => {
+          if (onForkSet(ev.target)) return;
           const target = ev.target && ev.target.closest ? ev.target.closest("[data-step]") : null;
           if (!target) return;
           focusStep(target.dataset.step, { toggle: true });
+        });
+        diagramSvg.addEventListener("keydown", (ev) => {
+          if (ev.key !== "Enter" && ev.key !== " ") return;
+          if (onForkSet(ev.target)){ ev.preventDefault(); }
         });
       }
 
