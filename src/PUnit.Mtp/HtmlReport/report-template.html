@@ -740,6 +740,52 @@
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(renderAll);
     if (!reduceMotion) setInterval(applySun, 60000);   // the sun barely moves; re-aim tiles each minute
 
+    // ---- cursor fast-path (spec §3/§7.4): sheen + rim glint follow the pointer, in the HOVERED svg ONLY.
+    // Per-tile gradients are sun-only (D2), so this writes at most 2 nodes/frame: the active svg's #sheen-<id>
+    // centre (eased toward the cursor) and #edge-<id> span (on the hovered tile's far edge). Guarded: the rAF
+    // self-stops when the cursor settles; reduced-motion skips it entirely.
+    let actSvg = null, actSheen = null, actEdge = null, tileBB = null;
+    let tgX = 0, tgY = 0, cuX = 0, cuY = 0, rafId = 0;
+    function lightFrom(svg){
+      if (svg === actSvg) return;
+      actSvg = svg;
+      actSheen = svg ? svg.querySelector("radialGradient.ad-sheen") : null;
+      actEdge = svg ? svg.querySelector("linearGradient.ad-edge") : null;
+    }
+    function tick(){
+      rafId = 0;
+      if (actSvg && !actSvg.isConnected){ lightFrom(null); tileBB = null; return; }   // dropped by a rerender
+      let moving = false;
+      if (actSheen){
+        if (Math.abs(tgX - cuX) + Math.abs(tgY - cuY) > 0.1){ cuX += (tgX - cuX) * 0.12; cuY += (tgY - cuY) * 0.12; moving = true; }
+        else { cuX = tgX; cuY = tgY; }
+        actSheen.setAttribute("cx", cuX.toFixed(1)); actSheen.setAttribute("cy", cuY.toFixed(1));
+        actSheen.setAttribute("fx", cuX.toFixed(1)); actSheen.setAttribute("fy", cuY.toFixed(1));
+      }
+      if (actEdge && tileBB){                                  // single glint, bright on the FAR edge (away from the sun)
+        const span = 0.5 * Math.hypot(tileBB.width, tileBB.height) + 7;
+        const ex = tileBB.x + tileBB.width / 2, ey = tileBB.y + tileBB.height / 2;
+        actEdge.setAttribute("x1", (ex - sunDir.dx * span).toFixed(1)); actEdge.setAttribute("y1", (ey - sunDir.dy * span).toFixed(1));
+        actEdge.setAttribute("x2", (ex + sunDir.dx * span).toFixed(1)); actEdge.setAttribute("y2", (ey + sunDir.dy * span).toFixed(1));
+      }
+      if (moving) rafId = requestAnimationFrame(tick);         // keep going only while easing; settles when idle
+    }
+    function ensureRaf(){ if (!rafId) rafId = requestAnimationFrame(tick); }
+    if (!reduceMotion){
+      report.addEventListener("pointermove", (e) => {
+        const svg = e.target && e.target.closest ? e.target.closest("svg.actdiag") : null;
+        lightFrom(svg);
+        if (!svg){ tileBB = null; return; }
+        const m = svg.getScreenCTM(); if (!m) return;
+        const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+        const loc = pt.matrixTransform(m.inverse());
+        tgX = loc.x; tgY = loc.y;
+        const tile = e.target.closest(".ad-lit");
+        tileBB = tile ? tile.getBBox() : null;                // BBox in THIS svg's user space (incl. the brackets margin — fine)
+        ensureRaf();
+      });
+    }
+
     // small helper: create a namespaced SVG element with a set of attributes
     function svgEl(tag, attrs){
       const e = document.createElementNS(SVGNS, tag);
