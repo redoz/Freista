@@ -87,7 +87,7 @@ public static class AppointmentDsl
     {
         [StepName("When creating an appointment")]
         [return: Creates]
-        public static Task<Appointment> CreateAppointment([Reads] Patient patient, [Reads] Slot slot, ScenarioContext? ctx = null)
+        public static Task<Appointment> CreateAppointment([References] Patient patient, [Consumes] Slot slot, ScenarioContext? ctx = null)
         {
             ctx?.SimulateElapsed(TimeSpan.FromMilliseconds(600));
             return Task.FromResult(new Appointment(patient, slot));
