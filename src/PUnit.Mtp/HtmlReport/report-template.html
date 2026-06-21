@@ -263,7 +263,10 @@
   .ad-fork:hover .ad-fork-pill, .ad-fork:focus-within .ad-fork-pill{ opacity:1; }
   .ad-fork:hover .ad-fork-pill, .ad-fork:focus-within .ad-fork-pill{ pointer-events:auto; }
   .ad-fork-seg{ cursor:pointer; }
-  .ad-fork-seg:focus-visible{ outline:2px solid var(--ring, var(--accent)); outline-offset:2px; border-radius:3px; }
+  .ad-fork-seg{ outline:none; }
+  .ad-fork-seg .brk{ opacity:0; transition:opacity .14s ease; pointer-events:none; }
+  .ad-fork-seg:focus-visible .brk{ opacity:1; }
+  @media (prefers-reduced-motion: reduce){ .ad-fork-seg .brk{ transition:none; } }
   /* sun-driven lighting (Phase 2). Per-instance gradient stops keyed by CLASS so one rule serves all N svgs. */
   .ad-sheen .ss0{ stop-color:var(--sheen); stop-opacity:calc(var(--sheen-peak) * var(--sun)); }
   .ad-sheen .ss1{ stop-color:var(--sheen); stop-opacity:calc(var(--sheen-peak) * var(--sun) * 0.3); }
@@ -1003,6 +1006,7 @@
         tx.style.cssText = "font-size:" + FS + "px;font-weight:500;fill:" + (active ? "#fff" : "var(--muted)") + ";";
         tx.textContent = s.t;
         seg.appendChild(tx);
+        seg.appendChild(brackets(sx, trackY + 1.5, s.w, H - 8));   // corner-bracket focus (replaces the outline)
         pill.appendChild(seg);
         sx += s.w;
       }
@@ -1962,7 +1966,9 @@
         });
         diagramSvg.addEventListener("keydown", (ev) => {
           if (ev.key !== "Enter" && ev.key !== " ") return;
-          if (onForkSet(ev.target)){ ev.preventDefault(); }
+          if (onForkSet(ev.target)){ ev.preventDefault(); return; }
+          const target = ev.target && ev.target.closest ? ev.target.closest("[data-step]") : null;
+          if (target){ focusStep(target.dataset.step, { toggle: true }); ev.preventDefault(); }
         });
       }
 
