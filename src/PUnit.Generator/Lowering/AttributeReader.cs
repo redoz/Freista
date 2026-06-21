@@ -52,7 +52,7 @@ internal static class AttributeReader
     }
 
     /// <summary>
-    /// The resource role declared on <paramref name="parameter"/> (<c>[Reads]/[Edits]/[Deletes]</c>),
+    /// The resource role declared on <paramref name="parameter"/> (<c>[Reads]/[References]/[Consumes]/[Edits]/[Deletes]</c>),
     /// as the runtime <c>ResourceContext</c> verb name, or null when none.
     /// </summary>
     public static string? ParameterRole(IParameterSymbol parameter)
@@ -70,7 +70,7 @@ internal static class AttributeReader
 
     /// <summary>
     /// Maps the first recognized role attribute to its runtime verb name. Parameter roles admit
-    /// <c>Reads/Edits/Deletes</c>; return/method roles admit <c>Creates/Loads/Edits</c>; <c>Edits</c>
+    /// <c>Reads/References/Consumes/Edits/Deletes</c>; return/method roles admit <c>Creates/Loads/Edits</c>; <c>Edits</c>
     /// is valid in both positions.
     /// </summary>
     private static string? RoleVerb(ImmutableArray<AttributeData> attributes, bool parameterRoles)

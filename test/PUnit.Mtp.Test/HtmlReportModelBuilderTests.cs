@@ -166,4 +166,55 @@ public class HtmlReportModelBuilderTests
         var scenario = Assert.Single(builder.Build("x").Scenarios);
         Assert.Empty(scenario.References);
     }
+
+    [Fact]
+    public void A_step_with_two_subjects_yields_no_edges()
+    {
+        var n0 = Node(0, "c", "When", "When reassigning");
+        var def = Def(n0);
+        var created = new ResourceIdentity(typeof(string), "Z");
+        var edited = new ResourceIdentity(typeof(int), "9");
+        var referenced = new ResourceIdentity(typeof(string), "Y");
+
+        var builder = new HtmlReport.HtmlReportModelBuilder();
+        builder.OnScenarioStarted(def);
+        builder.OnStepFinished(def, Result(n0, T0, 10, effects:
+        [
+            new ResourceEffect { Verb = LifecycleVerb.Edit, Identity = edited, StepId = "c", Timestamp = T0.AddMilliseconds(1) },
+            new ResourceEffect { Verb = LifecycleVerb.Reference, Identity = referenced, StepId = "c", Timestamp = T0.AddMilliseconds(2) },
+            new ResourceEffect { Verb = LifecycleVerb.Create, Identity = created, StepId = "c", Timestamp = T0.AddMilliseconds(3) },
+        ]));
+
+        // Two subjects (Edit + Create) ⇒ ambiguous ⇒ no edge, per the single-subject rule.
+        var scenario = Assert.Single(builder.Build("x").Scenarios);
+        Assert.Empty(scenario.References);
+    }
+
+    [Fact]
+    public void A_repeated_subject_target_edge_is_deduped_across_steps()
+    {
+        var n0 = Node(0, "a", "When", "create");
+        var n1 = Node(1, "b", "When", "re-reference", dependsOn: [0]);
+        var def = Def(n0, n1);
+        var appt = new ResourceIdentity(typeof(string), "appt-1");
+        var patient = new ResourceIdentity(typeof(string), "Jane");
+
+        var builder = new HtmlReport.HtmlReportModelBuilder();
+        builder.OnScenarioStarted(def);
+        builder.OnStepFinished(def, Result(n0, T0, 10, effects:
+        [
+            new ResourceEffect { Verb = LifecycleVerb.Reference, Identity = patient, StepId = "a", Timestamp = T0.AddMilliseconds(1) },
+            new ResourceEffect { Verb = LifecycleVerb.Create, Identity = appt, StepId = "a", Timestamp = T0.AddMilliseconds(2) },
+        ]));
+        builder.OnStepFinished(def, Result(n1, T0.AddMilliseconds(10), 10, effects:
+        [
+            // Same Appointment edited again, referencing the same Patient → same (subject,target) edge.
+            new ResourceEffect { Verb = LifecycleVerb.Reference, Identity = patient, StepId = "b", Timestamp = T0.AddMilliseconds(11) },
+            new ResourceEffect { Verb = LifecycleVerb.Edit, Identity = appt, StepId = "b", Timestamp = T0.AddMilliseconds(12) },
+        ]));
+
+        // The identical subject→target edge from two steps dedups to one.
+        var scenario = Assert.Single(builder.Build("x").Scenarios);
+        Assert.Single(scenario.References);
+    }
 }

@@ -30,6 +30,7 @@ public enum LifecycleVerb
 /// <summary>Maps a <see cref="LifecycleVerb"/> onto its lock mode and dedup precedence.</summary>
 public static class LifecycleVerbExtensions
 {
+    /// <summary>Read/Load/Reference/Consume yield <see cref="LockMode.Shared"/>; Create/Edit/Delete yield <see cref="LockMode.Exclusive"/>.</summary>
     public static LockMode ToLockMode(this LifecycleVerb verb) => verb switch
     {
         LifecycleVerb.Read or LifecycleVerb.Load

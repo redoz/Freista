@@ -118,12 +118,17 @@ internal sealed class HtmlReportModelBuilder
             var seenEdges = new HashSet<(string, string, string, string)>();
             foreach (var r in ordered)
             {
-                var subject = r.Effects.FirstOrDefault(
-                    e => e.Verb is LifecycleVerb.Create or LifecycleVerb.Edit);
-                if (subject is null)
+                // Single-subject rule (2026-06-21 spec): only an unambiguous single Create/Edit owns
+                // the edges. A step with zero OR multiple subjects forms no lineage edge.
+                var subjects = r.Effects
+                    .Where(e => e.Verb is LifecycleVerb.Create or LifecycleVerb.Edit)
+                    .ToList();
+                if (subjects.Count != 1)
                 {
                     continue;
                 }
+
+                var subject = subjects[0];
 
                 foreach (var e in r.Effects)
                 {

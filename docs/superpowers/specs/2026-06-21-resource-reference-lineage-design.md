@@ -27,20 +27,20 @@ Capture resource→resource reference lineage, declared at the DSL via two new p
 | Attribute | Verb (new) | Lock mode (C1) | UML | Role | C2 intent (doc only) |
 |---|---|---|---|---|---|
 | `[Reads]` (existing) | `Read` | Shared | — | param: read-only / validation | shared |
-| `[References]` (new) | `References` | Shared | aggregation | param: durable pointer to an independently-living resource | shared |
-| `[Consumes]` (new) | `Consumes` | Shared | composition | param: input absorbed / used-up into the produced resource | exclusive |
+| `[References]` (new) | `Reference` | Shared | aggregation | param: durable pointer to an independently-living resource | shared |
+| `[Consumes]` (new) | `Consume` | Shared | composition | param: input absorbed / used-up into the produced resource | exclusive |
 
-Each tagged parameter records **one** effect on the target (verb `References` or `Consumes`), via the same plumbing as `Read`. There is no redundant second effect. The verb itself carries the lineage kind; the target's resource lane shows `Consumes`/`References` directly (more informative than a generic `Read`).
+Each tagged parameter records **one** effect on the target (verb `Reference` or `Consume`), via the same plumbing as `Read`. There is no redundant second effect. The verb itself carries the lineage kind; the target's resource lane shows `Consume`/`Reference` directly (more informative than a generic `Read`).
 
 ### Edge derivation (why no edge needs to be stored)
 
 The edge's other endpoint is recoverable from the step, so it is **computed at report-build time, not stored**:
 
-> Per step, **subject** = the identity of the step's `Create`/`Edit` effect. For each `Consumes`/`References` effect in that step, draw an edge **subject → target** with the verb as its kind.
+> Per step, **subject** = the identity of the step's `Create`/`Edit` effect. For each `Consume`/`Reference` effect in that step, draw an edge **subject → target** with the verb as its kind.
 
-- `CreateAppointment` → `Create Appointment` (subject) + `Consumes Slot` + `References Patient` ⇒ edges `Appointment → Slot` (Consumes), `Appointment → Patient` (References).
+- `CreateAppointment` → `Create Appointment` (subject) + `Consume Slot` + `Reference Patient` ⇒ edges `Appointment → Slot` (Consume), `Appointment → Patient` (Reference).
 - `AssignPatient([Edits] Appointment, [References] Patient)` → subject is the edited Appointment ⇒ `Appointment → Patient`.
-- A `Consumes`/`References` effect in a step with **no** `Create`/`Edit` subject ⇒ the effect still shows on the target's lane, but **no edge** (graceful: a touch with nothing to link it to).
+- A `Consume`/`Reference` effect in a step with **no** `Create`/`Edit` subject ⇒ the effect still shows on the target's lane, but **no edge** (graceful: a touch with nothing to link it to).
 
 ### Single-subject limitation (must be documented for the user)
 
@@ -53,10 +53,10 @@ Edge derivation assumes a step mutates **one** subject (one `Create` or one `Edi
 
 Changed existing type — **`src/PUnit/Resources/LifecycleVerb.cs`**:
 
-- Add `References` and `Consumes` to the `LifecycleVerb` enum, documented in the existing house style (`References`: shared; `Consumes`: "used up; exclusive in C2").
+- Add `Reference` and `Consume` to the `LifecycleVerb` enum, documented in the existing house style (`Reference`: shared; `Consume`: "used up; exclusive in C2").
 - `ToLockMode` — **add explicit `Shared` cases** for both. (The method defaults to `Exclusive`, so omitting them would silently make these verbs exclusive — a trap.)
-  `LifecycleVerb.Read or LifecycleVerb.Load or LifecycleVerb.References or LifecycleVerb.Consumes => LockMode.Shared`
-- `Precedence` — insert above `Read` so a usage verb wins a same-identity, same-step dedup against a plain `Read`. New ladder: `Read 1 < References 2 < Consumes 3 < Load 4 < Create 5 < Edit 6 < Delete 7`. Relative order of existing verbs is preserved, and the "all exclusive (5–7) outrank all shared (1–4)" invariant still holds.
+  `LifecycleVerb.Read or LifecycleVerb.Load or LifecycleVerb.Reference or LifecycleVerb.Consume => LockMode.Shared`
+- `Precedence` — insert above `Read` so a usage verb wins a same-identity, same-step dedup against a plain `Read`. New ladder: `Read 1 < Reference 2 < Consume 3 < Load 4 < Create 5 < Edit 6 < Delete 7`. Relative order of existing verbs is preserved, and the "all exclusive (5–7) outrank all shared (1–4)" invariant still holds.
 
 No new runtime model type, and **no new `StepResult` field** — references ride the existing `IReadOnlyList<ResourceEffect> Effects`.
 
@@ -64,7 +64,7 @@ Report-model addition (the handoff surface) — **`src/PUnit.Mtp/HtmlReport/Html
 
 ```csharp
 /// One resource→resource edge for the report's lineage view, derived from a step's
-/// Create/Edit subject and its Consumes/References effects. Endpoints are (Type, Key)
+/// Create/Edit subject and its Consume/Reference effects. Endpoints are (Type, Key)
 /// pairs matching ReportResource identity.
 public sealed record ReportReference
 {
@@ -72,7 +72,7 @@ public sealed record ReportReference
     public required string SubjectKey { get; init; }
     public required string TargetType { get; init; }
     public required string TargetKey { get; init; }
-    public required string Kind { get; init; } // "References" | "Consumes" (from the verb)
+    public required string Kind { get; init; } // "Reference" | "Consume" (from the verb)
 }
 ```
 
@@ -86,25 +86,25 @@ Mirrors the existing effect plumbing at every hop — the runtime change is **2 
 
 2. **`src/PUnit/Resources/LifecycleVerb.cs`** — the enum + `ToLockMode` + `Precedence` changes above.
 
-3. **`src/PUnit/Resources/ResourceContext.cs`** — add `References<T>(T)` and `Consumes<T>(T)` methods, each a one-liner delegating to the existing private `Record(...)` exactly like `Read`:
+3. **`src/PUnit/Resources/ResourceContext.cs`** — add `Reference<T>(T)` and `Consume<T>(T)` methods, each a one-liner delegating to the existing private `Record(...)` exactly like `Read`:
    ```csharp
-   public ValueTask References<T>(T resource) where T : notnull
-       => Record(LifecycleVerb.References, _resolver.Resolve(resource), resource);
-   public ValueTask Consumes<T>(T resource) where T : notnull
-       => Record(LifecycleVerb.Consumes, _resolver.Resolve(resource), resource);
+   public ValueTask Reference<T>(T resource) where T : notnull
+       => Record(LifecycleVerb.Reference, _resolver.Resolve(resource), resource);
+   public ValueTask Consume<T>(T resource) where T : notnull
+       => Record(LifecycleVerb.Consume, _resolver.Resolve(resource), resource);
    ```
    Dedup, identity resolution, and timestamping are inherited unchanged.
 
-4. **`src/PUnit.Generator/Lowering/AttributeReader.cs`** (`ParameterRole`) — map `[References]` → verb `References`, `[Consumes]` → verb `Consumes`, alongside the existing `[Reads]` → `Read`.
+4. **`src/PUnit.Generator/Lowering/AttributeReader.cs`** (`ParameterRole`) — map `[References]` → verb `Reference`, `[Consumes]` → verb `Consume`, alongside the existing `[Reads]` → `Read`.
 
-5. **`src/PUnit.Generator/Emit/ScenarioEmitter.cs`** — emit a single `await __ctx.Resources.Consumes(slot)` / `.References(patient)` call where it emits `.Read(...)` today, with the same `#line hidden` trivia. No separate edge call.
+5. **`src/PUnit.Generator/Emit/ScenarioEmitter.cs`** — emit a single `await __ctx.Resources.Consume(slot)` / `.Reference(patient)` call where it emits `.Read(...)` today, with the same `#line hidden` trivia. No separate edge call.
 
-6. **`src/PUnit.Mtp/HtmlReport/HtmlReportModelBuilder.cs`** — derive edges: for each step, find the subject (its `Create`/`Edit` effect identity) and emit a `ReportReference` per `Consumes`/`References` effect; dedup edges by `(Subject, Target)` across the scenario; attach to the scenario model. Steps with no subject contribute no edges.
+6. **`src/PUnit.Mtp/HtmlReport/HtmlReportModelBuilder.cs`** — derive edges: for each step, find the subject (its `Create`/`Edit` effect identity) and emit a `ReportReference` per `Consume`/`Reference` effect; dedup edges by `(Subject, Target)` across the scenario; attach to the scenario model. Steps with no subject contribute no edges.
 
 ## Testing (behavioral-first)
 
-- **Generator/snapshot:** a `[References]`/`[Consumes]` param emits a **single** `References(...)`/`Consumes(...)` call (not `Read` + edge); a `[Reads]` param still emits `Read`.
-- **Runtime:** executing the scenario records `ResourceEffect`s with verbs `References`/`Consumes` on the targets; `ToLockMode` returns `Shared`; same-step double-tag dedups to the usage verb over `Read`.
+- **Generator/snapshot:** a `[References]`/`[Consumes]` param emits a **single** `Reference(...)`/`Consume(...)` call (not `Read` + edge); a `[Reads]` param still emits `Read`.
+- **Runtime:** executing the scenario records `ResourceEffect`s with verbs `Reference`/`Consume` on the targets; `ToLockMode` returns `Shared`; same-step double-tag dedups to the usage verb over `Read`.
 - **Report model (the new logic):** `HtmlReportModelBuilder` derives the expected `ReportReference` adjacency — right endpoints, right kind, deduped across steps; **a step with no Create/Edit subject yields the effect but no edge** (the graceful case).
 - **Sample as living demo:** `samples/AppointmentTests/AppointmentDsl.cs` `CreateAppointment` upgraded to `[Consumes] Slot slot, [References] Patient patient`. Existing suite stays green; the change is additive (swaps `Read` → `Consumes`/`References` on those params, adds derived edges, removes nothing).
 
@@ -117,6 +117,6 @@ Mirrors the existing effect plumbing at every hop — the runtime change is **2 
 
 ## Resolved decisions (from brainstorming)
 
-- **No decomposition into `Read` + edge.** `Consumes`/`References` are single effect verbs treated like `Read`; there is never a `Consumes` without an implied read because the verb *is* the read. Edges are derived, not stored.
-- **Dedup precedence:** `References`/`Consumes` sit just above `Read` (ladder above), so a double-tagged param shows the usage verb and its edge survives. Same-identity collisions with `Load`/`Create`/`Edit`/`Delete` in one step don't occur in practice (subject vs. param are distinct identities), so their placement is immaterial.
-- **Kind naming mirrors the attributes** (`References`/`Consumes`), carried by the verb and surfaced as the `ReportReference.Kind` string — no separate `ReferenceKind` enum.
+- **No decomposition into `Read` + edge.** `Consume`/`Reference` are single effect verbs treated like `Read`; there is never a `Consume` without an implied read because the verb *is* the read. Edges are derived, not stored.
+- **Dedup precedence:** `Reference`/`Consume` sit just above `Read` (ladder above), so a double-tagged param shows the usage verb and its edge survives. Same-identity collisions with `Load`/`Create`/`Edit`/`Delete` in one step don't occur in practice (subject vs. param are distinct identities), so their placement is immaterial.
+- **Kind naming mirrors the verb names** (`Reference`/`Consume`), carried by the verb and surfaced as the `ReportReference.Kind` string — no separate `ReferenceKind` enum.
