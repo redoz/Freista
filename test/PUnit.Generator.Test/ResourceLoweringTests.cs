@@ -125,4 +125,24 @@ public class ResourceLoweringTests
         Assert.Equal(LifecycleVerb.Create, book[2].Verb);
         Assert.Equal("Appointment:jane@acme.com@1", book[2].Identity.ToString());
     }
+
+    [Fact]
+    public async Task BookWithLineage_records_edges_from_the_created_appointment()
+    {
+        var result = GeneratorHarness.Run(SampleSources.ResourceDsl + SampleSources.LineageScenario);
+        result.AssertCompiles();
+        var results = await result.Definitions().Single().RunAsync();
+
+        // Step 2: BookWithLineage([References(Subject.Return)] User, [Consumes(Subject.Return)] Slot) [return: Creates] Appointment
+        var edges = results[2].Edges;
+        Assert.Equal(2, edges.Count);
+
+        var reference = edges.Single(e => e.Kind == LifecycleVerb.Reference);
+        Assert.Equal("Appointment:jane@acme.com@1", reference.Subject.ToString());
+        Assert.Equal("User:jane@acme.com", reference.Target.ToString());
+
+        var consume = edges.Single(e => e.Kind == LifecycleVerb.Consume);
+        Assert.Equal("Appointment:jane@acme.com@1", consume.Subject.ToString());
+        Assert.Equal("Slot:1", consume.Target.ToString());
+    }
 }
