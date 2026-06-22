@@ -111,36 +111,19 @@ internal sealed class HtmlReportModelBuilder
                 })
                 .ToList();
 
-            // Lineage edges (2026-06-21 spec): per step, the Create/Edit effect is the subject; each
-            // Reference/Consume effect is a target. Derived here, not stored. A step with no subject
-            // yields no edge; deduped by (subject, target) across the scenario.
+            // Lineage edges (2026-06-22 spec): edges are recorded explicitly at runtime from each
+            // [References]/[Consumes] target's declared subjects. Map them straight through; dedup by
+            // (subject, target) across the scenario. No subject inference.
             var references = new List<ReportReference>();
             var seenEdges = new HashSet<(string, string, string, string)>();
             foreach (var r in ordered)
             {
-                // Single-subject rule (2026-06-21 spec): only an unambiguous single Create/Edit owns
-                // the edges. A step with zero OR multiple subjects forms no lineage edge.
-                var subjects = r.Effects
-                    .Where(e => e.Verb is LifecycleVerb.Create or LifecycleVerb.Edit)
-                    .ToList();
-                if (subjects.Count != 1)
+                foreach (var edge in r.Edges)
                 {
-                    continue;
-                }
-
-                var subject = subjects[0];
-
-                foreach (var e in r.Effects)
-                {
-                    if (e.Verb is not (LifecycleVerb.Reference or LifecycleVerb.Consume))
-                    {
-                        continue;
-                    }
-
-                    var subjectType = subject.Identity.Type.Name;
-                    var subjectKey = subject.Identity.Key.ToString();
-                    var targetType = e.Identity.Type.Name;
-                    var targetKey = e.Identity.Key.ToString();
+                    var subjectType = edge.Subject.Type.Name;
+                    var subjectKey = edge.Subject.Key.ToString();
+                    var targetType = edge.Target.Type.Name;
+                    var targetKey = edge.Target.Key.ToString();
                     if (!seenEdges.Add((subjectType, subjectKey, targetType, targetKey)))
                     {
                         continue;
@@ -152,7 +135,7 @@ internal sealed class HtmlReportModelBuilder
                         SubjectKey = subjectKey,
                         TargetType = targetType,
                         TargetKey = targetKey,
-                        Kind = e.Verb.ToString(),
+                        Kind = edge.Kind.ToString(),
                     });
                 }
             }
