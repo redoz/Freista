@@ -276,6 +276,12 @@ internal static class ScenarioEmitter
     /// </summary>
     private static StatementSyntax ResourceCallStatement(ResourceRoleClaim claim)
     {
+        var arguments = new List<ArgumentSyntax> { Argument(ParseExpression(claim.Expression)) };
+        foreach (var subject in claim.SubjectExpressions)
+        {
+            arguments.Add(Argument(ParseExpression(subject)));
+        }
+
         var call = InvocationExpression(
             MemberAccessExpression(
                 SyntaxKind.SimpleMemberAccessExpression,
@@ -284,8 +290,7 @@ internal static class ScenarioEmitter
                     IdentifierName("__ctx"),
                     IdentifierName("Resources")),
                 IdentifierName(claim.Verb)))
-            .WithArgumentList(ArgumentList(SingletonSeparatedList(
-                Argument(ParseExpression(claim.Expression)))));
+            .WithArgumentList(ArgumentList(SeparatedList(arguments)));
 
         return ExpressionStatement(AwaitExpression(call)).WithLeadingTrivia(HiddenTrivia());
     }

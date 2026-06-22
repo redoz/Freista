@@ -7,6 +7,32 @@ namespace PUnit.Generator.Lowering;
 /// <summary>Reads PUnit's <c>[Scenario]</c> / <c>[StepName]</c> attribute data off method symbols.</summary>
 internal static class AttributeReader
 {
+    /// <summary>The reserved <c>[References]</c>/<c>[Consumes]</c> subject token meaning the step's return.
+    /// MUST stay identical to <c>PUnit.Subject.Return</c> (separate assembly).</summary>
+    public const string ReturnSubject = "<return>";
+
+    /// <summary>
+    /// The lineage subject names declared on a <c>[References]</c>/<c>[Consumes]</c> parameter (its
+    /// <c>params string[] subjects</c>), or empty when none/not a lineage role.
+    /// </summary>
+    public static ImmutableArray<string> ParameterSubjects(IParameterSymbol parameter)
+    {
+        foreach (var attr in parameter.GetAttributes())
+        {
+            if (attr.AttributeClass?.Name is "ReferencesAttribute" or "ConsumesAttribute"
+                && attr.ConstructorArguments.Length > 0
+                && attr.ConstructorArguments[0] is { Kind: TypedConstantKind.Array } arrayArg)
+            {
+                return arrayArg.Values
+                    .Select(v => v.Value as string)
+                    .Where(s => s is not null)
+                    .ToImmutableArray()!;
+            }
+        }
+
+        return ImmutableArray<string>.Empty;
+    }
+
     public static string? ScenarioDisplayName(IMethodSymbol method)
     {
         var attr = method.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "ScenarioAttribute");

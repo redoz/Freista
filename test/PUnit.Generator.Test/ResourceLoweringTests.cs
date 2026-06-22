@@ -91,6 +91,18 @@ public class ResourceLoweringTests
     }
 
     [Fact]
+    public void Reference_and_consume_subjects_emit_edge_calls()
+    {
+        var result = GeneratorHarness.Run(SampleSources.ResourceDsl + SampleSources.LineageScenario);
+        result.AssertCompiles();
+
+        // Each [References(Subject.Return)]/[Consumes(Subject.Return)] target emits the call with __r appended.
+        // Note: the target expression is __inputs.Get<T>(n) which contains parens, so .* is used instead of [^)]*.
+        Assert.Matches(@"Resources\.Reference\(.*,\s*__r\)", result.GeneratedSource);
+        Assert.Matches(@"Resources\.Consume\(.*,\s*__r\)", result.GeneratedSource);
+    }
+
+    [Fact]
     public async Task Reference_and_consume_params_lower_to_shared_lineage_effects()
     {
         var result = GeneratorHarness.Run(SampleSources.ResourceDsl + SampleSources.LineageScenario);

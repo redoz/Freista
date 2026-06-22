@@ -13,7 +13,12 @@ internal readonly record struct SourceSpan(
 /// method name (Read/Load/Create/Edit/Delete); <see cref="Expression"/> is the rewritten argument
 /// expression (in terms of <c>__inputs</c>) for a parameter role, or <c>__r</c> for a return role.
 /// </summary>
-internal readonly record struct ResourceRoleClaim(string Verb, string Expression, bool IsReturn);
+internal readonly record struct ResourceRoleClaim(string Verb, string Expression, bool IsReturn)
+{
+    /// <summary>Instance expressions for the lineage subjects (a parameter's rewritten argument, or
+    /// <c>__r</c>). Empty for non-lineage roles. Emitted as extra arguments to Reference/Consume.</summary>
+    public IReadOnlyList<string> SubjectExpressions { get; init; } = [];
+}
 
 /// <summary>A lowered scenario ready for emission.</summary>
 internal sealed record ParsedScenario

@@ -249,7 +249,7 @@ public static class SampleSources
 
                 [StepName("booking with lineage")]
                 [return: Creates]
-                public static async Task<Appointment> BookWithLineage([References] User user, [Consumes] Slot slot)
+                public static async Task<Appointment> BookWithLineage([References(Subject.Return)] User user, [Consumes(Subject.Return)] Slot slot)
                 {
                     await Task.Yield();
                     return new Appointment(user, slot);

@@ -480,7 +480,10 @@ internal sealed class ScenarioParser
             }
 
             var expression = ((ExpressionSyntax)rewriter.Visit(argument.Expression)).ToFullString().Trim();
-            claims.Add(new ResourceRoleClaim(role, expression, IsReturn: false));
+            var subjectExpressions = role is "Reference" or "Consume"
+                ? ResolveSubjectExpressions(parameter, method, arguments, rewriter)
+                : [];
+            claims.Add(new ResourceRoleClaim(role, expression, IsReturn: false) { SubjectExpressions = subjectExpressions });
         }
 
         if (hasResult && AttributeReader.ReturnRole(method) is { } returnRole)
@@ -489,6 +492,46 @@ internal sealed class ScenarioParser
         }
 
         return claims;
+    }
+
+    /// <summary>
+    /// Maps a [References]/[Consumes] parameter's declared subject names to instance expressions:
+    /// <c>Subject.Return</c> ⇒ <c>__r</c>; a parameter name ⇒ that parameter's rewritten argument
+    /// expression. Unresolved names are skipped (the analyzer reports them as PUNIT010).
+    /// </summary>
+    private static List<string> ResolveSubjectExpressions(
+        IParameterSymbol parameter,
+        IMethodSymbol method,
+        SeparatedSyntaxList<ArgumentSyntax> arguments,
+        IdentifierReplacer rewriter)
+    {
+        var result = new List<string>();
+        foreach (var subject in AttributeReader.ParameterSubjects(parameter))
+        {
+            if (subject == AttributeReader.ReturnSubject)
+            {
+                result.Add("__r");
+                continue;
+            }
+
+            for (var i = 0; i < method.Parameters.Length; i++)
+            {
+                if (method.Parameters[i].Name != subject)
+                {
+                    continue;
+                }
+
+                var arg = FindArgument(arguments, subject, i);
+                if (arg is not null)
+                {
+                    result.Add(((ExpressionSyntax)rewriter.Visit(arg.Expression)).ToFullString().Trim());
+                }
+
+                break;
+            }
+        }
+
+        return result;
     }
 
     /// <summary>
