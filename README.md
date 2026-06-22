@@ -1,8 +1,8 @@
 # Freista
 
-> Scenario tests for xUnit v3 — Given/When/Then steps, reported as individual tests, wired into a fork/join dependency graph.
+> Scenario / integration tests for .NET — Given/When/Then steps, each reported as its own test, wired into a fork/join dependency graph.
 
-Freista lets you write integration-style scenario tests as readable `Given` / `When` / `Then` C# and have each business step show up as its own xUnit test: sequential by default, explicitly parallel where you ask for it, with typed state flowing between steps and dependent steps auto-skipped after a failure.
+Freista lets you write integration-style scenario tests as readable `Given` / `When` / `Then` C# and have each business step show up as its own test: sequential by default, explicitly parallel where you ask for it, with typed state flowing between steps and dependent steps auto-skipped after a failure.
 
 ```csharp
 using Freista;
@@ -19,9 +19,7 @@ public static async Task Booking()
 }
 ```
 
-A Roslyn source generator lowers the scenario method into a manifest + executor that the runtime runs as a step graph on top of xUnit v3.
-
-> The name? The author's name is Patrik — and a test framework that's a pun felt right. Read it as "pun-it."
+A Roslyn source generator lowers the scenario method into a manifest + executor that the runtime runs as a step graph on Microsoft.Testing.Platform.
 
 ## How it works
 
@@ -29,11 +27,11 @@ A Roslyn source generator lowers the scenario method into a manifest + executor 
    each annotated with `[StepName("...")]`. These are real methods returning ordinary
    `Task<T>` — each `await` in the scenario unwraps to `T`.
 2. You write `[Scenario]` methods using that DSL. The body is **source for the generator** —
-   xUnit never executes it directly.
+   MTP never executes it directly.
 3. The generator lowers each body into a dependency graph (`ScenarioDefinition`): one node per
    step, with **source-order + dataflow** edges, and tuple/array forms lowered to parallel
    sibling groups.
-4. At run time, the xUnit v3 adapter discovers each `[Scenario]`, runs the graph through a DAG
+4. At run time, the MTP test framework discovers each `[Scenario]`, runs the graph through a DAG
    scheduler, and reports **every step as its own test** — passed, failed, or skipped.
 
 ### Parallelism is explicit
