@@ -86,4 +86,12 @@ internal static class Descriptors
         Category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor InvalidLineageSubject = new(
+        "PUNIT010",
+        "Lineage subject must name a step subject",
+        "'{0}' is not a valid lineage subject for step '{1}' — Subject must name an [Edits] parameter or the [Creates]/[Edits] return (use Subject.Return)",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

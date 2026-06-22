@@ -266,4 +266,100 @@ public class AnalyzerTests
 
         Assert.DoesNotContain(diagnostics, d => d.Id == "PUNIT009");
     }
+
+    [Fact]
+    public void PUNIT010_is_a_supported_diagnostic()
+    {
+        var analyzer = new PUnit.Generator.Analysis.ScenarioAnalyzer();
+        Assert.Contains(analyzer.SupportedDiagnostics, d => d.Id == "PUNIT010");
+    }
+
+    private const string LineageDsl =
+        """
+        using System.Threading.Tasks;
+        using PUnit;
+        namespace Bad;
+        public sealed record User(string Email) : IResource<User> { public static ResourceKey KeyFor(User i) => i.Email; }
+        public sealed record Account(string Id) : IResource<Account> { public static ResourceKey KeyFor(Account i) => i.Id; }
+
+        """;
+
+    [Fact]
+    public async Task PUNIT010_unknown_subject_name()
+    {
+        var source = LineageDsl +
+            """
+            public static class BadDsl
+            {
+                extension(When)
+                {
+                    [StepName("transfer")]
+                    public static async Task Transfer([Edits] Account acc, [References("ghost")] User who) { await Task.Yield(); }
+                }
+            }
+            """;
+
+        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "PUNIT010");
+    }
+
+    [Fact]
+    public async Task PUNIT010_subject_names_a_non_subject_role()
+    {
+        var source = LineageDsl +
+            """
+            public static class BadDsl
+            {
+                extension(When)
+                {
+                    [StepName("transfer")]
+                    public static async Task Transfer([Reads] Account acc, [References(nameof(acc))] User who) { await Task.Yield(); }
+                }
+            }
+            """;
+
+        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "PUNIT010");
+    }
+
+    [Fact]
+    public async Task PUNIT010_return_sentinel_without_a_creating_return()
+    {
+        var source = LineageDsl +
+            """
+            public static class BadDsl
+            {
+                extension(When)
+                {
+                    [StepName("look up")]
+                    public static async Task LookUp([References(Subject.Return)] User who) { await Task.Yield(); }
+                }
+            }
+            """;
+
+        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "PUNIT010");
+    }
+
+    [Fact]
+    public async Task PUNIT010_clean_for_valid_subjects()
+    {
+        var source = LineageDsl +
+            """
+            public static class GoodDsl
+            {
+                extension(When)
+                {
+                    [StepName("assign")]
+                    public static async Task Assign([Edits] Account acc, [References(nameof(acc))] User who) { await Task.Yield(); }
+
+                    [StepName("create")]
+                    [return: Creates]
+                    public static async Task<Account> Create([References(Subject.Return)] User who) { await Task.Yield(); return new Account("a"); }
+
+                    [StepName("note")]
+                    public static async Task Note([References] User who) { await Task.Yield(); }
+                }
+            }
+            """;
+
+        Assert.DoesNotContain(await GeneratorHarness.AnalyzeAsync(source), d => d.Id == "PUNIT010");
+    }
 }

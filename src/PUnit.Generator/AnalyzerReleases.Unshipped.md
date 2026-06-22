@@ -15,3 +15,4 @@ PUNIT006 | PUnit.Usage | Error | Parallel group element must be a phase-marker c
 PUNIT007 | PUnit.Usage | Error | Scenario step argument is not lowerable
 PUNIT008 | PUnit.Usage | Warning | Display-name placeholder does not bind to a parameter
 PUNIT009 | PUnit.Usage | Error | Resource access must be declared
+PUNIT010 | PUnit.Usage | Error | Lineage subject must name a step subject

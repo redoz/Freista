@@ -30,6 +30,7 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
         Descriptors.InvalidArgument,
         Descriptors.UnboundPlaceholder,
         Descriptors.MissingResourceRole,
+        Descriptors.InvalidLineageSubject,
     ];
 
     public override void Initialize(AnalysisContext context)
@@ -368,6 +369,35 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
             var location = method.Locations.FirstOrDefault() ?? Location.None;
             context.ReportDiagnostic(Diagnostic.Create(
                 Descriptors.MissingResourceRole, location, "return", method.Name));
+        }
+
+        var editParamNames = method.Parameters
+            .Where(p => AttributeReader.ParameterRole(p) == "Edit")
+            .Select(p => p.Name)
+            .ToImmutableHashSet();
+        var returnIsSubject = SymbolHelpers.TryUnwrapReturn(method.ReturnType, out var subjectReturn)
+            && subjectReturn is not null
+            && AttributeReader.ReturnRole(method) is "Create" or "Edit";
+
+        foreach (var parameter in method.Parameters)
+        {
+            if (AttributeReader.ParameterRole(parameter) is not ("Reference" or "Consume"))
+            {
+                continue;
+            }
+
+            foreach (var subject in AttributeReader.ParameterSubjects(parameter))
+            {
+                var valid = subject == AttributeReader.ReturnSubject
+                    ? returnIsSubject
+                    : editParamNames.Contains(subject);
+                if (!valid)
+                {
+                    var location = parameter.Locations.FirstOrDefault() ?? method.Locations.FirstOrDefault() ?? Location.None;
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        Descriptors.InvalidLineageSubject, location, subject, method.Name));
+                }
+            }
         }
     }
 
