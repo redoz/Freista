@@ -198,7 +198,7 @@ internal sealed class MtpReportSink : RunEventSink
     {
         var path = Path.Combine(
             Path.GetTempPath(),
-            "punit-mtp",
+            "freista-mtp",
             SanitizeFileName(PUnitDiscoverer.MakeUid(definition.ScenarioId, result.Node.StepId)));
         Directory.CreateDirectory(path);
         return path;

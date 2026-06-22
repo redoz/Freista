@@ -14,11 +14,11 @@ public class AnalyzerTests
         Assert.Contains(diagnostics, d => d.Id == id);
 
     [Fact]
-    public void PUNIT000_is_a_supported_diagnostic()
+    public void FRST000_is_a_supported_diagnostic()
     {
         var analyzer = new PUnit.Generator.Analysis.ScenarioAnalyzer();
 
-        Assert.Contains(analyzer.SupportedDiagnostics, d => d.Id == "PUNIT000");
+        Assert.Contains(analyzer.SupportedDiagnostics, d => d.Id == "FRST000");
     }
 
     [Fact]
@@ -31,29 +31,29 @@ public class AnalyzerTests
     }
 
     [Fact]
-    public async Task PUNIT001_non_async_task_scenario()
+    public async Task FRST001_non_async_task_scenario()
     {
         var diagnostics = await Analyze(
             """
             public static class S { [Scenario] public static void Bad() { } }
             """);
 
-        AssertHas(diagnostics, "PUNIT001");
+        AssertHas(diagnostics, "FRST001");
     }
 
     [Fact]
-    public async Task PUNIT002_statement_without_await()
+    public async Task FRST002_statement_without_await()
     {
         var diagnostics = await Analyze(
             """
             public static class S { [Scenario] public static async Task Bad() { var x = 5; } }
             """);
 
-        AssertHas(diagnostics, "PUNIT002");
+        AssertHas(diagnostics, "FRST002");
     }
 
     [Fact]
-    public async Task PUNIT003_control_flow()
+    public async Task FRST003_control_flow()
     {
         var diagnostics = await Analyze(
             """
@@ -66,11 +66,11 @@ public class AnalyzerTests
             }
             """);
 
-        AssertHas(diagnostics, "PUNIT003");
+        AssertHas(diagnostics, "FRST003");
     }
 
     [Fact]
-    public async Task PUNIT004_non_dsl_await()
+    public async Task FRST004_non_dsl_await()
     {
         var diagnostics = await Analyze(
             """
@@ -80,11 +80,11 @@ public class AnalyzerTests
             }
             """);
 
-        AssertHas(diagnostics, "PUNIT004");
+        AssertHas(diagnostics, "FRST004");
     }
 
     [Fact]
-    public async Task PUNIT005_invalid_dsl_return_type()
+    public async Task FRST005_invalid_dsl_return_type()
     {
         // A DSL member that returns a non-task type.
         var source =
@@ -105,11 +105,11 @@ public class AnalyzerTests
             }
             """;
 
-        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "PUNIT005");
+        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "FRST005");
     }
 
     [Fact]
-    public async Task PUNIT006_non_dsl_tuple_element()
+    public async Task FRST006_non_dsl_tuple_element()
     {
         var diagnostics = await Analyze(
             """
@@ -122,11 +122,11 @@ public class AnalyzerTests
             }
             """);
 
-        AssertHas(diagnostics, "PUNIT006");
+        AssertHas(diagnostics, "FRST006");
     }
 
     [Fact]
-    public async Task PUNIT007_argument_is_not_a_step_output()
+    public async Task FRST007_argument_is_not_a_step_output()
     {
         var diagnostics = await Analyze(
             """
@@ -140,11 +140,11 @@ public class AnalyzerTests
             }
             """);
 
-        AssertHas(diagnostics, "PUNIT007");
+        AssertHas(diagnostics, "FRST007");
     }
 
     [Fact]
-    public async Task PUNIT007_non_step_local_inside_a_compound_argument()
+    public async Task FRST007_non_step_local_inside_a_compound_argument()
     {
         // A bare identifier is flagged, but so must a non-step local buried in an expression —
         // otherwise the generator emits code referencing a local that doesn't exist.
@@ -160,11 +160,11 @@ public class AnalyzerTests
             }
             """);
 
-        AssertHas(diagnostics, "PUNIT007");
+        AssertHas(diagnostics, "FRST007");
     }
 
     [Fact]
-    public async Task PUNIT008_unbound_display_name_placeholder()
+    public async Task FRST008_unbound_display_name_placeholder()
     {
         var source =
             """
@@ -181,19 +181,19 @@ public class AnalyzerTests
             }
             """;
 
-        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "PUNIT008");
+        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "FRST008");
     }
 
     [Fact]
-    public void PUNIT009_is_a_supported_diagnostic()
+    public void FRST009_is_a_supported_diagnostic()
     {
         var analyzer = new PUnit.Generator.Analysis.ScenarioAnalyzer();
 
-        Assert.Contains(analyzer.SupportedDiagnostics, d => d.Id == "PUNIT009");
+        Assert.Contains(analyzer.SupportedDiagnostics, d => d.Id == "FRST009");
     }
 
     [Fact]
-    public async Task PUNIT009_unannotated_resource_parameter()
+    public async Task FRST009_unannotated_resource_parameter()
     {
         // A resource-typed parameter with no [Reads]/[Edits]/[Deletes] role — there is no default.
         var source =
@@ -215,11 +215,11 @@ public class AnalyzerTests
             }
             """;
 
-        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "PUNIT009");
+        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "FRST009");
     }
 
     [Fact]
-    public async Task PUNIT009_unannotated_resource_return()
+    public async Task FRST009_unannotated_resource_return()
     {
         // A resource-typed return with no return role — there is no default.
         var source =
@@ -245,33 +245,33 @@ public class AnalyzerTests
             }
             """;
 
-        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "PUNIT009");
+        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "FRST009");
     }
 
     [Fact]
-    public async Task PUNIT009_clean_when_roles_are_declared()
+    public async Task FRST009_clean_when_roles_are_declared()
     {
         // Every resource param/return in the resource DSL carries a role attribute.
         var diagnostics = await GeneratorHarness.AnalyzeAsync(
             SampleSources.ResourceDsl + SampleSources.ResourceScenario);
 
-        Assert.DoesNotContain(diagnostics, d => d.Id == "PUNIT009");
+        Assert.DoesNotContain(diagnostics, d => d.Id == "FRST009");
     }
 
     [Fact]
-    public async Task PUNIT009_does_not_fire_on_non_resource_types()
+    public async Task FRST009_does_not_fire_on_non_resource_types()
     {
         // Plain records carry no resource interface, so role-free params/returns are fine.
         var diagnostics = await Analyze(SampleSources.LinearScenario);
 
-        Assert.DoesNotContain(diagnostics, d => d.Id == "PUNIT009");
+        Assert.DoesNotContain(diagnostics, d => d.Id == "FRST009");
     }
 
     [Fact]
-    public void PUNIT010_is_a_supported_diagnostic()
+    public void FRST010_is_a_supported_diagnostic()
     {
         var analyzer = new PUnit.Generator.Analysis.ScenarioAnalyzer();
-        Assert.Contains(analyzer.SupportedDiagnostics, d => d.Id == "PUNIT010");
+        Assert.Contains(analyzer.SupportedDiagnostics, d => d.Id == "FRST010");
     }
 
     private const string LineageDsl =
@@ -285,7 +285,7 @@ public class AnalyzerTests
         """;
 
     [Fact]
-    public async Task PUNIT010_unknown_subject_name()
+    public async Task FRST010_unknown_subject_name()
     {
         var source = LineageDsl +
             """
@@ -299,11 +299,11 @@ public class AnalyzerTests
             }
             """;
 
-        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "PUNIT010");
+        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "FRST010");
     }
 
     [Fact]
-    public async Task PUNIT010_subject_names_a_non_subject_role()
+    public async Task FRST010_subject_names_a_non_subject_role()
     {
         var source = LineageDsl +
             """
@@ -317,11 +317,11 @@ public class AnalyzerTests
             }
             """;
 
-        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "PUNIT010");
+        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "FRST010");
     }
 
     [Fact]
-    public async Task PUNIT010_return_sentinel_without_a_creating_return()
+    public async Task FRST010_return_sentinel_without_a_creating_return()
     {
         var source = LineageDsl +
             """
@@ -335,11 +335,11 @@ public class AnalyzerTests
             }
             """;
 
-        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "PUNIT010");
+        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "FRST010");
     }
 
     [Fact]
-    public async Task PUNIT010_clean_for_valid_subjects()
+    public async Task FRST010_clean_for_valid_subjects()
     {
         var source = LineageDsl +
             """
@@ -360,6 +360,6 @@ public class AnalyzerTests
             }
             """;
 
-        Assert.DoesNotContain(await GeneratorHarness.AnalyzeAsync(source), d => d.Id == "PUNIT010");
+        Assert.DoesNotContain(await GeneratorHarness.AnalyzeAsync(source), d => d.Id == "FRST010");
     }
 }

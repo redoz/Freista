@@ -475,7 +475,7 @@ internal sealed class ScenarioParser
                 // No supplied argument. The trailing-ScenarioContext case is correct (nothing to claim).
                 // The omitted-optional case (a declared role on a defaulted param that the call left out)
                 // is a deliberate, known gap: the role silently vanishes. Diagnosing it is intentionally
-                // deferred to PUNIT009 (Task 9); a future reader should not treat this skip as a bug.
+                // deferred to FRST009 (Task 9); a future reader should not treat this skip as a bug.
                 continue;
             }
 
@@ -497,7 +497,7 @@ internal sealed class ScenarioParser
     /// <summary>
     /// Maps a [References]/[Consumes] parameter's declared subject names to instance expressions:
     /// <c>Subject.Return</c> ⇒ <c>__r</c>; a parameter name ⇒ that parameter's rewritten argument
-    /// expression. Unresolved names are skipped (the analyzer reports them as PUNIT010).
+    /// expression. Unresolved names are skipped (the analyzer reports them as FRST010).
     /// </summary>
     private static List<string> ResolveSubjectExpressions(
         IParameterSymbol parameter,

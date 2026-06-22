@@ -5,11 +5,11 @@ namespace PUnit.Generator;
 
 /// <summary>The outcome of safely parsing one scenario: either the parsed <see cref="Scenario"/>, or
 /// an <see cref="Error"/> (exception text) plus the originating method's <see cref="File"/>/<see cref="Line"/>
-/// to report as PUNIT000.</summary>
+/// to report as FRST000.</summary>
 internal readonly record struct ScenarioResult(ParsedScenario? Scenario, string? Error, string? File, int Line);
 
 /// <summary>
-/// Wraps the generator's parse and emit stages so an unexpected throw becomes a PUNIT000 diagnostic
+/// Wraps the generator's parse and emit stages so an unexpected throw becomes a FRST000 diagnostic
 /// instead of crashing the generator (CS8785). Delegate-driven, so the wrapping behaviour is
 /// unit-testable without forcing the real parser/emitter to throw.
 /// </summary>

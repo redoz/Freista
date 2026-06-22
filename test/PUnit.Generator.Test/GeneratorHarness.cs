@@ -258,7 +258,7 @@ public static class GeneratorHarness
         var withAnalyzers = compilation.WithAnalyzers(
             ImmutableArray.Create<DiagnosticAnalyzer>(new ScenarioAnalyzer()));
         var diagnostics = await withAnalyzers.GetAnalyzerDiagnosticsAsync();
-        return diagnostics.Where(d => d.Id.StartsWith("PUNIT")).ToImmutableArray();
+        return diagnostics.Where(d => d.Id.StartsWith("FRST")).ToImmutableArray();
     }
 
     public static IReadOnlyList<ScenarioDefinition> Definitions(this GeneratorResult result)

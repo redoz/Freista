@@ -6,7 +6,7 @@ namespace PUnit.Mtp;
 
 /// <summary>
 /// Opt-in tracing of every <see cref="TestNode"/> PUnit publishes to the MTP message bus (discovery
-/// and each step lifecycle update). Off by default and zero-cost; set <c>PUNIT_NODE_DEBUG</c> to a
+/// and each step lifecycle update). Off by default and zero-cost; set <c>FREISTA_NODE_DEBUG</c> to a
 /// file path, or to <c>1</c>/<c>stderr</c>/<c>console</c> for stderr. Use it to see the exact Uid,
 /// display name, state, and property bag of each node — in particular to compare the in-progress
 /// node (which a runner groups) against the finished node (which can collapse) when diagnosing how a
@@ -14,10 +14,10 @@ namespace PUnit.Mtp;
 /// </summary>
 internal static class NodeDiagnostics
 {
-    private static readonly string? Sink = Environment.GetEnvironmentVariable("PUNIT_NODE_DEBUG");
+    private static readonly string? Sink = Environment.GetEnvironmentVariable("FREISTA_NODE_DEBUG");
     private static readonly object FileLock = new();
 
-    /// <summary>Whether tracing is enabled (the <c>PUNIT_NODE_DEBUG</c> environment variable is set).</summary>
+    /// <summary>Whether tracing is enabled (the <c>FREISTA_NODE_DEBUG</c> environment variable is set).</summary>
     public static bool Enabled => !string.IsNullOrEmpty(Sink);
 
     /// <summary>Traces one published node under the given <paramref name="phase"/> (e.g. "discover", "run").</summary>
@@ -39,7 +39,7 @@ internal static class NodeDiagnostics
             return;
         }
 
-        Write($"[punit-node] {phase} {message}");
+        Write($"[freista-node] {phase} {message}");
     }
 
     private static string Describe(string phase, TestNode node)
@@ -47,7 +47,7 @@ internal static class NodeDiagnostics
         var state = node.Properties.OfType<TestNodeStateProperty>().FirstOrDefault()?.GetType().Name ?? "(none)";
 
         var builder = new StringBuilder();
-        builder.Append(CultureInfo.InvariantCulture, $"[punit-node] {phase} uid='{node.Uid.Value}' name='{node.DisplayName}' state={state}");
+        builder.Append(CultureInfo.InvariantCulture, $"[freista-node] {phase} uid='{node.Uid.Value}' name='{node.DisplayName}' state={state}");
 
         var identity = node.Properties.OfType<TestMethodIdentifierProperty>().FirstOrDefault();
         if (identity is not null)

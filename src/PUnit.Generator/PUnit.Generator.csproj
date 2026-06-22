@@ -23,7 +23,7 @@
     <InternalsVisibleTo Include="PUnit.Generator.Test" />
   </ItemGroup>
 
-  <!-- Analyzer release tracking (RS2008) for the shipped PUNIT diagnostics. -->
+  <!-- Analyzer release tracking (RS2008) for the shipped FRST diagnostics. -->
   <ItemGroup>
     <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
     <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />

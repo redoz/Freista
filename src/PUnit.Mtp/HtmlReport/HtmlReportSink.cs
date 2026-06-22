@@ -13,7 +13,7 @@ namespace PUnit.Mtp.HtmlReport;
 /// </summary>
 internal sealed class HtmlReportSink : RunEventSink
 {
-    private const string JsonToken = "/*__PUNIT_REPORT_JSON__*/";
+    private const string JsonToken = "/*__FREISTA_REPORT_JSON__*/";
     private const string ResourceName = "PUnit.Mtp.HtmlReport.report-template.html";
 
     private static readonly JsonSerializerOptions SerializerOptions =

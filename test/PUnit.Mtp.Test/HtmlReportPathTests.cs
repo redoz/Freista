@@ -12,7 +12,7 @@ public class HtmlReportPathTests
     public void Defaults_the_filename_under_the_results_directory()
     {
         var path = HtmlReport.HtmlReportPath.Resolve(enabled: true, filename: null, resultsDirectory: @"C:\r");
-        Assert.Equal(Path.Combine(@"C:\r", "punit-report.html"), path);
+        Assert.Equal(Path.Combine(@"C:\r", "freista-report.html"), path);
     }
 
     [Fact]
@@ -26,6 +26,6 @@ public class HtmlReportPathTests
     public void Falls_back_to_current_directory_when_results_directory_is_unknown()
     {
         var path = HtmlReport.HtmlReportPath.Resolve(enabled: true, filename: null, resultsDirectory: null);
-        Assert.Equal(Path.Combine(Directory.GetCurrentDirectory(), "punit-report.html"), path);
+        Assert.Equal(Path.Combine(Directory.GetCurrentDirectory(), "freista-report.html"), path);
     }
 }

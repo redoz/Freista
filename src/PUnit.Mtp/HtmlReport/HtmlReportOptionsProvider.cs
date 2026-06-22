@@ -7,19 +7,19 @@ namespace PUnit.Mtp.HtmlReport;
 /// <summary>
 /// Registers PUnit's HTML-report command-line options with Microsoft.Testing.Platform:
 /// <c>--report-html</c> (a flag) and <c>--report-html-filename &lt;name&gt;</c> (default
-/// <c>punit-report.html</c>). The report is written under MTP's <c>--results-directory</c>
+/// <c>freista-report.html</c>). The report is written under MTP's <c>--results-directory</c>
 /// (design §3.E). Generic names — PUnit owns its loaded extension set, so collision risk is low.
 /// </summary>
 internal sealed class HtmlReportOptionsProvider : ICommandLineOptionsProvider
 {
     internal const string EnableOption = "report-html";
     internal const string FilenameOption = "report-html-filename";
-    internal const string DefaultFilename = "punit-report.html";
+    internal const string DefaultFilename = "freista-report.html";
 
-    public string Uid => "punit.mtp.htmlreport";
+    public string Uid => "freista.mtp.htmlreport";
     public string Version => "1.0.0";
     public string DisplayName => "PUnit HTML report";
-    public string Description => "Writes a self-contained punit-report.html (Gantt timeline + resource lane).";
+    public string Description => "Writes a self-contained freista-report.html (Gantt timeline + resource lane).";
 
     public Task<bool> IsEnabledAsync() => Task.FromResult(true);
 

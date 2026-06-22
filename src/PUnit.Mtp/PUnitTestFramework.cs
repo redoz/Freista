@@ -45,7 +45,7 @@ public class PUnitTestFramework :
     IExtension, ITestPlatformTestFramework, IDataProducer
 {
     /// <summary>Stable extension UID for PUnit's MTP test framework.</summary>
-    internal const string ExtensionUid = "punit.mtp.testframework";
+    internal const string ExtensionUid = "freista.mtp.testframework";
 
     private readonly ConcurrentDictionary<string, byte> sessions = new(StringComparer.Ordinal);
     private readonly IServiceProvider? _services;

@@ -7,7 +7,7 @@ namespace PUnit.Mtp.Test;
 public sealed class HtmlReportSinkTests : IDisposable
 {
     private static readonly DateTimeOffset T0 = new(2026, 6, 9, 12, 0, 0, TimeSpan.Zero);
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "punit-report-test-" + Guid.NewGuid().ToString("N"));
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "freista-report-test-" + Guid.NewGuid().ToString("N"));
 
     public HtmlReportSinkTests() => Directory.CreateDirectory(_dir);
 
@@ -38,7 +38,7 @@ public sealed class HtmlReportSinkTests : IDisposable
     [Fact]
     public async Task Writes_a_self_contained_html_file_on_run_finished()
     {
-        var path = Path.Combine(_dir, "punit-report.html");
+        var path = Path.Combine(_dir, "freista-report.html");
         var sink = new HtmlReport.HtmlReportSink(path, new TestTimeProviderUtc(T0));
         var def = Def();
 
@@ -55,7 +55,7 @@ public sealed class HtmlReportSinkTests : IDisposable
         var html = await File.ReadAllTextAsync(path);
         Assert.Contains("books", html, StringComparison.Ordinal); // scenario name present
         Assert.Contains("\"scenarioId\": \"scn\"", html, StringComparison.Ordinal); // JSON blob present
-        Assert.DoesNotContain("__PUNIT_REPORT_JSON__", html, StringComparison.Ordinal); // token replaced
+        Assert.DoesNotContain("__FREISTA_REPORT_JSON__", html, StringComparison.Ordinal); // token replaced
         Assert.Contains("PUnit run report", html, StringComparison.Ordinal); // restyled shell present
         Assert.Contains("id=\"chips\"", html, StringComparison.Ordinal); // dashboard header chips present
         Assert.Contains("data-theme", html, StringComparison.Ordinal); // theme override wiring present
@@ -64,7 +64,7 @@ public sealed class HtmlReportSinkTests : IDisposable
     [Fact]
     public async Task Empty_run_still_writes_a_valid_report()
     {
-        var path = Path.Combine(_dir, "punit-report.html");
+        var path = Path.Combine(_dir, "freista-report.html");
         var sink = new HtmlReport.HtmlReportSink(path, new TestTimeProviderUtc(T0));
 
         await sink.PublishAsync(new RunStarted(0));
@@ -92,7 +92,7 @@ public sealed class HtmlReportSinkTests : IDisposable
     [Fact]
     public async Task Report_embeds_the_serif_font_and_links_no_external_assets()
     {
-        var path = Path.Combine(_dir, "punit-report.html");
+        var path = Path.Combine(_dir, "freista-report.html");
         var sink = new HtmlReport.HtmlReportSink(path, new TestTimeProviderUtc(T0));
         var def = Def();
         await sink.PublishAsync(new RunStarted(1));
@@ -116,7 +116,7 @@ public sealed class HtmlReportSinkTests : IDisposable
     [Fact]
     public async Task Renders_the_activity_diagram_and_drops_the_old_overlay()
     {
-        var path = Path.Combine(_dir, "punit-report.html");
+        var path = Path.Combine(_dir, "freista-report.html");
         var sink = new HtmlReport.HtmlReportSink(path, new TestTimeProviderUtc(T0));
         var def = Def();
         await sink.PublishAsync(new RunStarted(1));

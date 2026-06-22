@@ -8,7 +8,7 @@ internal static class Descriptors
     private const string Category = "PUnit.Usage";
 
     public static readonly DiagnosticDescriptor UnhandledException = new(
-        "PUNIT000",
+        "FRST000",
         "Unhandled exception in PUnit generator",
         "PUnit failed to process a scenario: {0}",
         Category,
@@ -16,7 +16,7 @@ internal static class Descriptors
         isEnabledByDefault: true);
 
     public static readonly DiagnosticDescriptor MustBeAsyncTask = new(
-        "PUNIT001",
+        "FRST001",
         "Scenario method must be async Task or async ValueTask",
         "Scenario method '{0}' must be declared 'async Task' or 'async ValueTask'",
         Category,
@@ -24,7 +24,7 @@ internal static class Descriptors
         isEnabledByDefault: true);
 
     public static readonly DiagnosticDescriptor UnsupportedStatement = new(
-        "PUNIT002",
+        "FRST002",
         "Unsupported scenario statement",
         "Scenario statements must be an awaited phase-marker call (Given/When/Then, or any type implementing PUnit.IPhase), an awaited tuple, or an awaited array of such calls",
         Category,
@@ -32,7 +32,7 @@ internal static class Descriptors
         isEnabledByDefault: true);
 
     public static readonly DiagnosticDescriptor UnsupportedControlFlow = new(
-        "PUNIT003",
+        "FRST003",
         "Unsupported control flow in scenario",
         "Control flow is not supported in scenario bodies in this version",
         Category,
@@ -40,7 +40,7 @@ internal static class Descriptors
         isEnabledByDefault: true);
 
     public static readonly DiagnosticDescriptor NotADslCall = new(
-        "PUNIT004",
+        "FRST004",
         "Scenario step must be a phase-marker call",
         "Scenario steps must call a static extension member on a phase marker (Given/When/Then, or any type implementing PUnit.IPhase)",
         Category,
@@ -48,7 +48,7 @@ internal static class Descriptors
         isEnabledByDefault: true);
 
     public static readonly DiagnosticDescriptor InvalidReturnType = new(
-        "PUNIT005",
+        "FRST005",
         "DSL method has an unsupported return type",
         "DSL method '{0}' must return Task, Task<T>, ValueTask, or ValueTask<T>",
         Category,
@@ -56,7 +56,7 @@ internal static class Descriptors
         isEnabledByDefault: true);
 
     public static readonly DiagnosticDescriptor InvalidGroupElement = new(
-        "PUNIT006",
+        "FRST006",
         "Parallel group element must be a phase-marker call",
         "Every element of a tuple/array parallel group must be a phase-marker call (Given/When/Then, or any type implementing PUnit.IPhase)",
         Category,
@@ -64,7 +64,7 @@ internal static class Descriptors
         isEnabledByDefault: true);
 
     public static readonly DiagnosticDescriptor InvalidArgument = new(
-        "PUNIT007",
+        "FRST007",
         "Scenario step argument is not lowerable",
         "Argument '{0}' must be a prior step output, a scenario parameter, or a constant",
         Category,
@@ -72,7 +72,7 @@ internal static class Descriptors
         isEnabledByDefault: true);
 
     public static readonly DiagnosticDescriptor UnboundPlaceholder = new(
-        "PUNIT008",
+        "FRST008",
         "Display-name placeholder does not bind to a parameter",
         "Display-name placeholder '{0}' does not match any parameter of '{1}'",
         Category,
@@ -80,7 +80,7 @@ internal static class Descriptors
         isEnabledByDefault: true);
 
     public static readonly DiagnosticDescriptor MissingResourceRole = new(
-        "PUNIT009",
+        "FRST009",
         "Resource access must be declared",
         "Resource-typed {0} '{1}' must declare its access: [Reads], [Edits], or [Deletes] on a parameter, or [Creates], [Loads], or [Edits] on the return — there is no default",
         Category,
@@ -88,7 +88,7 @@ internal static class Descriptors
         isEnabledByDefault: true);
 
     public static readonly DiagnosticDescriptor InvalidLineageSubject = new(
-        "PUNIT010",
+        "FRST010",
         "Lineage subject must name a step subject",
         "'{0}' is not a valid lineage subject for step '{1}' — Subject must name an [Edits] parameter or the [Creates]/[Edits] return (use Subject.Return)",
         Category,

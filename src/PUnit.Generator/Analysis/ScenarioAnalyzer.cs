@@ -13,7 +13,7 @@ namespace PUnit.Generator.Analysis;
 
 /// <summary>
 /// Validates that <c>[Scenario]</c> methods stay inside the lowerable subset, and that
-/// <c>[StepName]</c> templates bind to parameters, reporting clear PUNIT diagnostics otherwise.
+/// <c>[StepName]</c> templates bind to parameters, reporting clear FRST diagnostics otherwise.
 /// </summary>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
