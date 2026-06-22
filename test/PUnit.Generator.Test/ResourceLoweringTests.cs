@@ -109,8 +109,8 @@ public class ResourceLoweringTests
         result.AssertCompiles();
         var results = await result.Definitions().Single().RunAsync();
 
-        // Step 2: When.BookWithLineage([References] User, [Consumes] Slot) [return: Creates] —
-        // effects appear in param-declaration order, then the return role.
+        // Step 2: When.BookWithLineage([References(Subject.Return)] User, [Consumes(Subject.Return)] Slot) [return: Creates] —
+        // effects appear in param-declaration order, then the return role (subjects don't affect effects).
         var book = results[2].Effects;
         Assert.Equal(3, book.Count);
 
