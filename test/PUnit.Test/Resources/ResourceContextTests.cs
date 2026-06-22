@@ -151,7 +151,7 @@ public class ResourceContextTests
     }
 
     [Fact]
-    public async Task Reference_with_a_subject_records_a_lineage_edge_and_the_effect()
+    public async Task Reference_with_a_subject_records_a_lineage_relation_and_the_effect()
     {
         var ctx = NewContext(out _);
         var subject = new User("appt@acme.com");   // stands in for the produced resource
@@ -163,14 +163,14 @@ public class ResourceContextTests
         Assert.Equal(LifecycleVerb.Reference, effect.Verb);
         Assert.Equal(new ResourceIdentity(typeof(User), "jane@acme.com"), effect.Identity);
 
-        var edge = Assert.Single(ctx.Edges);                // and a subject -> target edge
-        Assert.Equal(new ResourceIdentity(typeof(User), "appt@acme.com"), edge.Subject);
-        Assert.Equal(new ResourceIdentity(typeof(User), "jane@acme.com"), edge.Target);
-        Assert.Equal(LifecycleVerb.Reference, edge.Kind);
+        var relation = Assert.Single(ctx.Lineage);          // and a subject -> target relation
+        Assert.Equal(new ResourceIdentity(typeof(User), "appt@acme.com"), relation.Subject);
+        Assert.Equal(new ResourceIdentity(typeof(User), "jane@acme.com"), relation.Target);
+        Assert.Equal(LifecycleVerb.Reference, relation.Kind);
     }
 
     [Fact]
-    public async Task Consume_with_two_subjects_records_two_edges()
+    public async Task Consume_with_two_subjects_records_two_relations()
     {
         var ctx = NewContext(out _);
         var a = new User("a@acme.com");
@@ -179,22 +179,22 @@ public class ResourceContextTests
 
         await ctx.Consume(target, a, b);
 
-        Assert.Equal(2, ctx.Edges.Count);
-        Assert.All(ctx.Edges, e => Assert.Equal(LifecycleVerb.Consume, e.Kind));
-        Assert.All(ctx.Edges, e => Assert.Equal(new ResourceIdentity(typeof(User), "slot@acme.com"), e.Target));
-        Assert.Contains(ctx.Edges, e => e.Subject == new ResourceIdentity(typeof(User), "a@acme.com"));
-        Assert.Contains(ctx.Edges, e => e.Subject == new ResourceIdentity(typeof(User), "b@acme.com"));
+        Assert.Equal(2, ctx.Lineage.Count);
+        Assert.All(ctx.Lineage, e => Assert.Equal(LifecycleVerb.Consume, e.Kind));
+        Assert.All(ctx.Lineage, e => Assert.Equal(new ResourceIdentity(typeof(User), "slot@acme.com"), e.Target));
+        Assert.Contains(ctx.Lineage, e => e.Subject == new ResourceIdentity(typeof(User), "a@acme.com"));
+        Assert.Contains(ctx.Lineage, e => e.Subject == new ResourceIdentity(typeof(User), "b@acme.com"));
     }
 
     [Fact]
-    public async Task Reference_without_subjects_records_no_edge()
+    public async Task Reference_without_subjects_records_no_relation()
     {
         var ctx = NewContext(out _);
 
         await ctx.Reference(new User("jane@acme.com"));
 
         Assert.Single(ctx.Effects);
-        Assert.Empty(ctx.Edges);
+        Assert.Empty(ctx.Lineage);
     }
 
     sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider

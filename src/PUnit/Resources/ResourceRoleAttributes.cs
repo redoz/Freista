@@ -14,10 +14,9 @@ public sealed class ReadsAttribute : Attribute;
 
 /// <summary>
 /// Parameter role: the produced resource keeps a durable reference to this one (aggregation; shared).
-/// Records a <see cref="LifecycleVerb.Reference"/> effect and, paired with the step's
-/// <c>[Creates]</c>/<c>[Edits]</c> subject, a lineage edge subject→target in the report. The edge is
-/// attributed to the step's SINGLE created/edited resource; a step that creates or edits more than
-/// one resource forms no lineage edge for its referenced inputs.
+/// Records a <see cref="LifecycleVerb.Reference"/> effect and, for each subject named in
+/// <see cref="Subjects"/>, a lineage relation subject→target in the report. With no subjects the
+/// effect is recorded but no relation is formed (lineage is opt-in per target).
 /// </summary>
 [AttributeUsage(AttributeTargets.Parameter)]
 public sealed class ReferencesAttribute : Attribute
@@ -25,16 +24,15 @@ public sealed class ReferencesAttribute : Attribute
     /// <summary>Lineage subjects: each is a parameter name (via <c>nameof</c>) or <see cref="Subject.Return"/>.</summary>
     public ReferencesAttribute(params string[] subjects) => Subjects = subjects;
 
-    /// <summary>The produced/edited resources that hold this reference; empty ⇒ no lineage edge.</summary>
+    /// <summary>The produced/edited resources that hold this reference; empty ⇒ no lineage relation.</summary>
     public string[] Subjects { get; }
 }
 
 /// <summary>
 /// Parameter role: the step consumes/uses-up this resource into the one it produces (composition;
-/// shared in C1, exclusive in C2). Records a <see cref="LifecycleVerb.Consume"/> effect and, paired
-/// with the step's <c>[Creates]</c>/<c>[Edits]</c> subject, a lineage edge subject→target in the
-/// report. The edge is attributed to the step's SINGLE created/edited resource; a step that creates
-/// or edits more than one resource forms no lineage edge for its consumed inputs.
+/// shared in C1, exclusive in C2). Records a <see cref="LifecycleVerb.Consume"/> effect and, for each
+/// subject named in <see cref="Subjects"/>, a lineage relation subject→target in the report. With no
+/// subjects the effect is recorded but no relation is formed (lineage is opt-in per target).
 /// </summary>
 [AttributeUsage(AttributeTargets.Parameter)]
 public sealed class ConsumesAttribute : Attribute
@@ -42,7 +40,7 @@ public sealed class ConsumesAttribute : Attribute
     /// <summary>Lineage subjects: each is a parameter name (via <c>nameof</c>) or <see cref="Subject.Return"/>.</summary>
     public ConsumesAttribute(params string[] subjects) => Subjects = subjects;
 
-    /// <summary>The produced/edited resources that consume this resource; empty ⇒ no lineage edge.</summary>
+    /// <summary>The produced/edited resources that consume this resource; empty ⇒ no lineage relation.</summary>
     public string[] Subjects { get; }
 }
 

@@ -3,10 +3,10 @@ using PUnit;
 namespace PUnit.Model;
 
 /// <summary>
-/// One explicitly-declared lineage edge recorded by a step: the produced/edited
+/// One explicitly-declared lineage relation recorded by a step: the produced/edited
 /// <see cref="Subject"/> holds a <see cref="Kind"/> relationship to <see cref="Target"/>.
 /// </summary>
-public sealed record ResourceLineageEdge
+public sealed record ResourceLineageRelation
 {
     /// <summary>The produced/edited resource (a <c>[Creates]</c>/<c>[Edits]</c> subject).</summary>
     public required ResourceIdentity Subject { get; init; }

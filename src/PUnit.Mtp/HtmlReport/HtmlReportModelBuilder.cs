@@ -111,20 +111,20 @@ internal sealed class HtmlReportModelBuilder
                 })
                 .ToList();
 
-            // Lineage edges (2026-06-22 spec): edges are recorded explicitly at runtime from each
+            // Lineage relations (2026-06-22 spec): relations are recorded explicitly at runtime from each
             // [References]/[Consumes] target's declared subjects. Map them straight through; dedup by
             // (subject, target) across the scenario. No subject inference.
             var references = new List<ReportReference>();
-            var seenEdges = new HashSet<(string, string, string, string)>();
+            var seenRelations = new HashSet<(string, string, string, string)>();
             foreach (var r in ordered)
             {
-                foreach (var edge in r.Edges)
+                foreach (var relation in r.Lineage)
                 {
-                    var subjectType = edge.Subject.Type.Name;
-                    var subjectKey = edge.Subject.Key.ToString();
-                    var targetType = edge.Target.Type.Name;
-                    var targetKey = edge.Target.Key.ToString();
-                    if (!seenEdges.Add((subjectType, subjectKey, targetType, targetKey)))
+                    var subjectType = relation.Subject.Type.Name;
+                    var subjectKey = relation.Subject.Key.ToString();
+                    var targetType = relation.Target.Type.Name;
+                    var targetKey = relation.Target.Key.ToString();
+                    if (!seenRelations.Add((subjectType, subjectKey, targetType, targetKey)))
                     {
                         continue;
                     }
@@ -135,7 +135,7 @@ internal sealed class HtmlReportModelBuilder
                         SubjectKey = subjectKey,
                         TargetType = targetType,
                         TargetKey = targetKey,
-                        Kind = edge.Kind.ToString(),
+                        Kind = relation.Kind.ToString(),
                     });
                 }
             }

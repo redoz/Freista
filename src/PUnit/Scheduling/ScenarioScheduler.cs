@@ -289,7 +289,7 @@ public sealed class ScenarioScheduler
                     Logs = context.Logs,
                     Attachments = context.Attachments,
                     Effects = context.Resources.Effects,
-                    Edges = context.Resources.Edges,
+                    Lineage = context.Resources.Lineage,
                 },
                 output);
         }
@@ -318,7 +318,7 @@ public sealed class ScenarioScheduler
                     Logs = context.Logs,
                     Attachments = context.Attachments,
                     Effects = context.Resources.Effects,
-                    Edges = context.Resources.Edges,
+                    Lineage = context.Resources.Lineage,
                 },
                 null);
     }

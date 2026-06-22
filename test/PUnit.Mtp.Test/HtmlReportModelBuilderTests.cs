@@ -28,11 +28,11 @@ public class HtmlReportModelBuilderTests
 
     private static StepResult Result(ScenarioNode node, DateTimeOffset startedAt, double ms,
         StepStatus status = StepStatus.Passed, IReadOnlyList<ResourceEffect>? effects = null,
-        IReadOnlyList<string>? logs = null, IReadOnlyList<ResourceLineageEdge>? edges = null) => new()
+        IReadOnlyList<string>? logs = null, IReadOnlyList<ResourceLineageRelation>? lineage = null) => new()
     {
         Node = node, DisplayName = node.DisplayNameTemplate, Status = status,
         StartedAt = startedAt, Duration = TimeSpan.FromMilliseconds(ms),
-        Effects = effects ?? [], Logs = logs ?? [], Edges = edges ?? [],
+        Effects = effects ?? [], Logs = logs ?? [], Lineage = lineage ?? [],
     };
 
     [Fact]
@@ -117,7 +117,7 @@ public class HtmlReportModelBuilderTests
     }
 
     [Fact]
-    public void Recorded_edges_become_lineage_references()
+    public void Recorded_relations_become_lineage_references()
     {
         var n0 = Node(0, "c", "When", "When creating an appointment");
         var def = Def(n0);
@@ -127,10 +127,10 @@ public class HtmlReportModelBuilderTests
 
         var builder = new HtmlReport.HtmlReportModelBuilder();
         builder.OnScenarioStarted(def);
-        builder.OnStepFinished(def, Result(n0, T0, 10, edges:
+        builder.OnStepFinished(def, Result(n0, T0, 10, lineage:
         [
-            new ResourceLineageEdge { Subject = appointment, Target = patient, Kind = LifecycleVerb.Reference },
-            new ResourceLineageEdge { Subject = appointment, Target = slot, Kind = LifecycleVerb.Consume },
+            new ResourceLineageRelation { Subject = appointment, Target = patient, Kind = LifecycleVerb.Reference },
+            new ResourceLineageRelation { Subject = appointment, Target = slot, Kind = LifecycleVerb.Consume },
         ]));
 
         var scenario = Assert.Single(builder.Build("x").Scenarios);
@@ -149,7 +149,7 @@ public class HtmlReportModelBuilderTests
     }
 
     [Fact]
-    public void A_step_with_no_edges_yields_no_references()
+    public void A_step_with_no_relations_yields_no_references()
     {
         var n0 = Node(0, "t", "Then", "Then the appointment should exist");
         var def = Def(n0);
@@ -166,7 +166,7 @@ public class HtmlReportModelBuilderTests
     }
 
     [Fact]
-    public void Multiple_subjects_on_one_target_yield_multiple_edges()
+    public void Multiple_subjects_on_one_target_yield_multiple_relations()
     {
         var n0 = Node(0, "w", "When", "When transferring between accounts");
         var def = Def(n0);
@@ -176,10 +176,10 @@ public class HtmlReportModelBuilderTests
 
         var builder = new HtmlReport.HtmlReportModelBuilder();
         builder.OnScenarioStarted(def);
-        builder.OnStepFinished(def, Result(n0, T0, 10, edges:
+        builder.OnStepFinished(def, Result(n0, T0, 10, lineage:
         [
-            new ResourceLineageEdge { Subject = from, Target = bank, Kind = LifecycleVerb.Reference },
-            new ResourceLineageEdge { Subject = to, Target = bank, Kind = LifecycleVerb.Reference },
+            new ResourceLineageRelation { Subject = from, Target = bank, Kind = LifecycleVerb.Reference },
+            new ResourceLineageRelation { Subject = to, Target = bank, Kind = LifecycleVerb.Reference },
         ]));
 
         var scenario = Assert.Single(builder.Build("x").Scenarios);
@@ -189,7 +189,7 @@ public class HtmlReportModelBuilderTests
     }
 
     [Fact]
-    public void A_repeated_edge_is_deduped_across_steps()
+    public void A_repeated_relation_is_deduped_across_steps()
     {
         var n0 = Node(0, "a", "When", "When step a");
         var n1 = Node(1, "b", "When", "When step b");
@@ -199,10 +199,10 @@ public class HtmlReportModelBuilderTests
 
         var builder = new HtmlReport.HtmlReportModelBuilder();
         builder.OnScenarioStarted(def);
-        builder.OnStepFinished(def, Result(n0, T0, 10, edges:
-            [new ResourceLineageEdge { Subject = appointment, Target = patient, Kind = LifecycleVerb.Reference }]));
-        builder.OnStepFinished(def, Result(n1, T0, 10, edges:
-            [new ResourceLineageEdge { Subject = appointment, Target = patient, Kind = LifecycleVerb.Reference }]));
+        builder.OnStepFinished(def, Result(n0, T0, 10, lineage:
+            [new ResourceLineageRelation { Subject = appointment, Target = patient, Kind = LifecycleVerb.Reference }]));
+        builder.OnStepFinished(def, Result(n1, T0, 10, lineage:
+            [new ResourceLineageRelation { Subject = appointment, Target = patient, Kind = LifecycleVerb.Reference }]));
 
         var scenario = Assert.Single(builder.Build("x").Scenarios);
         Assert.Single(scenario.References);

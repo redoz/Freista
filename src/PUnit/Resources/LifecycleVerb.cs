@@ -19,11 +19,13 @@ public enum LifecycleVerb
     Delete,
 
     /// <summary>References an independently-living resource — a durable pointer the produced
-    /// resource keeps (aggregation; shared). Carries a lineage edge in the report.</summary>
+    /// resource keeps (aggregation; shared). May carry a lineage relation in the report (opt-in via
+    /// the target's declared subjects).</summary>
     Reference,
 
     /// <summary>Consumes/uses-up a resource into the one the step produces (composition; shared in
-    /// C1, exclusive in C2). Carries a lineage edge in the report.</summary>
+    /// C1, exclusive in C2). May carry a lineage relation in the report (opt-in via the target's
+    /// declared subjects).</summary>
     Consume,
 }
 

@@ -36,6 +36,6 @@ public sealed class StepResult
     /// <summary>Resource effects (lifecycle acquires) the step recorded, in call order.</summary>
     public IReadOnlyList<ResourceEffect> Effects { get; init; } = [];
 
-    /// <summary>Lineage edges the step recorded from [References]/[Consumes] subjects.</summary>
-    public IReadOnlyList<ResourceLineageEdge> Edges { get; init; } = [];
+    /// <summary>Lineage relations the step recorded from [References]/[Consumes] subjects.</summary>
+    public IReadOnlyList<ResourceLineageRelation> Lineage { get; init; } = [];
 }
