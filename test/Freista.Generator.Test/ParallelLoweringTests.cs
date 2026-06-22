@@ -1,0 +1,92 @@
+using Freista.Model;
+using Xunit;
+
+namespace Freista.Generator.Test;
+
+/// <summary>Tuple, explicit-array, and LINQ <c>.ToArray()</c> forms lower into parallel sibling groups.</summary>
+public class ParallelLoweringTests
+{
+    [Fact]
+    public void Tuple_elements_become_parallel_siblings()
+    {
+        var result = GeneratorHarness.Run(SampleSources.Dsl + SampleSources.TupleScenario);
+        result.AssertCompiles();
+        var def = result.Definitions().Single();
+
+        Assert.Equal(5, def.Nodes.Count);
+        Assert.Empty(def.Nodes[0].DependsOn);                 // DatabaseIsClean
+        Assert.Equal([0], def.Nodes[1].DependsOn);             // PatientExists
+        Assert.Equal([0], def.Nodes[2].DependsOn);             // AvailableSlot
+        Assert.Equal([1, 2], def.Nodes[3].DependsOn);          // CreateAppointment joins both
+
+        Assert.NotNull(def.Nodes[1].GroupId);
+        Assert.Equal(def.Nodes[1].GroupId, def.Nodes[2].GroupId);
+        Assert.NotEqual(def.Nodes[1].GroupId, def.Nodes[3].GroupId);
+    }
+
+    [Fact]
+    public async Task Tuple_scenario_runs()
+    {
+        var result = GeneratorHarness.Run(SampleSources.Dsl + SampleSources.TupleScenario);
+        result.AssertCompiles();
+
+        var results = await result.Definitions().Single().RunAsync();
+
+        Assert.All(results, r => Assert.Equal(StepStatus.Passed, r.Status));
+    }
+
+    [Fact]
+    public void Array_elements_become_siblings_and_consumer_rebuilds_array()
+    {
+        var result = GeneratorHarness.Run(SampleSources.Dsl + SampleSources.ArrayScenario);
+        result.AssertCompiles();
+        var def = result.Definitions().Single();
+
+        Assert.Equal(4, def.Nodes.Count);
+        Assert.Empty(def.Nodes[0].DependsOn);                 // UserExists alice
+        Assert.Empty(def.Nodes[1].DependsOn);                 // UserExists bob
+        Assert.Equal(def.Nodes[0].GroupId, def.Nodes[1].GroupId);
+        Assert.Equal([0, 1], def.Nodes[2].DependsOn);          // ImportUsers consumes the array
+        Assert.Equal([0, 1, 2], def.Nodes[3].DependsOn);       // ImportShouldContainUsers (import + array)
+    }
+
+    [Fact]
+    public async Task Array_scenario_runs_and_rebuilds_the_array()
+    {
+        var result = GeneratorHarness.Run(SampleSources.Dsl + SampleSources.ArrayScenario);
+        result.AssertCompiles();
+
+        var results = await result.Definitions().Single().RunAsync();
+
+        // ImportUsers asserts users.Length == 2 implicitly by returning Import(Count); all pass means
+        // the array was reconstructed from both sibling outputs.
+        Assert.All(results, r => Assert.Equal(StepStatus.Passed, r.Status));
+    }
+
+    [Fact]
+    public void Linq_range_select_toarray_unrolls_to_one_node_per_element()
+    {
+        var result = GeneratorHarness.Run(SampleSources.Dsl + SampleSources.LinqScenario);
+        result.AssertCompiles();
+        var def = result.Definitions().Single();
+
+        Assert.Equal(5, def.Nodes.Count);                      // 3 UserExists + ImportUsers + assertion
+        Assert.Empty(def.Nodes[0].DependsOn);
+        Assert.Empty(def.Nodes[1].DependsOn);
+        Assert.Empty(def.Nodes[2].DependsOn);
+        Assert.Equal([0, 1, 2], def.Nodes[3].DependsOn);
+        Assert.Equal(def.Nodes[0].GroupId, def.Nodes[2].GroupId);
+    }
+
+    [Fact]
+    public async Task Linq_scenario_runs()
+    {
+        var result = GeneratorHarness.Run(SampleSources.Dsl + SampleSources.LinqScenario);
+        result.AssertCompiles();
+
+        var results = await result.Definitions().Single().RunAsync();
+
+        Assert.Equal(5, results.Count);
+        Assert.All(results, r => Assert.Equal(StepStatus.Passed, r.Status));
+    }
+}

@@ -10,4 +10,4 @@ Colocated repo (`.jj/` + `.git/`). Read-only `git` (`status`/`log`/`diff`) is fi
 No `Co-Authored-By` / tooling trailers.
 
 ## Project
-`PUnit`: a Microsoft.Testing.Platform test framework (Given/When/Then DSL, Roslyn source-gen, DAG parallel scheduler, object-flow tracking, self-contained HTML report). Build/test via `dotnet` on `PUnit.slnx`.
+`Freista`: a Microsoft.Testing.Platform test framework (Given/When/Then DSL, Roslyn source-gen, DAG parallel scheduler, object-flow tracking, self-contained HTML report). Build/test via `dotnet` on `Freista.slnx`.

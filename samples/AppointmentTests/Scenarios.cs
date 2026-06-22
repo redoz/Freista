@@ -1,4 +1,4 @@
-using PUnit;
+using Freista;
 using System.ComponentModel;
 
 namespace AppointmentTests;

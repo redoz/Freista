@@ -23,14 +23,14 @@
       5.6.0; 5.3.0 is the latest published Microsoft.CodeAnalysis.CSharp and is <= the
       host compiler, so the generator loads cleanly (a generator can never reference a
       newer Roslyn than the host). Older .NET 10 SDKs that shipped Roslyn 5.0-5.2 can be
-      supported later by adding a lower PUnit.Generator.Roslyn<NN> variant.
+      supported later by adding a lower Freista.Generator.Roslyn<NN> variant.
     -->
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.3.0" />
 
     <!-- Test infrastructure. xunit.v3 is pinned to match xunit.v3.extensibility.core. -->
     <PackageVersion Include="xunit.v3" Version="3.2.2" />
     <PackageVersion Include="xunit.v3.mtp-v2" Version="3.2.2" />
-    <!-- Assertions only (Assert.Equal/NotNull/...) for PUnit.Mtp consumers: scenario step bodies keep
+    <!-- Assertions only (Assert.Equal/NotNull/...) for Freista.Mtp consumers: scenario step bodies keep
          `using Xunit;` verbatim. Pinned to match the xunit.v3 line above. -->
     <PackageVersion Include="xunit.v3.assert" Version="3.2.2" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />

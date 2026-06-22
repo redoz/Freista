@@ -1,11 +1,11 @@
-# PUnit
+# Freista
 
 > Scenario tests for xUnit v3 — Given/When/Then steps, reported as individual tests, wired into a fork/join dependency graph.
 
-PUnit lets you write integration-style scenario tests as readable `Given` / `When` / `Then` C# and have each business step show up as its own xUnit test: sequential by default, explicitly parallel where you ask for it, with typed state flowing between steps and dependent steps auto-skipped after a failure.
+Freista lets you write integration-style scenario tests as readable `Given` / `When` / `Then` C# and have each business step show up as its own xUnit test: sequential by default, explicitly parallel where you ask for it, with typed state flowing between steps and dependent steps auto-skipped after a failure.
 
 ```csharp
-using PUnit;
+using Freista;
 
 [Scenario("customer books an appointment")]
 public static async Task Booking()
@@ -57,9 +57,9 @@ independent ready branches keep running.
 
 | Project | What it is |
 | --- | --- |
-| `src/PUnit` | Runner-neutral core: phase markers, parallel awaiters, `ScenarioContext`, the graph model, and the DAG scheduler. No xUnit dependency. |
-| `src/PUnit.Generator` | Roslyn incremental generator + analyzer (FRST000–010). netstandard2.0. |
-| `src/PUnit.Mtp` | Microsoft.Testing.Platform test framework: `[Scenario]`, discovery, run loop, per-step node reporter. |
+| `src/Freista` | Runner-neutral core: phase markers, parallel awaiters, `ScenarioContext`, the graph model, and the DAG scheduler. No xUnit dependency. |
+| `src/Freista.Generator` | Roslyn incremental generator + analyzer (FRST000–010). netstandard2.0. |
+| `src/Freista.Mtp` | Microsoft.Testing.Platform test framework: `[Scenario]`, discovery, run loop, per-step node reporter. |
 | `samples/AppointmentTests` | End-to-end sample (linear / tuple / array / LINQ). |
 | `test/*` | Scheduler tests (xUnit-free), generator/analyzer tests (behavioral + Verify snapshots), and MTP acceptance tests. |
 

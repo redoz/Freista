@@ -1,5 +1,5 @@
 using System.Globalization;
-using PUnit;
+using Freista;
 using Xunit;
 
 namespace AppointmentTests;

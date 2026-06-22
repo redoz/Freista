@@ -1,0 +1,22 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Freista/Freista.csproj" />
+    <Project Path="src/Freista.Mtp/Freista.Mtp.csproj" />
+    <Project Path="src/Freista.Generator/Freista.Generator.csproj" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="test/Freista.Test/Freista.Test.csproj" />
+    <Project Path="test/Freista.Generator.Test/Freista.Generator.Test.csproj" />
+    <Project Path="test/Freista.Mtp.Test/Freista.Mtp.Test.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/AppointmentTests/AppointmentTests.csproj" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path=".gitignore" />
+    <File Path="README.md" />
+    <File Path="docs/scenario-graph-extension-design.md" />
+  </Folder>
+</Solution>

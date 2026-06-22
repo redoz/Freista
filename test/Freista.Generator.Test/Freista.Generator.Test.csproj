@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <!-- Generator + analyzer tests. Drive the generator over input source with Roslyn and
+       snapshot the generated manifest/executor and diagnostics via Verify. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3.mtp-v2" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Verify.XunitV3" />
+    <PackageReference Include="Verify.SourceGenerators" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+  </ItemGroup>
+
+  <!-- The generator is referenced as a normal library so tests can construct it directly
+       and run it through a CSharpGeneratorDriver. Freista (core) is referenced so input
+       compilations can resolve scenario/DSL types. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Freista.Generator\Freista.Generator.csproj" />
+    <ProjectReference Include="..\..\src\Freista\Freista.csproj" />
+    <!-- Freista.Mtp provides the go-forward [Scenario] attribute (test input compilations need it to
+         resolve [Scenario]) AND the bootstrap the generated entry point calls; reference it so a
+         compile test can prove the emitted Program.cs binds to the real RunAsync signature. -->
+    <ProjectReference Include="..\..\src\Freista.Mtp\Freista.Mtp.csproj" />
+  </ItemGroup>
+
+</Project>

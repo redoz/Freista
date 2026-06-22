@@ -1,0 +1,73 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <!-- This is the FRAMEWORK library, not a runnable test app. The Microsoft.Testing.Platform
+         package defaults IsTestingPlatformApplication to true, which would make `dotnet test` (under
+         the repo's MTP runner in global.json) try to run this library as a test executable and fail
+         with "OutputType is 'Library'". Consumers (the sample, generated entry points) are the
+         runnable apps; opt this library out. -->
+    <IsTestingPlatformApplication>false</IsTestingPlatformApplication>
+    <Description>
+      Microsoft.Testing.Platform test framework for Freista: Freista's own ITestFramework that
+      discovers, runs, and reports each scenario step as a first-class MTP test node, plus a
+      public bootstrap (RunAsync) for the generated entry point and the escape-hatch API.
+    </Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Freista\Freista.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Freista.Mtp.Test" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Testing.Platform" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="HtmlReport\report-template.html" />
+  </ItemGroup>
+
+  <!--
+    Packaging: `dotnet add package Freista.Mtp` should bring the generator along. We reference the
+    generator only to order its build (its assembly is not referenced and never becomes a package
+    dependency), then drop its dll into the package's analyzers path. The Freista core reference
+    becomes an ordinary package dependency. Add a higher Roslyn variant later by recompiling the
+    generator's sources against it (see Directory.Build.props) and packing it under its own folder.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Freista.Generator\Freista.Generator.csproj"
+                      ReferenceOutputAssembly="false" PrivateAssets="all" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);_IncludeFreistaGenerator</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+
+  <!--
+    Ship MSBuild props/targets so a consuming test project gets the FreistaGenerateProgram default,
+    exposes it to the generator (CompilerVisibleProperty), and suppresses the SDK's own entry points
+    when Freista emits one. buildTransitive flows these through project-to-project references too.
+  -->
+  <ItemGroup>
+    <None Include="buildTransitive\Freista.Mtp.props" Pack="true" PackagePath="buildTransitive\" />
+    <None Include="buildTransitive\Freista.Mtp.targets" Pack="true" PackagePath="buildTransitive\" />
+  </ItemGroup>
+
+  <Target Name="_IncludeFreistaGenerator">
+    <!-- Pin the analyzer TFM so this net10.0 project's TargetFramework doesn't flow to the
+         netstandard2.0 generator via the MSBuild task's inherited global properties. -->
+    <MSBuild Projects="..\Freista.Generator\Freista.Generator.csproj" Targets="GetTargetPath"
+             Properties="TargetFramework=netstandard2.0;Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="_FreistaGeneratorPath" />
+    </MSBuild>
+    <ItemGroup>
+      <TfmSpecificPackageFile Include="@(_FreistaGeneratorPath)"
+                              PackagePath="analyzers/dotnet/roslyn$(FreistaRoslynVersion)/cs" />
+    </ItemGroup>
+  </Target>
+
+</Project>
