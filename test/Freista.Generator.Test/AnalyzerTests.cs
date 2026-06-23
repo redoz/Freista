@@ -195,7 +195,7 @@ public class AnalyzerTests
     [Fact]
     public async Task FRST009_unannotated_resource_parameter()
     {
-        // A resource-typed parameter with no [Reads]/[Edits]/[Deletes] role — there is no default.
+        // A resource-typed parameter with no [Read]/[Edited]/[Deleted] role — there is no default.
         var source =
             """
             using System.Threading.Tasks;

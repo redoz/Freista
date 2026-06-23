@@ -74,7 +74,7 @@ public sealed record ReportResourceEvent
 }
 
 /// <summary>One resource→resource lineage edge in the report, mapped from a step's recorded
-/// [References]/[Consumes] subjects. Endpoints are (Type, Key) pairs matching <see cref="ReportResource"/>.</summary>
+/// producer References/Consumes targets. Endpoints are (Type, Key) pairs matching <see cref="ReportResource"/>.</summary>
 public sealed record ReportReference
 {
     public required string SubjectType { get; init; }

@@ -8,15 +8,18 @@ internal readonly record struct SourceSpan(
     string File, int StartLine, int StartChar, int EndLine, int EndChar);
 
 /// <summary>
-/// A single resource role lowered from a <c>[Creates]/[Loads]/[Reads]/[Edits]/[Deletes]</c> attribute
-/// on a step's parameter or return value. <see cref="Verb"/> is the runtime <c>ResourceContext</c>
-/// method name (Read/Load/Create/Edit/Delete); <see cref="Expression"/> is the rewritten argument
-/// expression (in terms of <c>__inputs</c>) for a parameter role, or <c>__r</c> for a return role.
+/// A single resource role lowered from a <c>[Created]/[Loaded]/[Read]/[Edited]/[Deleted]</c> attribute
+/// on a step's parameter or return value, or a <c>Reference</c>/<c>Consume</c> claim synthesized from a
+/// producer's <c>References</c>/<c>Consumes</c> lineage. <see cref="Verb"/> is the runtime
+/// <c>ResourceContext</c> method name (Read/Load/Create/Edit/Delete/Reference/Consume);
+/// <see cref="Expression"/> is the rewritten argument expression (in terms of <c>__inputs</c>) for a
+/// parameter role, the lineage target's expression for a synthesized claim, or <c>__r</c> for a return role.
 /// </summary>
 internal readonly record struct ResourceRoleClaim(string Verb, string Expression, bool IsReturn)
 {
-    /// <summary>Instance expressions for the lineage subjects (a parameter's rewritten argument, or
-    /// <c>__r</c>). Empty for non-lineage roles. Emitted as extra arguments to Reference/Consume.</summary>
+    /// <summary>For a synthesized Reference/Consume claim, the producing subject's instance expression
+    /// (a parameter's rewritten argument, or <c>__r</c>) — emitted as the trailing argument so the
+    /// runtime records subject→target. Empty for plain role claims.</summary>
     public IReadOnlyList<string> SubjectExpressions { get; init; } = [];
 }
 

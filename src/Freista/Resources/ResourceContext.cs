@@ -46,7 +46,7 @@ public sealed class ResourceContext
         get { lock (_lock) { return _effects.ToArray(); } }
     }
 
-    /// <summary>Lineage relations recorded by this step's [References]/[Consumes] subjects.</summary>
+    /// <summary>Lineage relations recorded by this step's producer-side References/Consumes targets.</summary>
     public IReadOnlyList<ResourceLineageRelation> Lineage
     {
         get { lock (_lock) { return _lineage.ToArray(); } }

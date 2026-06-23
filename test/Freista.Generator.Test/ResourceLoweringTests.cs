@@ -4,7 +4,7 @@ using Xunit;
 namespace Freista.Generator.Test;
 
 /// <summary>
-/// The generator lowers resource role attributes ([Creates]/[Edits]/[Reads] on a step's return value
+/// The generator lowers resource role attributes ([Created]/[Edited]/[Read] on a step's return value
 /// or parameters) into <c>ctx.Resources.*</c> verb calls, so a step's recorded effect stream reflects
 /// its declared roles. A role-free scenario must emit no resource calls at all.
 /// </summary>
@@ -22,7 +22,7 @@ public class ResourceLoweringTests
     {
         var results = await RunResourceScenario();
 
-        // Given.UserExists → [return: Creates]
+        // Given.UserExists → [return: Created]
         var effect = Assert.Single(results[0].Effects);
         Assert.Equal(LifecycleVerb.Create, effect.Verb);
         Assert.Equal("User:jane@acme.com", effect.Identity.ToString());
@@ -33,7 +33,7 @@ public class ResourceLoweringTests
     {
         var results = await RunResourceScenario();
 
-        // When.Suspend([Edits] User) → [return: Edits]; both resolve to the same identity ⇒ one effect.
+        // When.Suspend([Edited] User) → [return: Edited]; both resolve to the same identity ⇒ one effect.
         var effect = Assert.Single(results[1].Effects);
         Assert.Equal(LifecycleVerb.Edit, effect.Verb);
         Assert.Equal("User:jane@acme.com", effect.Identity.ToString());
@@ -44,7 +44,7 @@ public class ResourceLoweringTests
     {
         var results = await RunResourceScenario();
 
-        // Then.CannotSignIn([Reads] User)
+        // Then.CannotSignIn([Read] User)
         var effect = Assert.Single(results[2].Effects);
         Assert.Equal(LifecycleVerb.Read, effect.Verb);
         Assert.Equal("User:jane@acme.com", effect.Identity.ToString());
@@ -65,17 +65,17 @@ public class ResourceLoweringTests
         result.AssertCompiles();
         var results = await result.Definitions().Single().RunAsync();
 
-        // Step 0: Given.UserExists → single [return: Creates] on User:jane@acme.com.
+        // Step 0: Given.UserExists → single [return: Created] on User:jane@acme.com.
         var userCreate = Assert.Single(results[0].Effects);
         Assert.Equal(LifecycleVerb.Create, userCreate.Verb);
         Assert.Equal("User:jane@acme.com", userCreate.Identity.ToString());
 
-        // Step 1: Given.SlotExists → single [return: Creates] on Slot:1.
+        // Step 1: Given.SlotExists → single [return: Created] on Slot:1.
         var slotCreate = Assert.Single(results[1].Effects);
         Assert.Equal(LifecycleVerb.Create, slotCreate.Verb);
         Assert.Equal("Slot:1", slotCreate.Identity.ToString());
 
-        // Step 2: When.Book([Reads] User, [Edits] Slot) [return: Creates] → effects must appear in
+        // Step 2: When.Book([Read] User, [Edited] Slot) [return: Created] → effects must appear in
         // exactly this order: each role-bearing parameter in declaration order, THEN the return role.
         var book = results[2].Effects;
         Assert.Equal(3, book.Count);

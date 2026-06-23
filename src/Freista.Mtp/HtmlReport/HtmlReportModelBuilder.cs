@@ -112,8 +112,8 @@ internal sealed class HtmlReportModelBuilder
                 .ToList();
 
             // Lineage relations (2026-06-22 spec): relations are recorded explicitly at runtime from each
-            // [References]/[Consumes] target's declared subjects. Map them straight through; dedup by
-            // (subject, target) across the scenario. No subject inference.
+            // producer's [Created]/[Loaded]/[Edited] References/Consumes targets. Map them straight
+            // through; dedup by (subject, target) across the scenario. No subject inference.
             var references = new List<ReportReference>();
             var seenRelations = new HashSet<(string, string, string, string)>();
             foreach (var r in ordered)

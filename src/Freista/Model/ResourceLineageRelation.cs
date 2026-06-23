@@ -8,7 +8,7 @@ namespace Freista.Model;
 /// </summary>
 public sealed record ResourceLineageRelation
 {
-    /// <summary>The produced/edited resource (a <c>[Creates]</c>/<c>[Edits]</c> subject).</summary>
+    /// <summary>The produced/edited resource (a <c>[Created]</c>/<c>[Loaded]</c>/<c>[Edited]</c> subject).</summary>
     public required ResourceIdentity Subject { get; init; }
 
     /// <summary>The referenced/consumed resource.</summary>

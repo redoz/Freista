@@ -7,8 +7,9 @@ namespace Freista.Generator.Lowering;
 /// <summary>Reads Freista's <c>[Scenario]</c> / <c>[StepName]</c> attribute data off method symbols.</summary>
 internal static class AttributeReader
 {
-    /// <summary>The reserved <c>[References]</c>/<c>[Consumes]</c> subject token meaning the step's return.
-    /// MUST stay identical to <c>Freista.Subject.Return</c> (separate assembly).</summary>
+    /// <summary>The reserved lineage-target token meaning the step's own return value, used in a
+    /// producer's <c>References</c>/<c>Consumes</c>. MUST stay identical to <c>Freista.Subject.Return</c>
+    /// (separate assembly).</summary>
     public const string ReturnSubject = "<return>";
 
     /// <summary>
