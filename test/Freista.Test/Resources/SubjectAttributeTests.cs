@@ -6,22 +6,28 @@ namespace Freista.Test.Resources;
 public class SubjectAttributeTests
 {
     [Fact]
-    public void References_captures_subjects_and_defaults_to_empty()
+    public void Created_lineage_properties_default_to_empty()
     {
-        Assert.Equal(["acc", "<return>"], new ReferencesAttribute("acc", Subject.Return).Subjects);
-        Assert.Empty(new ReferencesAttribute().Subjects);
+        Assert.Empty(new CreatedAttribute().References);
+        Assert.Empty(new CreatedAttribute().Consumes);
     }
 
     [Fact]
-    public void Consumes_captures_subjects_and_defaults_to_empty()
+    public void Created_captures_references_and_consumes()
     {
-        Assert.Equal(["from"], new ConsumesAttribute("from").Subjects);
-        Assert.Empty(new ConsumesAttribute().Subjects);
+        var attr = new CreatedAttribute { References = ["user", Subject.Return], Consumes = ["slot"] };
+        Assert.Equal(["user", "<return>"], attr.References);
+        Assert.Equal(["slot"], attr.Consumes);
     }
 
     [Fact]
-    public void Subject_Return_is_the_reserved_token()
+    public void Edited_carries_the_same_lineage_surface()
     {
-        Assert.Equal("<return>", Subject.Return);
+        var attr = new EditedAttribute { References = ["who"] };
+        Assert.Equal(["who"], attr.References);
+        Assert.Empty(attr.Consumes);
     }
+
+    [Fact]
+    public void Subject_Return_is_the_reserved_token() => Assert.Equal("<return>", Subject.Return);
 }

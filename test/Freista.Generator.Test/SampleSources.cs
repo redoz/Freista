@@ -184,7 +184,7 @@ public static class SampleSources
         """;
 
     // A resource-aware DSL: User/Slot/Appointment are CRTP IResource<> records with KeyFor, and the
-    // steps carry role attributes ([Creates]/[Edits]/[Reads] on the return value or parameters) the
+    // steps carry role attributes ([Created]/[Edited]/[Read] on the return value or parameters) the
     // generator lowers into ctx.Resources.* calls.
     public const string ResourceDsl =
         """
@@ -213,7 +213,7 @@ public static class SampleSources
             extension(Given)
             {
                 [StepName("user {email} exists")]
-                [return: Creates]
+                [return: Created]
                 public static async Task<User> UserExists(string email)
                 {
                     await Task.Yield();
@@ -221,7 +221,7 @@ public static class SampleSources
                 }
 
                 [StepName("a slot exists")]
-                [return: Creates]
+                [return: Created]
                 public static async Task<Slot> SlotExists()
                 {
                     await Task.Yield();
@@ -232,24 +232,24 @@ public static class SampleSources
             extension(When)
             {
                 [StepName("suspending the user")]
-                [return: Edits]
-                public static async Task<User> Suspend([Edits] User user)
+                [return: Edited]
+                public static async Task<User> Suspend([Edited] User user)
                 {
                     await Task.Yield();
                     return user;
                 }
 
                 [StepName("booking a slot")]
-                [return: Creates]
-                public static async Task<Appointment> Book([Reads] User user, [Edits] Slot slot)
+                [return: Created]
+                public static async Task<Appointment> Book([Read] User user, [Edited] Slot slot)
                 {
                     await Task.Yield();
                     return new Appointment(user, slot);
                 }
 
                 [StepName("booking with lineage")]
-                [return: Creates]
-                public static async Task<Appointment> BookWithLineage([References(Subject.Return)] User user, [Consumes(Subject.Return)] Slot slot)
+                [return: Created(References = [nameof(user)], Consumes = [nameof(slot)])]
+                public static async Task<Appointment> BookWithLineage(User user, Slot slot)
                 {
                     await Task.Yield();
                     return new Appointment(user, slot);
@@ -259,7 +259,7 @@ public static class SampleSources
             extension(Then)
             {
                 [StepName("the user cannot sign in")]
-                public static Task CannotSignIn([Reads] User user) => Task.CompletedTask;
+                public static Task CannotSignIn([Read] User user) => Task.CompletedTask;
             }
         }
         """;
@@ -281,7 +281,7 @@ public static class SampleSources
         """;
 
     // Scenario appended to ResourceDsl: exercises When.Book's multi-role parameter list
-    // ([Reads] User, [Edits] Slot) plus [return: Creates], locking in param-loop ordering
+    // ([Read] User, [Edited] Slot) plus [return: Created], locking in param-loop ordering
     // and param-before-return emit order.
     public const string BookingScenario =
         """
@@ -298,8 +298,9 @@ public static class SampleSources
         }
         """;
 
-    // Scenario appended to ResourceDsl: exercises the lineage roles ([References] User, [Consumes]
-    // Slot) plus [return: Creates], proving they lower to shared Reference/Consume effects.
+    // Scenario appended to ResourceDsl: exercises producer-side lineage — [return: Created(References =
+    // [nameof(user)], Consumes = [nameof(slot)])] — proving the named targets lower to shared
+    // Reference/Consume effects plus lineage relations from the created Appointment.
     public const string LineageScenario =
         """
 

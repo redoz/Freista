@@ -285,7 +285,7 @@ public class AnalyzerTests
         """;
 
     [Fact]
-    public async Task FRST010_unknown_subject_name()
+    public async Task FRST010_unknown_target_name()
     {
         var source = LineageDsl +
             """
@@ -294,7 +294,8 @@ public class AnalyzerTests
                 extension(When)
                 {
                     [StepName("transfer")]
-                    public static async Task Transfer([Edits] Account acc, [References("ghost")] User who) { await Task.Yield(); }
+                    [return: Created(References = [nameof(who), "ghost"])]
+                    public static async Task<Account> Transfer(User who) { await Task.Yield(); return new Account("a"); }
                 }
             }
             """;
@@ -303,26 +304,9 @@ public class AnalyzerTests
     }
 
     [Fact]
-    public async Task FRST010_subject_names_a_non_subject_role()
+    public async Task FRST010_return_target_without_a_subject_return()
     {
-        var source = LineageDsl +
-            """
-            public static class BadDsl
-            {
-                extension(When)
-                {
-                    [StepName("transfer")]
-                    public static async Task Transfer([Reads] Account acc, [References(nameof(acc))] User who) { await Task.Yield(); }
-                }
-            }
-            """;
-
-        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "FRST010");
-    }
-
-    [Fact]
-    public async Task FRST010_return_sentinel_without_a_creating_return()
-    {
+        // An [Edited] parameter naming Subject.Return as a target, but the step yields no resource.
         var source = LineageDsl +
             """
             public static class BadDsl
@@ -330,7 +314,7 @@ public class AnalyzerTests
                 extension(When)
                 {
                     [StepName("look up")]
-                    public static async Task LookUp([References(Subject.Return)] User who) { await Task.Yield(); }
+                    public static async Task LookUp([Edited(References = [Subject.Return])] Account acc) { await Task.Yield(); }
                 }
             }
             """;
@@ -339,7 +323,27 @@ public class AnalyzerTests
     }
 
     [Fact]
-    public async Task FRST010_clean_for_valid_subjects()
+    public async Task FRST010_self_reference()
+    {
+        // A produced subject may not name itself as a lineage target.
+        var source = LineageDsl +
+            """
+            public static class BadDsl
+            {
+                extension(When)
+                {
+                    [StepName("clone")]
+                    [return: Created(References = [Subject.Return])]
+                    public static async Task<Account> Clone() { await Task.Yield(); return new Account("a"); }
+                }
+            }
+            """;
+
+        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "FRST010");
+    }
+
+    [Fact]
+    public async Task FRST010_clean_for_valid_targets()
     {
         var source = LineageDsl +
             """
@@ -348,14 +352,11 @@ public class AnalyzerTests
                 extension(When)
                 {
                     [StepName("assign")]
-                    public static async Task Assign([Edits] Account acc, [References(nameof(acc))] User who) { await Task.Yield(); }
+                    public static async Task Assign([Edited(References = [nameof(who)])] Account acc, User who) { await Task.Yield(); }
 
                     [StepName("create")]
-                    [return: Creates]
-                    public static async Task<Account> Create([References(Subject.Return)] User who) { await Task.Yield(); return new Account("a"); }
-
-                    [StepName("note")]
-                    public static async Task Note([References] User who) { await Task.Yield(); }
+                    [return: Created(References = [nameof(who)])]
+                    public static async Task<Account> Create(User who) { await Task.Yield(); return new Account("a"); }
                 }
             }
             """;

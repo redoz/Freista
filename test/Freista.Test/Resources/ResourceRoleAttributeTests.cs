@@ -15,23 +15,23 @@ public class ResourceRoleAttributeTests
     [Fact]
     public void Return_roles_allow_return_and_method()
     {
-        Assert.True(Targets<CreatesAttribute>().HasFlag(AttributeTargets.ReturnValue));
-        Assert.True(Targets<CreatesAttribute>().HasFlag(AttributeTargets.Method));
-        Assert.True(Targets<LoadsAttribute>().HasFlag(AttributeTargets.ReturnValue));
-        Assert.True(Targets<LoadsAttribute>().HasFlag(AttributeTargets.Method));
+        Assert.True(Targets<CreatedAttribute>().HasFlag(AttributeTargets.ReturnValue));
+        Assert.True(Targets<CreatedAttribute>().HasFlag(AttributeTargets.Method));
+        Assert.True(Targets<LoadedAttribute>().HasFlag(AttributeTargets.ReturnValue));
+        Assert.True(Targets<LoadedAttribute>().HasFlag(AttributeTargets.Method));
     }
 
     [Fact]
     public void Parameter_roles_allow_parameters()
     {
-        Assert.True(Targets<ReadsAttribute>().HasFlag(AttributeTargets.Parameter));
-        Assert.True(Targets<DeletesAttribute>().HasFlag(AttributeTargets.Parameter));
+        Assert.True(Targets<ReadAttribute>().HasFlag(AttributeTargets.Parameter));
+        Assert.True(Targets<DeletedAttribute>().HasFlag(AttributeTargets.Parameter));
     }
 
     [Fact]
-    public void Edits_is_valid_on_both_parameter_and_return()
+    public void Edited_is_valid_on_both_parameter_and_return()
     {
-        var t = Targets<EditsAttribute>();
+        var t = Targets<EditedAttribute>();
         Assert.True(t.HasFlag(AttributeTargets.Parameter));
         Assert.True(t.HasFlag(AttributeTargets.ReturnValue));
         Assert.True(t.HasFlag(AttributeTargets.Method));

@@ -82,15 +82,15 @@ internal static class Descriptors
     public static readonly DiagnosticDescriptor MissingResourceRole = new(
         "FRST009",
         "Resource access must be declared",
-        "Resource-typed {0} '{1}' must declare its access: [Reads], [Edits], or [Deletes] on a parameter, or [Creates], [Loads], or [Edits] on the return — there is no default",
+        "Resource-typed {0} '{1}' must declare its access: [Read], [Edited], or [Deleted] on a parameter, or [Created], [Loaded], or [Edited] on the return — or be named in a producer's References/Consumes — there is no default",
         Category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
     public static readonly DiagnosticDescriptor InvalidLineageSubject = new(
         "FRST010",
-        "Lineage subject must name a step subject",
-        "'{0}' is not a valid lineage subject for step '{1}' — Subject must name an [Edits] parameter or the [Creates]/[Edits] return (use Subject.Return)",
+        "Lineage target must name a step input",
+        "'{0}' is not a valid lineage target for step '{1}' — References/Consumes must name a parameter (via nameof) or the step's own return (Subject.Return)",
         Category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

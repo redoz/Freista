@@ -56,7 +56,7 @@ public static class AppointmentDsl
         }
 
         [StepName("Given patient {name} exists")]
-        [return: Creates]
+        [return: Created]
         public static Task<Patient> PatientExists(string name, ScenarioContext? ctx = null)
         {
             ctx?.SimulateElapsed(TimeSpan.FromMilliseconds(320));
@@ -64,7 +64,7 @@ public static class AppointmentDsl
         }
 
         [StepName("Given an available slot exists")]
-        [return: Creates]
+        [return: Created]
         public static Task<Slot> AvailableSlot(ScenarioContext? ctx = null)
         {
             ctx?.SimulateElapsed(TimeSpan.FromMilliseconds(460));
@@ -72,7 +72,7 @@ public static class AppointmentDsl
         }
 
         [StepName("Given user {name} exists")]
-        [return: Creates]
+        [return: Created]
         public static Task<User> UserExists(string name, ScenarioContext? ctx = null)
         {
             // A small, deterministic per-name jitter so the bulk-import lanes show different bar
@@ -86,8 +86,8 @@ public static class AppointmentDsl
     extension(When)
     {
         [StepName("When creating an appointment")]
-        [return: Creates]
-        public static Task<Appointment> CreateAppointment([References(Subject.Return)] Patient patient, [Consumes(Subject.Return)] Slot slot, ScenarioContext? ctx = null)
+        [return: Created(References = [nameof(patient)], Consumes = [nameof(slot)])]
+        public static Task<Appointment> CreateAppointment(Patient patient, Slot slot, ScenarioContext? ctx = null)
         {
             ctx?.SimulateElapsed(TimeSpan.FromMilliseconds(600));
             return Task.FromResult(new Appointment(patient, slot));
@@ -104,7 +104,7 @@ public static class AppointmentDsl
     extension(Then)
     {
         [StepName("Then the appointment should exist")]
-        public static Task AppointmentExists([Reads] Appointment appointment, ScenarioContext? ctx = null)
+        public static Task AppointmentExists([Read] Appointment appointment, ScenarioContext? ctx = null)
         {
             ctx?.SimulateElapsed(TimeSpan.FromMilliseconds(170));
             Assert.NotNull(appointment.Patient);

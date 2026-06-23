@@ -460,6 +460,30 @@ internal sealed class ScenarioParser
         var rewriter = new IdentifierReplacer(replacements);
         var arguments = invocation.ArgumentList.Arguments;
 
+        // Emits the lineage relations a producing subject declares via [Created]/[Loaded]/[Edited]'s
+        // References/Consumes: one Reference/Consume claim per resolvable target, the subject expression
+        // riding along (the runtime records subject→target). Emitted BEFORE the subject's own role claim,
+        // so effect order stays target-lineage-then-subject (e.g. Reference, Consume, then Create).
+        void EmitLineage((System.Collections.Immutable.ImmutableArray<string> References,
+            System.Collections.Immutable.ImmutableArray<string> Consumes) lineage, string subjectExpression)
+        {
+            foreach (var target in lineage.References)
+            {
+                if (ResolveTargetExpression(target, method, arguments, rewriter) is { } expr)
+                {
+                    claims.Add(new ResourceRoleClaim("Reference", expr, IsReturn: false) { SubjectExpressions = [subjectExpression] });
+                }
+            }
+
+            foreach (var target in lineage.Consumes)
+            {
+                if (ResolveTargetExpression(target, method, arguments, rewriter) is { } expr)
+                {
+                    claims.Add(new ResourceRoleClaim("Consume", expr, IsReturn: false) { SubjectExpressions = [subjectExpression] });
+                }
+            }
+        }
+
         for (var p = 0; p < method.Parameters.Length; p++)
         {
             var parameter = method.Parameters[p];
@@ -480,14 +504,23 @@ internal sealed class ScenarioParser
             }
 
             var expression = ((ExpressionSyntax)rewriter.Visit(argument.Expression)).ToFullString().Trim();
-            var subjectExpressions = role is "Reference" or "Consume"
-                ? ResolveSubjectExpressions(parameter, method, arguments, rewriter)
-                : [];
-            claims.Add(new ResourceRoleClaim(role, expression, IsReturn: false) { SubjectExpressions = subjectExpressions });
+            if (role == "Edit")
+            {
+                EmitLineage(AttributeReader.ProducerLineage(parameter.GetAttributes()), expression);
+            }
+
+            claims.Add(new ResourceRoleClaim(role, expression, IsReturn: false));
         }
 
         if (hasResult && AttributeReader.ReturnRole(method) is { } returnRole)
         {
+            var lineage = AttributeReader.ProducerLineage(method.GetReturnTypeAttributes());
+            if (lineage.References.IsEmpty && lineage.Consumes.IsEmpty)
+            {
+                lineage = AttributeReader.ProducerLineage(method.GetAttributes());
+            }
+
+            EmitLineage(lineage, "__r");
             claims.Add(new ResourceRoleClaim(returnRole, "__r", IsReturn: true));
         }
 
@@ -495,43 +528,33 @@ internal sealed class ScenarioParser
     }
 
     /// <summary>
-    /// Maps a [References]/[Consumes] parameter's declared subject names to instance expressions:
-    /// <c>Subject.Return</c> ⇒ <c>__r</c>; a parameter name ⇒ that parameter's rewritten argument
-    /// expression. Unresolved names are skipped (the analyzer reports them as FRST010).
+    /// Maps a producer's lineage target name to an instance expression: <c>Subject.Return</c> ⇒
+    /// <c>__r</c>; a parameter name ⇒ that parameter's rewritten argument expression. Null when the
+    /// name resolves to no supplied argument (the analyzer reports it as FRST010).
     /// </summary>
-    private static List<string> ResolveSubjectExpressions(
-        IParameterSymbol parameter,
+    private static string? ResolveTargetExpression(
+        string name,
         IMethodSymbol method,
         SeparatedSyntaxList<ArgumentSyntax> arguments,
         IdentifierReplacer rewriter)
     {
-        var result = new List<string>();
-        foreach (var subject in AttributeReader.ParameterSubjects(parameter))
+        if (name == AttributeReader.ReturnSubject)
         {
-            if (subject == AttributeReader.ReturnSubject)
+            return "__r";
+        }
+
+        for (var i = 0; i < method.Parameters.Length; i++)
+        {
+            if (method.Parameters[i].Name != name)
             {
-                result.Add("__r");
                 continue;
             }
 
-            for (var i = 0; i < method.Parameters.Length; i++)
-            {
-                if (method.Parameters[i].Name != subject)
-                {
-                    continue;
-                }
-
-                var arg = FindArgument(arguments, subject, i);
-                if (arg is not null)
-                {
-                    result.Add(((ExpressionSyntax)rewriter.Visit(arg.Expression)).ToFullString().Trim());
-                }
-
-                break;
-            }
+            var arg = FindArgument(arguments, name, i);
+            return arg is null ? null : ((ExpressionSyntax)rewriter.Visit(arg.Expression)).ToFullString().Trim();
         }
 
-        return result;
+        return null;
     }
 
     /// <summary>

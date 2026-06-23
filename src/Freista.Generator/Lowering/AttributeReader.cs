@@ -12,18 +12,31 @@ internal static class AttributeReader
     public const string ReturnSubject = "<return>";
 
     /// <summary>
-    /// The lineage subject names declared on a <c>[References]</c>/<c>[Consumes]</c> parameter (its
-    /// <c>params string[] subjects</c>), or empty when none/not a lineage role.
+    /// The lineage targets declared on a producer's <c>[Created]</c>/<c>[Loaded]</c>/<c>[Edited]</c>
+    /// attribute — its <c>References</c>/<c>Consumes</c> named properties. Each target is a parameter
+    /// name (via <c>nameof</c>) or <see cref="ReturnSubject"/>. Empty arrays when absent.
     /// </summary>
-    public static ImmutableArray<string> ParameterSubjects(IParameterSymbol parameter)
+    public static (ImmutableArray<string> References, ImmutableArray<string> Consumes) ProducerLineage(
+        ImmutableArray<AttributeData> attributes)
     {
-        foreach (var attr in parameter.GetAttributes())
+        foreach (var attr in attributes)
         {
-            if (attr.AttributeClass?.Name is "ReferencesAttribute" or "ConsumesAttribute"
-                && attr.ConstructorArguments.Length > 0
-                && attr.ConstructorArguments[0] is { Kind: TypedConstantKind.Array } arrayArg)
+            if (attr.AttributeClass?.Name is "CreatedAttribute" or "LoadedAttribute" or "EditedAttribute")
             {
-                return arrayArg.Values
+                return (NamedStringArray(attr, "References"), NamedStringArray(attr, "Consumes"));
+            }
+        }
+
+        return (ImmutableArray<string>.Empty, ImmutableArray<string>.Empty);
+    }
+
+    private static ImmutableArray<string> NamedStringArray(AttributeData attr, string name)
+    {
+        foreach (var named in attr.NamedArguments)
+        {
+            if (named.Key == name && named.Value.Kind == TypedConstantKind.Array)
+            {
+                return named.Value.Values
                     .Select(v => v.Value as string)
                     .Where(s => s is not null)
                     .ToImmutableArray()!;
@@ -78,7 +91,7 @@ internal static class AttributeReader
     }
 
     /// <summary>
-    /// The resource role declared on <paramref name="parameter"/> (<c>[Reads]/[References]/[Consumes]/[Edits]/[Deletes]</c>),
+    /// The resource role declared on <paramref name="parameter"/> (<c>[Read]/[Edited]/[Deleted]</c>),
     /// as the runtime <c>ResourceContext</c> verb name, or null when none.
     /// </summary>
     public static string? ParameterRole(IParameterSymbol parameter)
@@ -86,7 +99,7 @@ internal static class AttributeReader
 
     /// <summary>
     /// The resource role declared on <paramref name="method"/>'s return value
-    /// (<c>[return: Creates]/[return: Loads]/[return: Edits]</c>), falling back to the method-level
+    /// (<c>[return: Created]/[return: Loaded]/[return: Edited]</c>), falling back to the method-level
     /// shorthand, as the runtime verb name, or null when none. Return roles only apply when the step
     /// actually yields a value (the caller checks that).
     /// </summary>
@@ -96,8 +109,9 @@ internal static class AttributeReader
 
     /// <summary>
     /// Maps the first recognized role attribute to its runtime verb name. Parameter roles admit
-    /// <c>Reads/References/Consumes/Edits/Deletes</c>; return/method roles admit <c>Creates/Loads/Edits</c>; <c>Edits</c>
-    /// is valid in both positions.
+    /// <c>Read/Edited/Deleted</c>; return/method roles admit <c>Created/Loaded/Edited</c>; <c>Edited</c>
+    /// is valid in both positions. Reference/Consume are not parameter roles — they are conferred on a
+    /// target by being named in a producer's lineage (see <see cref="ProducerLineage"/>).
     /// </summary>
     private static string? RoleVerb(ImmutableArray<AttributeData> attributes, bool parameterRoles)
     {
@@ -105,13 +119,11 @@ internal static class AttributeReader
         {
             var verb = attr.AttributeClass?.Name switch
             {
-                "ReadsAttribute" when parameterRoles => "Read",
-                "ReferencesAttribute" when parameterRoles => "Reference",
-                "ConsumesAttribute" when parameterRoles => "Consume",
-                "DeletesAttribute" when parameterRoles => "Delete",
-                "EditsAttribute" => "Edit",
-                "CreatesAttribute" when !parameterRoles => "Create",
-                "LoadsAttribute" when !parameterRoles => "Load",
+                "ReadAttribute" when parameterRoles => "Read",
+                "DeletedAttribute" when parameterRoles => "Delete",
+                "EditedAttribute" => "Edit",
+                "CreatedAttribute" when !parameterRoles => "Create",
+                "LoadedAttribute" when !parameterRoles => "Load",
                 _ => null,
             };
 

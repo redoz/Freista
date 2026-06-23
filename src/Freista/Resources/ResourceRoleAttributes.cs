@@ -1,53 +1,57 @@
 namespace Freista;
 
-/// <summary>Return/method role: the step produces a <b>new</b> resource (exclusive in C2).</summary>
+/// <summary>
+/// Return/method role: the step produces a <b>new</b> resource (exclusive in C2).
+/// <see cref="References"/>/<see cref="Consumes"/> name the input parameters (each via <c>nameof</c>,
+/// or <see cref="Subject.Return"/>) that flow into the produced resource, recording a lineage relation
+/// from the produced resource to each. Each named target also takes the matching shared
+/// <see cref="LifecycleVerb.Reference"/>/<see cref="LifecycleVerb.Consume"/> effect — naming a target
+/// is its access declaration, so the target stays a bare parameter.
+/// </summary>
 [AttributeUsage(AttributeTargets.ReturnValue | AttributeTargets.Method)]
-public sealed class CreatesAttribute : Attribute;
+public sealed class CreatedAttribute : Attribute
+{
+    /// <summary>Inputs the produced resource keeps a durable reference to (aggregation; shared).</summary>
+    public string[] References { get; set; } = [];
 
-/// <summary>Return/method role: the step returns an <b>existing</b> resource it loaded (shared in C2).</summary>
+    /// <summary>Inputs the produced resource consumes/uses-up (composition; shared in C1, exclusive in C2).</summary>
+    public string[] Consumes { get; set; } = [];
+}
+
+/// <summary>
+/// Return/method role: the step returns an <b>existing</b> resource it loaded (shared in C2).
+/// Carries the same lineage <see cref="References"/>/<see cref="Consumes"/> surface as
+/// <see cref="CreatedAttribute"/>.
+/// </summary>
 [AttributeUsage(AttributeTargets.ReturnValue | AttributeTargets.Method)]
-public sealed class LoadsAttribute : Attribute;
+public sealed class LoadedAttribute : Attribute
+{
+    /// <summary>Inputs the loaded resource keeps a durable reference to (aggregation; shared).</summary>
+    public string[] References { get; set; } = [];
+
+    /// <summary>Inputs the loaded resource consumes/uses-up (composition; shared in C1, exclusive in C2).</summary>
+    public string[] Consumes { get; set; } = [];
+}
 
 /// <summary>Parameter role: the step only reads the resource (shared in C2).</summary>
 [AttributeUsage(AttributeTargets.Parameter)]
-public sealed class ReadsAttribute : Attribute;
+public sealed class ReadAttribute : Attribute;
 
 /// <summary>
-/// Parameter role: the produced resource keeps a durable reference to this one (aggregation; shared).
-/// Records a <see cref="LifecycleVerb.Reference"/> effect and, for each subject named in
-/// <see cref="Subjects"/>, a lineage relation subject→target in the report. With no subjects the
-/// effect is recorded but no relation is formed (lineage is opt-in per target).
+/// Parameter or return/method role: the step mutates the resource (exclusive in C2). In a producing
+/// position the edited resource may carry lineage <see cref="References"/>/<see cref="Consumes"/>
+/// naming the inputs that flow into it.
 /// </summary>
-[AttributeUsage(AttributeTargets.Parameter)]
-public sealed class ReferencesAttribute : Attribute
-{
-    /// <summary>Lineage subjects: each is a parameter name (via <c>nameof</c>) or <see cref="Subject.Return"/>.</summary>
-    public ReferencesAttribute(params string[] subjects) => Subjects = subjects;
-
-    /// <summary>The produced/edited resources that hold this reference; empty ⇒ no lineage relation.</summary>
-    public string[] Subjects { get; }
-}
-
-/// <summary>
-/// Parameter role: the step consumes/uses-up this resource into the one it produces (composition;
-/// shared in C1, exclusive in C2). Records a <see cref="LifecycleVerb.Consume"/> effect and, for each
-/// subject named in <see cref="Subjects"/>, a lineage relation subject→target in the report. With no
-/// subjects the effect is recorded but no relation is formed (lineage is opt-in per target).
-/// </summary>
-[AttributeUsage(AttributeTargets.Parameter)]
-public sealed class ConsumesAttribute : Attribute
-{
-    /// <summary>Lineage subjects: each is a parameter name (via <c>nameof</c>) or <see cref="Subject.Return"/>.</summary>
-    public ConsumesAttribute(params string[] subjects) => Subjects = subjects;
-
-    /// <summary>The produced/edited resources that consume this resource; empty ⇒ no lineage relation.</summary>
-    public string[] Subjects { get; }
-}
-
-/// <summary>Parameter or return/method role: the step mutates the resource (exclusive in C2).</summary>
 [AttributeUsage(AttributeTargets.Parameter | AttributeTargets.ReturnValue | AttributeTargets.Method)]
-public sealed class EditsAttribute : Attribute;
+public sealed class EditedAttribute : Attribute
+{
+    /// <summary>Inputs the edited resource keeps a durable reference to (aggregation; shared).</summary>
+    public string[] References { get; set; } = [];
+
+    /// <summary>Inputs the edited resource consumes/uses-up (composition; shared in C1, exclusive in C2).</summary>
+    public string[] Consumes { get; set; } = [];
+}
 
 /// <summary>Parameter role: the step removes the resource (exclusive in C2).</summary>
 [AttributeUsage(AttributeTargets.Parameter)]
-public sealed class DeletesAttribute : Attribute;
+public sealed class DeletedAttribute : Attribute;

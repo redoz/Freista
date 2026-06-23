@@ -96,7 +96,8 @@ public class ResourceLoweringTests
         var result = GeneratorHarness.Run(SampleSources.ResourceDsl + SampleSources.LineageScenario);
         result.AssertCompiles();
 
-        // Each [References(Subject.Return)]/[Consumes(Subject.Return)] target emits the call with __r appended.
+        // [return: Created(References = [nameof(user)], Consumes = [nameof(slot)])] emits each lineage call
+        // with the created Appointment (__r) riding along as the subject.
         // Note: the target expression is __inputs.Get<T>(n) which contains parens, so .* is used instead of [^)]*.
         Assert.Matches(@"Resources\.Reference\(.*,\s*__r\)", result.GeneratedSource);
         Assert.Matches(@"Resources\.Consume\(.*,\s*__r\)", result.GeneratedSource);
@@ -109,8 +110,9 @@ public class ResourceLoweringTests
         result.AssertCompiles();
         var results = await result.Definitions().Single().RunAsync();
 
-        // Step 2: When.BookWithLineage([References(Subject.Return)] User, [Consumes(Subject.Return)] Slot) [return: Creates] —
-        // effects appear in param-declaration order, then the return role (subjects don't affect effects).
+        // Step 2: When.BookWithLineage(User user, Slot slot) [return: Created(References = [nameof(user)],
+        // Consumes = [nameof(slot)])] — the producer's lineage emits Reference(user) then Consume(slot)
+        // before the return's Create, so effects read Reference, Consume, Create.
         var book = results[2].Effects;
         Assert.Equal(3, book.Count);
 
@@ -133,7 +135,7 @@ public class ResourceLoweringTests
         result.AssertCompiles();
         var results = await result.Definitions().Single().RunAsync();
 
-        // Step 2: BookWithLineage([References(Subject.Return)] User, [Consumes(Subject.Return)] Slot) [return: Creates] Appointment
+        // Step 2: BookWithLineage(User user, Slot slot) [return: Created(References = [nameof(user)], Consumes = [nameof(slot)])] Appointment
         var relations = results[2].Lineage;
         Assert.Equal(2, relations.Count);
 

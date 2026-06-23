@@ -351,9 +351,57 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
 
     private static void AnalyzeStepResources(SyntaxNodeAnalysisContext context, IMethodSymbol method)
     {
+        var paramNames = method.Parameters.Select(p => p.Name).ToImmutableHashSet();
+
+        // Producing subjects and the targets they name via [Created]/[Loaded]/[Edited]'s
+        // References/Consumes. A producer is keyed by its own "self" name — a parameter name, or the
+        // return sentinel — so it cannot name itself as a lineage target.
+        var producers = new List<(string Self, ImmutableArray<string> Targets, Location Location)>();
+
         foreach (var parameter in method.Parameters)
         {
-            if (IsResourceType(parameter.Type) && AttributeReader.ParameterRole(parameter) is null)
+            if (AttributeReader.ParameterRole(parameter) != "Edit")
+            {
+                continue;
+            }
+
+            var (refs, cons) = AttributeReader.ProducerLineage(parameter.GetAttributes());
+            if (!refs.IsEmpty || !cons.IsEmpty)
+            {
+                var loc = parameter.Locations.FirstOrDefault() ?? method.Locations.FirstOrDefault() ?? Location.None;
+                producers.Add((parameter.Name, refs.AddRange(cons), loc));
+            }
+        }
+
+        var hasReturnRole = SymbolHelpers.TryUnwrapReturn(method.ReturnType, out var returnType)
+            && returnType is not null
+            && AttributeReader.ReturnRole(method) is not null;
+        if (hasReturnRole)
+        {
+            var (refs, cons) = AttributeReader.ProducerLineage(method.GetReturnTypeAttributes());
+            if (refs.IsEmpty && cons.IsEmpty)
+            {
+                (refs, cons) = AttributeReader.ProducerLineage(method.GetAttributes());
+            }
+
+            if (!refs.IsEmpty || !cons.IsEmpty)
+            {
+                producers.Add((AttributeReader.ReturnSubject, refs.AddRange(cons), method.Locations.FirstOrDefault() ?? Location.None));
+            }
+        }
+
+        // A bare parameter named as a lineage target is "covered" for FRST009: being named confers the
+        // Reference/Consume role (and its shared effect), so it needs no attribute of its own.
+        var coveredByLineage = producers
+            .SelectMany(p => p.Targets)
+            .Where(name => name != AttributeReader.ReturnSubject && paramNames.Contains(name))
+            .ToImmutableHashSet();
+
+        foreach (var parameter in method.Parameters)
+        {
+            if (IsResourceType(parameter.Type)
+                && AttributeReader.ParameterRole(parameter) is null
+                && !coveredByLineage.Contains(parameter.Name))
             {
                 var location = parameter.Locations.FirstOrDefault() ?? method.Locations.FirstOrDefault() ?? Location.None;
                 context.ReportDiagnostic(Diagnostic.Create(
@@ -371,31 +419,19 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
                 Descriptors.MissingResourceRole, location, "return", method.Name));
         }
 
-        var editParamNames = method.Parameters
-            .Where(p => AttributeReader.ParameterRole(p) == "Edit")
-            .Select(p => p.Name)
-            .ToImmutableHashSet();
-        var returnIsSubject = SymbolHelpers.TryUnwrapReturn(method.ReturnType, out var subjectReturn)
-            && subjectReturn is not null
-            && AttributeReader.ReturnRole(method) is "Create" or "Edit";
-
-        foreach (var parameter in method.Parameters)
+        // FRST010: each lineage target must name a parameter, or the return when the step yields a
+        // subject (Subject.Return); a producer may not name itself.
+        foreach (var producer in producers)
         {
-            if (AttributeReader.ParameterRole(parameter) is not ("Reference" or "Consume"))
+            foreach (var target in producer.Targets)
             {
-                continue;
-            }
-
-            foreach (var subject in AttributeReader.ParameterSubjects(parameter))
-            {
-                var valid = subject == AttributeReader.ReturnSubject
-                    ? returnIsSubject
-                    : editParamNames.Contains(subject);
+                var valid = target == AttributeReader.ReturnSubject
+                    ? hasReturnRole && producer.Self != AttributeReader.ReturnSubject
+                    : paramNames.Contains(target) && target != producer.Self;
                 if (!valid)
                 {
-                    var location = parameter.Locations.FirstOrDefault() ?? method.Locations.FirstOrDefault() ?? Location.None;
                     context.ReportDiagnostic(Diagnostic.Create(
-                        Descriptors.InvalidLineageSubject, location, subject, method.Name));
+                        Descriptors.InvalidLineageSubject, producer.Location, target, method.Name));
                 }
             }
         }
