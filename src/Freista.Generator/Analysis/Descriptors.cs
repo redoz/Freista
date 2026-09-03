@@ -34,7 +34,7 @@ internal static class Descriptors
     public static readonly DiagnosticDescriptor UnsupportedControlFlow = new(
         "FRST003",
         "Unsupported control flow in scenario",
-        "Control flow is not supported in scenario bodies in this version",
+        "Loops and other control flow are not supported in scenario bodies — put the loop, retry, or polling inside a step. Only if/else (on an awaited phase-marker condition) shapes the graph.",
         Category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -91,6 +91,22 @@ internal static class Descriptors
         "FRST010",
         "Lineage target must name a step input",
         "'{0}' is not a valid lineage target for step '{1}' — References/Consumes must name a parameter (via nameof) or the step's own return (Subject.Return)",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor InvalidCondition = new(
+        "FRST011",
+        "Scenario condition must be an awaited phase-marker call",
+        "An 'if' condition in a scenario must be an awaited phase-marker call (Given/When/Then, or any type implementing Freista.IPhase) whose result is usable as a C# condition (bool, an implicit conversion to bool, or 'operator true')",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor UnmergeableLocal = new(
+        "FRST012",
+        "Conditionally assigned local has no step-produced definition",
+        "'{0}' is assigned inside a branch but has no step-produced definition outside it, so there is nothing to merge against — give it a prior step output, or assign it in every branch",
         Category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

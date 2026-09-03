@@ -31,6 +31,8 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
         Descriptors.UnboundPlaceholder,
         Descriptors.MissingResourceRole,
         Descriptors.InvalidLineageSubject,
+        Descriptors.InvalidCondition,
+        Descriptors.UnmergeableLocal,
     ];
 
     public override void Initialize(AnalysisContext context)
@@ -90,6 +92,110 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
         }
     }
 
+    /// <summary>
+    /// An `if` is supported when its condition is an awaited phase-marker call whose result is usable
+    /// as a C# condition. Each arm is analyzed with the same step-output set; an assignment inside an
+    /// arm to a local that is not already a step output is FRST012 (nothing to merge against).
+    /// </summary>
+    private static void AnalyzeIf(
+        SyntaxNodeAnalysisContext context,
+        IfStatementSyntax statement,
+        HashSet<ILocalSymbol> stepOutputs)
+    {
+        if (statement.Condition is not AwaitExpressionSyntax { Expression: InvocationExpressionSyntax invocation }
+            || invocation.Expression is not MemberAccessExpressionSyntax member
+            || SymbolHelpers.PhaseOf(member.Expression, context.SemanticModel) is null)
+        {
+            Report(context, Descriptors.InvalidCondition, statement.Condition.GetLocation());
+        }
+        else
+        {
+            AnalyzeDslCall(context, invocation, stepOutputs, Descriptors.NotADslCall);
+
+            if (context.SemanticModel.GetSymbolInfo(invocation).Symbol is IMethodSymbol method
+                && SymbolHelpers.TryUnwrapReturn(method.ReturnType, out var resultType)
+                && (resultType is null || !IsUsableAsCondition(resultType, context.SemanticModel.Compilation)))
+            {
+                Report(context, Descriptors.InvalidCondition, statement.Condition.GetLocation());
+            }
+        }
+
+        // FRST012 is about definitions on EVERY path, so it must be decided against the definitions
+        // that existed before the branch — hence the snapshot, taken before the arms are analyzed
+        // (analyzing an arm adds that arm's own declarations to the set).
+        var parentOutputs = new HashSet<ILocalSymbol>(stepOutputs, SymbolEqualityComparer.Default);
+        var thenAssigned = CollectAssignedLocals(context, statement.Statement);
+        var elseAssigned = statement.Else is { } elseBranch
+            ? CollectAssignedLocals(context, elseBranch.Statement)
+            : [];
+
+        AnalyzeStatement(context, statement.Statement, stepOutputs);
+        if (statement.Else is { } elseClause)
+        {
+            AnalyzeStatement(context, elseClause.Statement, stepOutputs);
+        }
+
+        foreach (var pair in thenAssigned.Concat(elseAssigned))
+        {
+            var local = pair.Key;
+
+            // Assigning in BOTH arms is the ordinary phi and needs no prior definition. Assigning in
+            // only one arm is fine too, as long as a step produced the value before the branch — that
+            // definition becomes the pass-through side of the merge. Neither means some path reaches
+            // the merge with no node behind it.
+            var definedEverywhere = thenAssigned.ContainsKey(local) && elseAssigned.ContainsKey(local);
+            if (!definedEverywhere && !parentOutputs.Contains(local))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    Descriptors.UnmergeableLocal, pair.Value.GetLocation(), local.Name));
+                continue;
+            }
+
+            // The merge is a step-produced definition for everything after the `if`.
+            stepOutputs.Add(local);
+        }
+    }
+
+    /// <summary>Locals an arm re-assigns from an awaited call (<c>x = await When.Y(...)</c>), mapped to
+    /// the identifier that names them, for diagnostic locations.</summary>
+    private static Dictionary<ILocalSymbol, IdentifierNameSyntax> CollectAssignedLocals(
+        SyntaxNodeAnalysisContext context, StatementSyntax arm)
+    {
+        var assigned = new Dictionary<ILocalSymbol, IdentifierNameSyntax>(SymbolEqualityComparer.Default);
+        foreach (var assignment in arm.DescendantNodesAndSelf().OfType<AssignmentExpressionSyntax>())
+        {
+            if (assignment is { Left: IdentifierNameSyntax identifier, Right: AwaitExpressionSyntax }
+                && context.SemanticModel.GetSymbolInfo(identifier).Symbol is ILocalSymbol local)
+            {
+                assigned[local] = identifier;
+            }
+        }
+
+        return assigned;
+    }
+
+    /// <summary>
+    /// True when <paramref name="type"/> can drive a C# <c>if</c>: it is <c>bool</c>, defines
+    /// <c>operator true</c>, or has an implicit conversion to <c>bool</c>. <c>bool?</c> is correctly
+    /// rejected — C# rejects it too.
+    /// </summary>
+    private static bool IsUsableAsCondition(ITypeSymbol type, Compilation compilation)
+    {
+        if (type.SpecialType == SpecialType.System_Boolean)
+        {
+            return true;
+        }
+
+        if (type.GetMembers("op_True").Any())
+        {
+            return true;
+        }
+
+        var boolType = compilation.GetSpecialType(SpecialType.System_Boolean);
+        var conversion = compilation.ClassifyConversion(type, boolType);
+        return conversion.IsImplicit && conversion.IsUserDefined;
+    }
+
     private static void AnalyzeStatement(
         SyntaxNodeAnalysisContext context,
         StatementSyntax statement,
@@ -108,7 +214,19 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
                 AnalyzeExpressionStatement(context, expr, stepOutputs);
                 return;
 
-            case IfStatementSyntax or ForStatementSyntax or ForEachStatementSyntax
+            case BlockSyntax block:
+                foreach (var inner in block.Statements)
+                {
+                    AnalyzeStatement(context, inner, stepOutputs);
+                }
+
+                return;
+
+            case IfStatementSyntax ifStatement:
+                AnalyzeIf(context, ifStatement, stepOutputs);
+                return;
+
+            case ForStatementSyntax or ForEachStatementSyntax
                 or WhileStatementSyntax or DoStatementSyntax or SwitchStatementSyntax
                 or TryStatementSyntax or UsingStatementSyntax or LockStatementSyntax
                 or GotoStatementSyntax or BreakStatementSyntax or ContinueStatementSyntax
@@ -130,7 +248,20 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
         HashSet<ILocalSymbol> stepOutputs)
     {
         var variables = local.Declaration.Variables;
-        if (variables.Count != 1 || variables[0].Initializer?.Value is not AwaitExpressionSyntax await)
+        if (variables.Count != 1)
+        {
+            Report(context, Descriptors.UnsupportedStatement, local.GetLocation());
+            return;
+        }
+
+        // `Appointment appointment;` — a declaration with no initializer introduces the name only; the
+        // definition arrives from an assignment in each `if` arm and becomes a phi at the closing brace.
+        if (variables[0].Initializer is null)
+        {
+            return;
+        }
+
+        if (variables[0].Initializer?.Value is not AwaitExpressionSyntax await)
         {
             Report(context, Descriptors.UnsupportedStatement, local.GetLocation());
             return;

@@ -53,7 +53,7 @@ public class AnalyzerTests
     }
 
     [Fact]
-    public async Task FRST003_control_flow()
+    public async Task FRST003_loops_are_still_rejected()
     {
         var diagnostics = await Analyze(
             """
@@ -61,12 +61,205 @@ public class AnalyzerTests
             {
                 [Scenario] public static async Task Bad()
                 {
-                    if (1 == 1) { await Given.AvailableSlot(); }
+                    foreach (var i in new[] { 1, 2 }) { await Given.AvailableSlot(); }
                 }
             }
             """);
 
         AssertHas(diagnostics, "FRST003");
+    }
+
+    [Fact]
+    public async Task FRST003_while_switch_and_try_are_still_rejected()
+    {
+        AssertHas(await Analyze(
+            """
+            public static class S
+            {
+                [Scenario] public static async Task Bad()
+                {
+                    while (true) { await Given.AvailableSlot(); }
+                }
+            }
+            """), "FRST003");
+
+        AssertHas(await Analyze(
+            """
+            public static class S
+            {
+                [Scenario] public static async Task Bad()
+                {
+                    try { await Given.AvailableSlot(); } catch { }
+                }
+            }
+            """), "FRST003");
+    }
+
+    [Fact]
+    public async Task FRST003_message_points_at_putting_the_loop_inside_a_step()
+    {
+        var diagnostics = await Analyze(
+            """
+            public static class S
+            {
+                [Scenario] public static async Task Bad()
+                {
+                    for (var i = 0; i < 2; i++) { await Given.AvailableSlot(); }
+                }
+            }
+            """);
+
+        var loop = Assert.Single(diagnostics, d => d.Id == "FRST003");
+        Assert.Contains(
+            "inside a step",
+            loop.GetMessage(System.Globalization.CultureInfo.InvariantCulture),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task FRST003_no_longer_fires_on_a_supported_if()
+    {
+        var diagnostics = await GeneratorHarness.AnalyzeAsync(
+            SampleSources.ConditionalDsl + SampleSources.IfElseScenario);
+
+        Assert.DoesNotContain(diagnostics, d => d.Id == "FRST003");
+    }
+
+    [Fact]
+    public void FRST011_and_FRST012_are_supported_diagnostics()
+    {
+        var analyzer = new Freista.Generator.Analysis.ScenarioAnalyzer();
+
+        Assert.Contains(analyzer.SupportedDiagnostics, d => d.Id == "FRST011");
+        Assert.Contains(analyzer.SupportedDiagnostics, d => d.Id == "FRST012");
+    }
+
+    [Fact]
+    public async Task Supported_conditional_scenarios_produce_no_diagnostics()
+    {
+        Assert.Empty(await GeneratorHarness.AnalyzeAsync(
+            SampleSources.ConditionalDsl + SampleSources.IfElseScenario));
+        Assert.Empty(await GeneratorHarness.AnalyzeAsync(
+            SampleSources.ConditionalDsl + SampleSources.BareIfScenario));
+        Assert.Empty(await GeneratorHarness.AnalyzeAsync(
+            SampleSources.ConditionalDsl + SampleSources.NestedIfScenario));
+        Assert.Empty(await GeneratorHarness.AnalyzeAsync(
+            SampleSources.ConditionalDsl + SampleSources.OperatorTrueScenario));
+        Assert.Empty(await GeneratorHarness.AnalyzeAsync(
+            SampleSources.ConditionalDsl + SampleSources.ConditionalOverwriteScenario));
+    }
+
+    [Fact]
+    public async Task FRST011_bare_expression_condition()
+    {
+        var source = SampleSources.ConditionalDsl +
+            """
+
+            public static class S
+            {
+                [Scenario] public static async Task Bad()
+                {
+                    var patient = await Given.PatientExists("Jane");
+                    if (patient.Name.Length > 3)
+                        await When.Notify(patient);
+                }
+            }
+            """;
+
+        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "FRST011");
+    }
+
+    [Fact]
+    public async Task FRST011_awaited_non_dsl_condition()
+    {
+        var source = SampleSources.ConditionalDsl +
+            """
+
+            public static class S
+            {
+                [Scenario] public static async Task Bad()
+                {
+                    var patient = await Given.PatientExists("Jane");
+                    if (await Task.FromResult(true))
+                        await When.Notify(patient);
+                }
+            }
+            """;
+
+        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "FRST011");
+    }
+
+    [Fact]
+    public async Task FRST011_condition_result_is_not_usable_as_a_condition()
+    {
+        // Patient has no conversion to bool and no operator true, so it cannot drive an `if`.
+        var source = SampleSources.ConditionalDsl +
+            """
+
+            public static class S
+            {
+                [Scenario] public static async Task Bad()
+                {
+                    var patient = await Given.PatientExists("Jane");
+                    if (await Given.PatientExists("Bob"))
+                        await When.Notify(patient);
+                }
+            }
+            """;
+
+        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "FRST011");
+    }
+
+    [Fact]
+    public async Task FRST012_conditional_assignment_to_a_non_step_local()
+    {
+        // `appointment` is initialized by a non-step expression, so the merge has no parent NODE to
+        // merge against — only an initializer.
+        var source = SampleSources.ConditionalDsl +
+            """
+
+            public static class S
+            {
+                [Scenario] public static async Task Bad()
+                {
+                    var patient = await Given.PatientExists("Jane");
+                    Appointment appointment = null!;
+                    if (await Given.IsPriority())
+                        appointment = await When.CreateUrgent(patient);
+
+                    await Then.AppointmentExists(appointment);
+                }
+            }
+            """;
+
+        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "FRST012");
+    }
+
+    [Fact]
+    public async Task FRST012_does_not_fire_on_reassignment_within_one_arm()
+    {
+        // Two definitions inside the SAME arm are fine — the definition map keeps the last one.
+        var source = SampleSources.ConditionalDsl +
+            """
+
+            public static class S
+            {
+                [Scenario("double assign")] public static async Task Ok()
+                {
+                    var patient = await Given.PatientExists("Jane");
+                    var appointment = await When.CreateStandard(patient);
+                    if (await Given.IsPriority())
+                    {
+                        appointment = await When.CreateUrgent(patient);
+                        appointment = await When.CreateUrgent(patient);
+                    }
+
+                    await Then.AppointmentExists(appointment);
+                }
+            }
+            """;
+
+        Assert.DoesNotContain(await GeneratorHarness.AnalyzeAsync(source), d => d.Id == "FRST012");
     }
 
     [Fact]
