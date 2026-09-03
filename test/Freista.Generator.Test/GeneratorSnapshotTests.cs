@@ -38,6 +38,11 @@ public class GeneratorSnapshotTests
             .UseDirectory("Snapshots");
 
     [Fact]
+    public Task Conditional_scenario() =>
+        Verify(GeneratorHarness.RunDriver(SampleSources.ConditionalDsl + SampleSources.IfElseScenario))
+            .UseDirectory("Snapshots");
+
+    [Fact]
     public Task Resource_scenario() =>
         Verify(GeneratorHarness.RunDriver(SampleSources.ResourceDsl + SampleSources.ResourceScenario))
             .UseDirectory("Snapshots");

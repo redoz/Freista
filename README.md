@@ -75,8 +75,31 @@ dotnet test samples/AppointmentTests # see the steps reported as individual test
   `new[] { ... }` arrays, or a constant `Enumerable.Range(a, b).Select(...).ToArray()`.
 - DSL methods return `Task`/`Task<T>`/`ValueTask`/`ValueTask<T>` and may take an optional trailing
   `ScenarioContext` parameter.
-- Control flow (if/for/while/...) is rejected with a diagnostic; loops, conditionals, and richer
-  collection forms are future work.
+- `if`/`else` shapes the graph when the condition is an awaited `Given`/`When`/`Then` call whose
+  result is usable as a C# condition (`bool`, an implicit conversion to `bool`, or `operator true`).
+  The condition is an ordinary step — discovered, timed, and reported like any other. Exactly one arm
+  runs; steps in the other are reported **not taken**, never green. A local assigned in both arms is
+  merged automatically.
+- Loops (`for`/`foreach`/`while`/`do`), `switch`, `try`/`catch`, and `goto` are rejected with a
+  diagnostic: put the loop, retry, or polling **inside a step**. A step is an ordinary
+  `async Task<T>` method, so it can loop, retry, or poll internally; what a step cannot do is stop a
+  later step from running, which is why `if`/`else` is the one construct the graph models.
 
-See [the design spec](docs/scenario-graph-extension-design.md) and the
+### Conditionals
+
+```csharp
+var patient = await Given.PatientExists("Alice");
+var slot = await Given.AvailableSlot();
+
+Appointment appointment;
+if (await Given.PatientIsPriority(patient))
+    appointment = await When.CreateUrgentAppointment(patient, slot);
+else
+    appointment = await When.CreateAppointment(patient, slot);
+
+await Then.AppointmentExists(appointment);
+```
+
+See [the design spec](docs/scenario-graph-extension-design.md), the
+[conditionals design](docs/superpowers/specs/2026-09-03-scenario-conditionals-design.md), and the
 [implementation plan](docs/superpowers/plans/2026-06-03-scenario-graph-extension.md).
