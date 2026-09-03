@@ -28,6 +28,10 @@ public sealed class ScenarioDefinition
     /// <summary>Scenario-wide timeout, or null for none.</summary>
     public TimeSpan? Timeout { get; init; }
 
+    /// <summary>When this scenario's <see cref="Cleanup.Optional"/> teardowns run; from
+    /// <c>[Teardown(Run.…)]</c>, defaulting to <see cref="Run.Always"/> when the attribute is absent.</summary>
+    public Run TeardownPolicy { get; init; } = Run.Always;
+
     /// <summary>The graph nodes in source order.</summary>
     public required IReadOnlyList<ScenarioNode> Nodes { get; init; }
 

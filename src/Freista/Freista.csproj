@@ -14,4 +14,10 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The scheduler-facing seams (AttachTeardown, SetCurrent) stay internal; the runtime tests
+         exercise them directly rather than only through a full scenario run. -->
+    <InternalsVisibleTo Include="Freista.Test" />
+  </ItemGroup>
+
 </Project>

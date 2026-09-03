@@ -53,6 +53,13 @@ public sealed class ScenarioNode
     public bool IsSynthetic { get; init; }
 
     /// <summary>
+    /// True for the scenario's single generator-emitted teardown node. The INVERSE of
+    /// <see cref="IsSynthetic"/>: it is discovered and numbered like an ordinary step (users must see
+    /// a failing cleanup in CI), and only the scheduler and the report treat it specially.
+    /// </summary>
+    public bool IsTeardown { get; init; }
+
+    /// <summary>
     /// For a condition node, coerces this step's (boxed) output to the branch value. The generator
     /// emits <c>static o =&gt; ((T)o!) ? true : false</c> so Roslyn selects <c>bool</c>, an implicit
     /// conversion, or <c>operator true</c> at compile time — the scheduler never reflects. Null for a

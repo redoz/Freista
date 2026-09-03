@@ -17,6 +17,9 @@ public sealed class ScenarioContext
     private readonly ConcurrentQueue<string> _logs = new();
     private readonly ConcurrentDictionary<string, string> _attachments = new();
 
+    private TeardownLog? _teardownLog;
+    private int _teardownStepIndex;
+
     /// <summary>
     /// The context of the step running on this execution flow, or null outside a step. Backed by
     /// <see cref="AsyncLocal{T}"/>, so concurrent sibling steps each observe their own context and
@@ -120,6 +123,29 @@ public sealed class ScenarioContext
 
     /// <summary>A logger with an explicit category, writing to the running step.</summary>
     public ILogger GetLogger(string category) => new FreistaLogger(category, this);
+
+    /// <summary>Wires this context to the scenario's teardown log. Called by the scheduler; a context
+    /// built outside it (a DSL method under unit test) simply has nowhere to register, and
+    /// <see cref="OnTeardown(Func{Task})"/> becomes a no-op rather than throwing.</summary>
+    internal void AttachTeardown(TeardownLog log, int stepIndex)
+    {
+        _teardownLog = log;
+        _teardownStepIndex = stepIndex;
+    }
+
+    /// <summary>
+    /// Registers cleanup for something this step created. The closure captures the object and the
+    /// connection, because it is written where both are in scope. Runs after the scenario, subject to
+    /// the scenario's <c>[Teardown(Run.…)]</c> policy.
+    /// </summary>
+    public void OnTeardown(Func<Task> cleanup) => OnTeardown(Cleanup.Optional, cleanup);
+
+    /// <summary>
+    /// Registers cleanup of the given kind. <see cref="Cleanup.Required"/> runs whatever the
+    /// scenario's policy says — use it for things whose absence is a leak rather than a choice.
+    /// </summary>
+    public void OnTeardown(Cleanup kind, Func<Task> cleanup)
+        => _teardownLog?.Add(_teardownStepIndex, kind, cleanup);
 
     /// <summary>Records a named text attachment associated with the current step.</summary>
     public void AddAttachment(string name, string value) => _attachments[name] = value;
