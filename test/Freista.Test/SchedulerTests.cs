@@ -40,6 +40,61 @@ public class SchedulerTests
     private static Func<IStepInputs, ScenarioContext, Task<object?>> Pass(object? output = null)
         => (_, _) => Task.FromResult(output);
 
+
+    private static ScenarioNode Cond(int index, bool value, int[]? dependsOn = null, Guard[]? guards = null) => new()
+    {
+        Index = index,
+        StepId = $"step-{index}",
+        Phase = "Given",
+        OperationName = $"Cond{index}",
+        DisplayNameTemplate = $"cond {index}",
+        DependsOn = dependsOn ?? [],
+        Guards = guards ?? [],
+        Invoke = (_, _) => Task.FromResult<object?>(value),
+        EvaluateCondition = static o => (bool)o!,
+    };
+
+    private static ScenarioNode ThrowingCond(int index, int[]? dependsOn = null) => new()
+    {
+        Index = index,
+        StepId = $"step-{index}",
+        Phase = "Given",
+        OperationName = $"Cond{index}",
+        DisplayNameTemplate = $"cond {index}",
+        DependsOn = dependsOn ?? [],
+        Invoke = (_, _) => throw new InvalidOperationException("boom"),
+        EvaluateCondition = static o => (bool)o!,
+    };
+
+    private static ScenarioNode Arm(
+        int index,
+        Guard[] guards,
+        Func<IStepInputs, ScenarioContext, Task<object?>> invoke,
+        params int[] dependsOn) => new()
+    {
+        Index = index,
+        StepId = $"step-{index}",
+        Phase = "When",
+        OperationName = $"Op{index}",
+        DisplayNameTemplate = $"op {index}",
+        DependsOn = dependsOn,
+        Guards = guards,
+        Invoke = invoke,
+    };
+
+    private static ScenarioNode MergeNode(int index, params int[] sources) => new()
+    {
+        Index = index,
+        StepId = $"step-{index}",
+        Phase = "When",
+        OperationName = "Merge",
+        DisplayNameTemplate = "«merge»",
+        DependsOn = [],
+        MergeSources = sources,
+        IsSynthetic = true,
+        Invoke = (_, _) => Task.FromResult<object?>(null),
+    };
+
     private static async Task<T> WithTimeout<T>(Task<T> task)
     {
         var done = await Task.WhenAny(task, Task.Delay(Generous));
@@ -302,6 +357,200 @@ public class SchedulerTests
         Assert.Equal(StepStatus.Skipped, results[1].Status);
         Assert.NotEqual(default, results[1].StartedAt);
         Assert.Equal(TimeSpan.Zero, results[1].Duration);
+    }
+
+
+    [Fact]
+    public async Task True_condition_runs_the_if_arm_and_leaves_the_else_arm_not_taken()
+    {
+        var ifRan = false;
+        var elseRan = false;
+        var def = Def(
+            Cond(0, true),
+            Arm(1, [new Guard(0, true)], (_, _) => { ifRan = true; return Task.FromResult<object?>(null); }, 0),
+            Arm(2, [new Guard(0, false)], (_, _) => { elseRan = true; return Task.FromResult<object?>(null); }, 0));
+
+        var results = await WithTimeout(new ScenarioScheduler().RunAsync(def));
+
+        Assert.True(ifRan);
+        Assert.False(elseRan);
+        Assert.Equal(StepStatus.Passed, results[1].Status);
+        Assert.Equal(StepStatus.NotTaken, results[2].Status);
+        Assert.Contains("not taken", results[2].SkipReason);
+    }
+
+    [Fact]
+    public async Task False_condition_runs_the_else_arm()
+    {
+        var def = Def(
+            Cond(0, false),
+            Arm(1, [new Guard(0, true)], Pass(), 0),
+            Arm(2, [new Guard(0, false)], Pass(), 0));
+
+        var results = await WithTimeout(new ScenarioScheduler().RunAsync(def));
+
+        Assert.Equal(StepStatus.NotTaken, results[1].Status);
+        Assert.Equal(StepStatus.Passed, results[2].Status);
+    }
+
+    [Fact]
+    public async Task Nested_guards_all_must_hold()
+    {
+        // Guarded on cond0 == true AND cond1 == false; cond1 is true, so the node is not taken.
+        var def = Def(
+            Cond(0, true),
+            Cond(1, true, [0]),
+            Arm(2, [new Guard(0, true), new Guard(1, false)], Pass(), 1));
+
+        var results = await WithTimeout(new ScenarioScheduler().RunAsync(def));
+
+        Assert.Equal(StepStatus.NotTaken, results[2].Status);
+    }
+
+    [Fact]
+    public async Task Condition_that_throws_skips_both_arms_rather_than_marking_them_not_taken()
+    {
+        // Load-bearing: a blown-up condition chose no branch. Reporting an arm as "not taken" would
+        // disguise a failure as a routine decision.
+        var def = Def(
+            ThrowingCond(0),
+            Arm(1, [new Guard(0, true)], Pass(), 0),
+            Arm(2, [new Guard(0, false)], Pass(), 0));
+
+        var results = await WithTimeout(new ScenarioScheduler().RunAsync(def));
+
+        Assert.Equal(StepStatus.Failed, results[0].Status);
+        Assert.Equal(StepStatus.Skipped, results[1].Status);
+        Assert.Equal(StepStatus.Skipped, results[2].Status);
+        Assert.Contains("dependency failed", results[1].SkipReason);
+    }
+
+    [Fact]
+    public async Task Merge_passes_with_the_output_of_the_single_passing_source()
+    {
+        var def = Def(
+            Cond(0, false),
+            Arm(1, [new Guard(0, true)], Pass("if-value"), 0),
+            Arm(2, [new Guard(0, false)], Pass("else-value"), 0),
+            MergeNode(3, 1, 2),
+            new ScenarioNode
+            {
+                Index = 4,
+                StepId = "step-4",
+                Phase = "Then",
+                OperationName = "Consume",
+                DisplayNameTemplate = "consume",
+                DependsOn = [3],
+                Invoke = (inputs, _) => Task.FromResult<object?>(inputs.Get<string>(3)),
+            });
+
+        var results = await WithTimeout(new ScenarioScheduler().RunAsync(def));
+
+        Assert.Equal(StepStatus.Passed, results[3].Status);
+        Assert.Equal(StepStatus.Passed, results[4].Status);
+    }
+
+    [Fact]
+    public async Task Merge_is_not_taken_when_every_source_is_not_taken()
+    {
+        // Both arms sit inside an outer branch that was not taken.
+        var def = Def(
+            Cond(0, false),
+            Cond(1, true, [0], [new Guard(0, true)]),
+            Arm(2, [new Guard(0, true), new Guard(1, true)], Pass("a"), 1),
+            Arm(3, [new Guard(0, true), new Guard(1, false)], Pass("b"), 1),
+            MergeNode(4, 2, 3));
+
+        var results = await WithTimeout(new ScenarioScheduler().RunAsync(def));
+
+        Assert.Equal(StepStatus.NotTaken, results[4].Status);
+    }
+
+    [Fact]
+    public async Task Merge_is_skipped_when_a_source_failed()
+    {
+        var def = Def(
+            Cond(0, true),
+            Arm(1, [new Guard(0, true)], (_, _) => throw new InvalidOperationException("boom"), 0),
+            Arm(2, [new Guard(0, false)], Pass("b"), 0),
+            MergeNode(3, 1, 2));
+
+        var results = await WithTimeout(new ScenarioScheduler().RunAsync(def));
+
+        Assert.Equal(StepStatus.Failed, results[1].Status);
+        Assert.Equal(StepStatus.Skipped, results[3].Status);
+        Assert.Contains("Op1", results[3].SkipReason);
+    }
+
+    [Fact]
+    public async Task Single_source_merge_passes_the_parent_definition_through()
+    {
+        // The bare-`if` pass-through: a one-source merge is an alias for that source.
+        var def = Def(
+            Node(0, Pass("parent")),
+            MergeNode(1, 0),
+            new ScenarioNode
+            {
+                Index = 2,
+                StepId = "step-2",
+                Phase = "Then",
+                OperationName = "Consume",
+                DisplayNameTemplate = "consume",
+                DependsOn = [1],
+                Invoke = (inputs, _) => Task.FromResult<object?>(inputs.Get<string>(1)),
+            });
+
+        var results = await WithTimeout(new ScenarioScheduler().RunAsync(def));
+
+        Assert.Equal(StepStatus.Passed, results[1].Status);
+        Assert.Equal(StepStatus.Passed, results[2].Status);
+    }
+
+    [Fact]
+    public async Task Dependent_of_a_not_taken_node_is_not_taken_not_skipped()
+    {
+        var def = Def(
+            Cond(0, false),
+            Arm(1, [new Guard(0, true)], Pass(), 0),
+            Node(2, Pass(), [1]));
+
+        var results = await WithTimeout(new ScenarioScheduler().RunAsync(def));
+
+        Assert.Equal(StepStatus.NotTaken, results[1].Status);
+        Assert.Equal(StepStatus.NotTaken, results[2].Status);
+        Assert.Contains("not taken", results[2].SkipReason);
+    }
+
+    [Fact]
+    public async Task Not_taken_step_carries_started_at_and_zero_duration()
+    {
+        var clock = new TestTimeProvider(new DateTimeOffset(2026, 9, 3, 12, 0, 0, TimeSpan.Zero));
+        var def = Def(
+            Cond(0, false),
+            Arm(1, [new Guard(0, true)], Pass(), 0));
+
+        var results = await WithTimeout(new ScenarioScheduler(timeProvider: clock).RunAsync(def));
+
+        Assert.Equal(StepStatus.NotTaken, results[1].Status);
+        Assert.NotEqual(default, results[1].StartedAt);
+        Assert.Equal(TimeSpan.Zero, results[1].Duration);
+    }
+
+    [Fact]
+    public async Task Not_taken_nodes_do_not_raise_a_step_starting_callback()
+    {
+        // A branch that was never chosen never "started"; the MTP sink relies on this so it can leave
+        // the node in its discovered state instead of stranding it InProgress.
+        var observer = new RecordingObserver();
+        var def = Def(
+            Cond(0, false),
+            Arm(1, [new Guard(0, true)], Pass(), 0));
+
+        await WithTimeout(new ScenarioScheduler().RunAsync(def, observer: observer));
+
+        Assert.Single(observer.Started);
+        Assert.Equal(2, observer.Finished.Count);
+        Assert.Contains(observer.Finished, r => r.Status == StepStatus.NotTaken);
     }
 
     private sealed class RecordingObserver : IStepObserver

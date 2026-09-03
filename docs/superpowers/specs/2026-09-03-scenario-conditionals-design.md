@@ -198,11 +198,17 @@ For each guard on a pending node, inspect `status[g.ConditionIndex]`:
 |---|---|
 | `Pending` / `Running` | unresolved — wait |
 | `Passed` | evaluate `EvaluateCondition(output)`; if it differs from `g.WhenValue`, node becomes `NotTaken` |
-| `Failed` / `Skipped` / `NotTaken` | node becomes `Skipped` — cascade, not a decision |
+| `Failed` / `Skipped` | node becomes `Skipped` — cascade, not a decision |
+| `NotTaken` | node becomes `NotTaken` — the condition sat in a branch that was itself not chosen |
 
-The last row is load-bearing. If the condition step **threw**, no branch was ever chosen; reporting
-the arm as "not taken" would disguise a failure as a routine decision. A blown-up condition is a
+Row three is load-bearing. If the condition step **threw**, no branch was ever chosen; reporting the
+arm as "not taken" would disguise a failure as a routine decision. A blown-up condition is a
 dependency failure and must read as one.
+
+Row four is the nested case, and it must *not* collapse into row three. A condition inside an
+untaken outer arm never ran because a decision went the other way — nothing went wrong — so an
+untaken nested branch reports `NotTaken` all the way down. Cascading it to `Skipped` would
+reintroduce exactly the ambiguity `NotTaken` exists to remove.
 
 ### Phase 2 — launch
 

@@ -72,15 +72,40 @@ public sealed class ScenarioScheduler
             {
                 if (cancellationToken.IsCancellationRequested)
                 {
-                    await ApplySkipAsync(i, "scenario canceled").ConfigureAwait(false);
+                    await ApplyTerminalAsync(i, StepStatus.Skipped, "scenario canceled").ConfigureAwait(false);
                     progressed = true;
                     continue;
                 }
 
                 var node = nodes[i];
+
+                // 1a. Merge (phi) nodes: any-of over mutually exclusive sources.
+                if (node.MergeSources.Count > 0)
+                {
+                    if (TryResolveMerge(node, out var mergeStatus, out var mergeReason, out var mergeOutput))
+                    {
+                        if (mergeStatus == StepStatus.Passed)
+                        {
+                            pending.Remove(i);
+                            outputs[i] = mergeOutput;
+                            status[i] = StepStatus.Passed;
+                            await ApplyMergePassAsync(i).ConfigureAwait(false);
+                        }
+                        else
+                        {
+                            await ApplyTerminalAsync(i, mergeStatus, mergeReason!).ConfigureAwait(false);
+                        }
+
+                        progressed = true;
+                    }
+
+                    continue;
+                }
+
                 var anyUnresolved = false;
                 List<string>? failed = null;
                 List<string>? skipped = null;
+                List<string>? notTaken = null;
 
                 foreach (var dep in node.DependsOn)
                 {
@@ -96,12 +121,61 @@ public sealed class ScenarioScheduler
                         case StepStatus.Skipped:
                             (skipped ??= []).Add(nodes[dep].OperationName);
                             break;
+                        case StepStatus.NotTaken:
+                            (notTaken ??= []).Add(nodes[dep].OperationName);
+                            break;
                     }
                 }
 
-                if (!anyUnresolved && (failed is not null || skipped is not null))
+                // 1b. Guards. A resolved-false guard is a decision (NotTaken); a guard whose condition
+                // failed/was skipped/was itself not taken is a cascade (Skipped) — no branch was chosen.
+                var guardNotTaken = (string?)null;
+                foreach (var guard in node.Guards)
                 {
-                    await ApplySkipAsync(i, BuildSkipReason(failed, skipped)).ConfigureAwait(false);
+                    switch (status[guard.ConditionIndex])
+                    {
+                        case StepStatus.Pending:
+                        case StepStatus.Running:
+                            anyUnresolved = true;
+                            break;
+                        case StepStatus.Passed:
+                            if (EvaluateGuard(nodes[guard.ConditionIndex], outputs[guard.ConditionIndex]) != guard.WhenValue)
+                            {
+                                guardNotTaken ??= nodes[guard.ConditionIndex].OperationName;
+                            }
+
+                            break;
+                        case StepStatus.NotTaken:
+                            // The condition itself sat in a branch that was not chosen, so it never
+                            // ran. Still a decision, not a failure — cascading to Skipped here would
+                            // report an untaken nested branch as though something had gone wrong.
+                            (notTaken ??= []).Add(nodes[guard.ConditionIndex].OperationName);
+                            break;
+                        default: // Failed / Skipped
+                            (skipped ??= []).Add(nodes[guard.ConditionIndex].OperationName);
+                            break;
+                    }
+                }
+
+                if (anyUnresolved)
+                {
+                    continue;
+                }
+
+                if (failed is not null || skipped is not null)
+                {
+                    await ApplyTerminalAsync(i, StepStatus.Skipped, BuildSkipReason(failed, skipped)).ConfigureAwait(false);
+                    progressed = true;
+                }
+                else if (guardNotTaken is not null)
+                {
+                    await ApplyTerminalAsync(i, StepStatus.NotTaken, $"not taken: {guardNotTaken}").ConfigureAwait(false);
+                    progressed = true;
+                }
+                else if (notTaken is not null)
+                {
+                    await ApplyTerminalAsync(
+                        i, StepStatus.NotTaken, $"not taken: {string.Join(", ", notTaken)}").ConfigureAwait(false);
                     progressed = true;
                 }
             }
@@ -117,7 +191,14 @@ public sealed class ScenarioScheduler
                     }
 
                     var node = nodes[i];
-                    if (node.DependsOn.All(d => status[d] == StepStatus.Passed))
+                    if (node.MergeSources.Count > 0)
+                    {
+                        continue; // resolved in phase 1, never invoked
+                    }
+
+                    if (node.DependsOn.All(d => status[d] == StepStatus.Passed)
+                        && node.Guards.All(g => status[g.ConditionIndex] == StepStatus.Passed
+                            && EvaluateGuard(nodes[g.ConditionIndex], outputs[g.ConditionIndex]) == g.WhenValue))
                     {
                         pending.Remove(i);
                         status[i] = StepStatus.Running;
@@ -185,13 +266,16 @@ public sealed class ScenarioScheduler
 
         return results.Select(r => r!).ToList();
 
-        async Task ApplySkipAsync(int i, string reason)
+        async Task ApplyTerminalAsync(int i, StepStatus terminal, string reason)
         {
             pending.Remove(i);
-            status[i] = StepStatus.Skipped;
+            status[i] = terminal;
             var node = nodes[i];
             var name = FormatName(node, inputs);
-            if (observer is not null)
+
+            // A not-taken branch never started, so no observer sees it start — that is what lets a
+            // reporter leave the node in its discovered state instead of stranding it "in progress".
+            if (observer is not null && terminal != StepStatus.NotTaken)
             {
                 await observer.OnStepStartingAsync(
                     new StepContext { Node = node, DisplayName = name })
@@ -203,7 +287,7 @@ public sealed class ScenarioScheduler
             {
                 var startOffset = StartOffset(node, simFinishOffset!);
                 simStartOffset![i] = startOffset;
-                simFinishOffset![i] = startOffset; // skipped steps have zero duration
+                simFinishOffset![i] = startOffset; // skipped and not-taken steps have zero duration
                 startedAt = simBase + startOffset;
             }
 
@@ -211,7 +295,7 @@ public sealed class ScenarioScheduler
             {
                 Node = node,
                 DisplayName = name,
-                Status = StepStatus.Skipped,
+                Status = terminal,
                 StartedAt = startedAt,
                 SkipReason = reason,
             };
@@ -221,6 +305,101 @@ public sealed class ScenarioScheduler
                 await observer.OnStepFinishedAsync(result).ConfigureAwait(false);
             }
         }
+
+        // A merge resolves once ALL its sources are terminal: exactly one Passed => pass with that
+        // source's output; every source NotTaken => NotTaken; any Failed/Skipped => Skipped, cascading.
+        bool TryResolveMerge(ScenarioNode node, out StepStatus resolved, out string? reason, out object? output)
+        {
+            resolved = StepStatus.Passed;
+            reason = null;
+            output = null;
+            var passedIndex = -1;
+            List<string>? bad = null;
+
+            foreach (var source in node.MergeSources)
+            {
+                switch (status[source])
+                {
+                    case StepStatus.Pending:
+                    case StepStatus.Running:
+                        return false;
+                    case StepStatus.Passed:
+                        passedIndex = source;
+                        break;
+                    case StepStatus.NotTaken:
+                        break;
+                    default: // Failed / Skipped
+                        (bad ??= []).Add(nodes[source].OperationName);
+                        break;
+                }
+            }
+
+            if (bad is not null)
+            {
+                resolved = StepStatus.Skipped;
+                reason = $"dependency failed: {string.Join(", ", bad)}";
+                return true;
+            }
+
+            if (passedIndex < 0)
+            {
+                resolved = StepStatus.NotTaken;
+                reason = "not taken: no branch produced a value";
+                return true;
+            }
+
+            output = outputs[passedIndex];
+            return true;
+        }
+
+        async Task ApplyMergePassAsync(int i)
+        {
+            var node = nodes[i];
+            var name = FormatName(node, inputs);
+            var startedAt = _timeProvider.GetUtcNow();
+            if (_simulatedTime)
+            {
+                var startOffset = MergeStartOffset(node, simFinishOffset!);
+                simStartOffset![i] = startOffset;
+                simFinishOffset![i] = startOffset; // a merge is instantaneous
+                startedAt = simBase + startOffset;
+            }
+
+            var result = new StepResult
+            {
+                Node = node,
+                DisplayName = name,
+                Status = StepStatus.Passed,
+                StartedAt = startedAt,
+            };
+            results[i] = result;
+            if (observer is not null)
+            {
+                await observer.OnStepFinishedAsync(result).ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <summary>Coerces a condition node's boxed output to its branch value using the generator-emitted
+    /// <see cref="ScenarioNode.EvaluateCondition"/>. <see cref="ScenarioDefinition.Validate"/> has
+    /// already proven it is non-null for every guarded condition.</summary>
+    private static bool EvaluateGuard(ScenarioNode condition, object? output)
+        => condition.EvaluateCondition!(output);
+
+    /// <summary>A merge's simulated start offset: the MAX of its sources' finish offsets (it has no
+    /// DependsOn edges of its own).</summary>
+    private static TimeSpan MergeStartOffset(ScenarioNode node, TimeSpan[] finishOffsets)
+    {
+        var offset = TimeSpan.Zero;
+        foreach (var source in node.MergeSources)
+        {
+            if (finishOffsets[source] > offset)
+            {
+                offset = finishOffsets[source];
+            }
+        }
+
+        return offset;
     }
 
     private async Task<NodeOutcome> RunNodeAsync(
