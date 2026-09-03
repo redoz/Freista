@@ -57,6 +57,20 @@ public sealed class ScenarioScheduler
         var pending = new HashSet<int>(Enumerable.Range(0, count));
         var running = new Dictionary<Task<NodeOutcome>, int>();
 
+        // The teardown node is not part of the DAG: it runs after every other node is terminal, so it
+        // is removed from the pending set rather than scheduled.
+        var teardownIndex = -1;
+        for (var i = 0; i < count; i++)
+        {
+            if (nodes[i].IsTeardown)
+            {
+                teardownIndex = i;
+                pending.Remove(i);
+            }
+        }
+
+        var teardownLog = new TeardownLog();
+
         // Simulated-time bookkeeping. The base instant is sampled once; per-node start/finish offsets
         // (TimeSpan from base) compose the DAG-correct timeline. Unused in real mode.
         var simBase = _simulatedTime ? _timeProvider.GetUtcNow() : default;
@@ -217,7 +231,7 @@ public sealed class ScenarioScheduler
                         }
 
                         running[RunNodeAsync(
-                            node, inputs, services, displayName, simBase, startOffset, cancellationToken)] = i;
+                            node, inputs, services, displayName, simBase, startOffset, teardownLog, cancellationToken)] = i;
                         progressed = true;
                     }
                 }
@@ -263,7 +277,119 @@ public sealed class ScenarioScheduler
             }
         }
 
+        if (teardownIndex >= 0)
+        {
+            await RunTeardownAsync(teardownIndex).ConfigureAwait(false);
+        }
+
         return results.Select(r => r!).ToList();
+
+        // Runs after the scheduling loop, so a cancelled scenario token has already stopped the DAG
+        // and cannot suppress the cleanups that exist to prevent leaks. Cleanup delegates are invoked
+        // directly, never through a step's cancellation source.
+        async Task RunTeardownAsync(int i)
+        {
+            var node = nodes[i];
+            var name = FormatName(node, inputs);
+
+            // Success is a property of the SCENARIO, not of the step that registered a cleanup: a
+            // failed run should leave the whole world intact, not a half-torn-down mix of it.
+            var succeeded = true;
+            for (var n = 0; n < count; n++)
+            {
+                if (n != i && status[n] is not (StepStatus.Passed or StepStatus.NotTaken))
+                {
+                    succeeded = false;
+                    break;
+                }
+            }
+
+            var optionalAllowed = definition.TeardownPolicy switch
+            {
+                Run.Always => true,
+                Run.OnSuccess => succeeded,
+                _ => false,
+            };
+
+            // Reverse topological order of the owning step, then reverse registration order within a
+            // step. Registration order alone is nondeterministic: steps run concurrently.
+            var selected = teardownLog.Entries
+                .Where(e => e.Kind == Cleanup.Required || optionalAllowed)
+                .OrderByDescending(e => e.OwningStepIndex)
+                .ThenByDescending(e => e.Sequence)
+                .ToList();
+
+            var startedAt = _timeProvider.GetUtcNow();
+            if (_simulatedTime)
+            {
+                simStartOffset![i] = TimeSpan.Zero;
+                simFinishOffset![i] = TimeSpan.Zero;
+            }
+
+            if (selected.Count == 0)
+            {
+                var reason = teardownLog.Entries.Count == 0
+                    ? "no teardown registered"
+                    : $"teardown policy is {definition.TeardownPolicy}"
+                        + (definition.TeardownPolicy == Run.OnSuccess && !succeeded
+                            ? " and the scenario failed"
+                            : string.Empty);
+                status[i] = StepStatus.NotTaken;
+                results[i] = new StepResult
+                {
+                    Node = node,
+                    DisplayName = name,
+                    Status = StepStatus.NotTaken,
+                    StartedAt = startedAt,
+                    SkipReason = reason,
+                };
+                if (observer is not null)
+                {
+                    await observer.OnStepFinishedAsync(results[i]!).ConfigureAwait(false);
+                }
+
+                return;
+            }
+
+            if (observer is not null)
+            {
+                await observer.OnStepStartingAsync(
+                    new StepContext { Node = node, DisplayName = name }).ConfigureAwait(false);
+            }
+
+            var stopwatch = Stopwatch.StartNew();
+            List<Exception>? errors = null;
+            foreach (var entry in selected)
+            {
+                try
+                {
+                    await entry.Cleanup().ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    // Recorded, never rethrown here: aborting would leak everything behind it.
+                    (errors ??= []).Add(ex);
+                }
+            }
+
+            stopwatch.Stop();
+            status[i] = errors is null ? StepStatus.Passed : StepStatus.Failed;
+            results[i] = new StepResult
+            {
+                Node = node,
+                DisplayName = name,
+                Status = status[i],
+                StartedAt = startedAt,
+                Duration = stopwatch.Elapsed,
+                Exception = errors is null
+                    ? null
+                    : new AggregateException($"{errors.Count} teardown action(s) failed.", errors),
+            };
+            if (observer is not null)
+            {
+                await observer.OnStepFinishedAsync(results[i]!).ConfigureAwait(false);
+            }
+        }
 
         async Task ApplyTerminalAsync(int i, StepStatus terminal, string reason)
         {
@@ -408,6 +534,7 @@ public sealed class ScenarioScheduler
         string displayName,
         DateTimeOffset simBase,
         TimeSpan simStartOffset,
+        TeardownLog teardownLog,
         CancellationToken scenarioToken)
     {
         // In simulated mode each step runs on its own clock seeded at base + start offset, so the
@@ -422,6 +549,8 @@ public sealed class ScenarioScheduler
         using var stepCts = CancellationTokenSource.CreateLinkedTokenSource(scenarioToken);
         var context = new ScenarioContext(
             node.StepId, displayName, services, resolver: null, stepTimeProvider, stepCts.Token);
+
+        context.AttachTeardown(teardownLog, node.Index);
 
         // Ambient for the duration of this step. Set inside RunNodeAsync (which each step enters on
         // its own async flow) so it is visible to the step body and to anything it awaits, but never

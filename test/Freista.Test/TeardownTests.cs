@@ -87,4 +87,203 @@ public class TeardownTests
 
         Assert.Equal(Run.Always, def.TeardownPolicy);
     }
+
+    private static ScenarioNode Step(
+        int index,
+        Func<IStepInputs, ScenarioContext, Task<object?>> invoke,
+        int[]? dependsOn = null) => new()
+    {
+        Index = index,
+        StepId = $"step-{index}",
+        Phase = "Given",
+        OperationName = $"Op{index}",
+        DisplayNameTemplate = $"op {index}",
+        DependsOn = dependsOn ?? [],
+        Invoke = invoke,
+    };
+
+    private static ScenarioNode TeardownNode(int index) => new()
+    {
+        Index = index,
+        StepId = $"step-{index}",
+        Phase = "Then",
+        OperationName = "Teardown",
+        DisplayNameTemplate = "Teardown",
+        DependsOn = [],
+        IsTeardown = true,
+        Invoke = (_, _) => Task.FromResult<object?>(null),
+    };
+
+    private static ScenarioDefinition Def(Run policy, params ScenarioNode[] nodes) => new()
+    {
+        ScenarioId = "scn",
+        DisplayName = "scenario",
+        MethodName = "Ns.Scn",
+        TeardownPolicy = policy,
+        Nodes = nodes,
+    };
+
+    [Fact]
+    public async Task Cleanups_run_in_reverse_topological_order()
+    {
+        var order = new List<string>();
+        var def = Def(Run.Always,
+            Step(0, (_, ctx) => { ctx.OnTeardown(() => { lock (order) { order.Add("first"); } return Task.CompletedTask; }); return Task.FromResult<object?>(null); }),
+            Step(1, (_, ctx) => { ctx.OnTeardown(() => { lock (order) { order.Add("second"); } return Task.CompletedTask; }); return Task.FromResult<object?>(null); }, [0]),
+            TeardownNode(2));
+
+        var results = await new ScenarioScheduler().RunAsync(def);
+
+        Assert.Equal(["second", "first"], order);
+        Assert.Equal(StepStatus.Passed, results[2].Status);
+    }
+
+    [Fact]
+    public async Task Within_one_step_cleanups_run_in_reverse_registration_order()
+    {
+        var order = new List<string>();
+        var def = Def(Run.Always,
+            Step(0, (_, ctx) =>
+            {
+                ctx.OnTeardown(() => { order.Add("a"); return Task.CompletedTask; });
+                ctx.OnTeardown(() => { order.Add("b"); return Task.CompletedTask; });
+                return Task.FromResult<object?>(null);
+            }),
+            TeardownNode(1));
+
+        await new ScenarioScheduler().RunAsync(def);
+
+        Assert.Equal(["b", "a"], order);
+    }
+
+    [Fact]
+    public async Task OnSuccess_skips_optional_cleanups_when_a_step_failed()
+    {
+        var ran = false;
+        var def = Def(Run.OnSuccess,
+            Step(0, (_, ctx) => { ctx.OnTeardown(() => { ran = true; return Task.CompletedTask; }); return Task.FromResult<object?>(null); }),
+            Step(1, (_, _) => throw new InvalidOperationException("boom"), [0]),
+            TeardownNode(2));
+
+        var results = await new ScenarioScheduler().RunAsync(def);
+
+        Assert.False(ran);
+        Assert.Equal(StepStatus.NotTaken, results[2].Status);
+    }
+
+    [Fact]
+    public async Task OnSuccess_runs_optional_cleanups_when_every_step_passed()
+    {
+        var ran = false;
+        var def = Def(Run.OnSuccess,
+            Step(0, (_, ctx) => { ctx.OnTeardown(() => { ran = true; return Task.CompletedTask; }); return Task.FromResult<object?>(null); }),
+            TeardownNode(1));
+
+        await new ScenarioScheduler().RunAsync(def);
+
+        Assert.True(ran);
+    }
+
+    [Fact]
+    public async Task Required_cleanups_run_even_under_Run_Never()
+    {
+        var optional = false;
+        var required = false;
+        var def = Def(Run.Never,
+            Step(0, (_, ctx) =>
+            {
+                ctx.OnTeardown(() => { optional = true; return Task.CompletedTask; });
+                ctx.OnTeardown(Cleanup.Required, () => { required = true; return Task.CompletedTask; });
+                return Task.FromResult<object?>(null);
+            }),
+            TeardownNode(1));
+
+        var results = await new ScenarioScheduler().RunAsync(def);
+
+        Assert.False(optional);
+        Assert.True(required);
+        Assert.Equal(StepStatus.Passed, results[1].Status);
+    }
+
+    [Fact]
+    public async Task A_throwing_cleanup_does_not_stop_the_rest()
+    {
+        var later = false;
+        var def = Def(Run.Always,
+            Step(0, (_, ctx) => { ctx.OnTeardown(() => { later = true; return Task.CompletedTask; }); return Task.FromResult<object?>(null); }),
+            Step(1, (_, ctx) => { ctx.OnTeardown(() => throw new InvalidOperationException("cleanup boom")); return Task.FromResult<object?>(null); }, [0]),
+            TeardownNode(2));
+
+        var results = await new ScenarioScheduler().RunAsync(def);
+
+        Assert.True(later);
+        Assert.Equal(StepStatus.Failed, results[2].Status);
+        Assert.Contains("cleanup boom", results[2].Exception!.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Teardown_node_is_not_taken_when_nothing_registered()
+    {
+        var def = Def(Run.Always, Step(0, (_, _) => Task.FromResult<object?>(null)), TeardownNode(1));
+
+        var results = await new ScenarioScheduler().RunAsync(def);
+
+        Assert.Equal(StepStatus.NotTaken, results[1].Status);
+    }
+
+    [Fact]
+    public async Task A_step_in_an_untaken_branch_registers_nothing()
+    {
+        var ran = false;
+        var cond = new ScenarioNode
+        {
+            Index = 0,
+            StepId = "cond",
+            Phase = "Given",
+            OperationName = "Cond",
+            DisplayNameTemplate = "cond",
+            DependsOn = [],
+            Invoke = (_, _) => Task.FromResult<object?>(false),
+            EvaluateCondition = static o => (bool)o!,
+        };
+        var arm = new ScenarioNode
+        {
+            Index = 1,
+            StepId = "arm",
+            Phase = "When",
+            OperationName = "Arm",
+            DisplayNameTemplate = "arm",
+            DependsOn = [0],
+            Guards = [new Guard(0, true)],
+            Invoke = (_, ctx) => { ctx.OnTeardown(() => { ran = true; return Task.CompletedTask; }); return Task.FromResult<object?>(null); },
+        };
+
+        var results = await new ScenarioScheduler().RunAsync(Def(Run.Always, cond, arm, TeardownNode(2)));
+
+        Assert.Equal(StepStatus.NotTaken, results[1].Status);
+        Assert.False(ran);
+        Assert.Equal(StepStatus.NotTaken, results[2].Status);
+    }
+
+    [Fact]
+    public async Task Required_cleanups_run_after_the_scenario_is_cancelled()
+    {
+        // The case that matters most: a cancelled or timed-out scenario is exactly when a container
+        // leaks, so the cancelled token must not suppress the cleanup that prevents it.
+        var released = false;
+        using var cts = new CancellationTokenSource();
+        var def = Def(Run.Always,
+            Step(0, (_, ctx) =>
+            {
+                ctx.OnTeardown(Cleanup.Required, () => { released = true; return Task.CompletedTask; });
+                cts.Cancel();
+                return Task.FromResult<object?>(null);
+            }),
+            Step(1, (_, _) => Task.FromResult<object?>(null), [0]),
+            TeardownNode(2));
+
+        await new ScenarioScheduler().RunAsync(def, cancellationToken: cts.Token);
+
+        Assert.True(released);
+    }
 }
