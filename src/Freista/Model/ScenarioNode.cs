@@ -36,6 +36,30 @@ public sealed class ScenarioNode
     /// <summary>Label shared by sibling nodes of a tuple/array parallel group, for reporting.</summary>
     public string? GroupId { get; init; }
 
+    /// <summary>Branch conditions gating this node; ALL must hold for it to run. Empty for an
+    /// unconditional node.</summary>
+    public IReadOnlyList<Guard> Guards { get; init; } = [];
+
+    /// <summary>
+    /// For a synthetic merge (phi) node, the mutually-exclusive candidate producers whose outputs
+    /// this node selects between — the ONLY any-of semantics in the graph. Exactly one may pass; its
+    /// output becomes this node's output. A single source is a pass-through alias (the missing arm of
+    /// a bare <c>if</c>). Empty for an ordinary node.
+    /// </summary>
+    public IReadOnlyList<int> MergeSources { get; init; } = [];
+
+    /// <summary>True for generator plumbing (merge/pass-through nodes) that is not a business step:
+    /// excluded from MTP discovery and step numbering, retained in the HTML report model.</summary>
+    public bool IsSynthetic { get; init; }
+
+    /// <summary>
+    /// For a condition node, coerces this step's (boxed) output to the branch value. The generator
+    /// emits <c>static o =&gt; ((T)o!) ? true : false</c> so Roslyn selects <c>bool</c>, an implicit
+    /// conversion, or <c>operator true</c> at compile time — the scheduler never reflects. Null for a
+    /// node that gates nothing.
+    /// </summary>
+    public Func<object?, bool>? EvaluateCondition { get; init; }
+
     /// <summary>
     /// Runs the underlying DSL operation. Reads its arguments from <see cref="IStepInputs"/>,
     /// returns the (boxed) output, or null for a non-result <c>Task</c>/<c>ValueTask</c>.

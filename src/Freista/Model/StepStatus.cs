@@ -17,4 +17,9 @@ public enum StepStatus
 
     /// <summary>Not run because a dependency failed, was skipped, or the scenario was canceled.</summary>
     Skipped,
+
+    /// <summary>Not run because the branch it belongs to was not chosen. Distinct from
+    /// <see cref="Skipped"/>: nothing went wrong — the condition simply decided otherwise.
+    /// Never reported as a pass.</summary>
+    NotTaken,
 }

@@ -57,6 +57,52 @@ public sealed class ScenarioDefinition
                         $"Step {node.Index} ('{node.OperationName}') depends on itself.");
                 }
             }
+
+            foreach (var guard in node.Guards)
+            {
+                if (guard.ConditionIndex < 0 || guard.ConditionIndex >= count)
+                {
+                    throw new InvalidOperationException(
+                        $"Step {node.Index} ('{node.OperationName}') has a guard on out-of-range node {guard.ConditionIndex}.");
+                }
+
+                if (Nodes[guard.ConditionIndex].EvaluateCondition is null)
+                {
+                    throw new InvalidOperationException(
+                        $"Step {node.Index} ('{node.OperationName}') is guarded on step {guard.ConditionIndex} "
+                        + $"('{Nodes[guard.ConditionIndex].OperationName}'), which has no EvaluateCondition.");
+                }
+            }
+
+            foreach (var source in node.MergeSources)
+            {
+                if (source < 0 || source >= count)
+                {
+                    throw new InvalidOperationException(
+                        $"Merge step {node.Index} references out-of-range source {source}.");
+                }
+
+                if (source == node.Index)
+                {
+                    throw new InvalidOperationException($"Merge step {node.Index} references itself.");
+                }
+            }
+
+            // Merge sources must be mutually exclusive — every pair must be guarded on a common
+            // condition with opposite WhenValue — so at most one can pass. The generator guarantees
+            // this; without the check a violation would surface as a baffling double-write.
+            for (var a = 0; a < node.MergeSources.Count; a++)
+            {
+                for (var b = a + 1; b < node.MergeSources.Count; b++)
+                {
+                    if (!AreExclusive(Nodes[node.MergeSources[a]], Nodes[node.MergeSources[b]]))
+                    {
+                        throw new InvalidOperationException(
+                            $"Merge step {node.Index} sources {node.MergeSources[a]} and {node.MergeSources[b]} "
+                            + "are not mutually exclusive (no shared condition with opposite guard values).");
+                    }
+                }
+            }
         }
 
         // DFS cycle detection over the index-addressed dependency graph (0 = unvisited,
@@ -72,23 +118,54 @@ public sealed class ScenarioDefinition
         }
     }
 
+    /// <summary>True when two candidate producers can never both run: some condition guards both
+    /// with opposite <see cref="Guard.WhenValue"/>s.</summary>
+    private static bool AreExclusive(ScenarioNode left, ScenarioNode right)
+    {
+        foreach (var l in left.Guards)
+        {
+            foreach (var r in right.Guards)
+            {
+                if (l.ConditionIndex == r.ConditionIndex && l.WhenValue != r.WhenValue)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     private bool HasCycle(int index, int[] state)
     {
         state[index] = 1;
-        foreach (var dep in Nodes[index].DependsOn)
+
+        // Merge sources are real edges (a merge selects one producer's output), so a cycle through
+        // them is as fatal as one through DependsOn and must be walked the same way.
+        if (HasCycleThrough(Nodes[index].DependsOn, state) || HasCycleThrough(Nodes[index].MergeSources, state))
         {
-            if (state[dep] == 1)
+            return true;
+        }
+
+        state[index] = 2;
+        return false;
+    }
+
+    private bool HasCycleThrough(IReadOnlyList<int> edges, int[] state)
+    {
+        foreach (var edge in edges)
+        {
+            if (state[edge] == 1)
             {
                 return true;
             }
 
-            if (state[dep] == 0 && HasCycle(dep, state))
+            if (state[edge] == 0 && HasCycle(edge, state))
             {
                 return true;
             }
         }
 
-        state[index] = 2;
         return false;
     }
 }
