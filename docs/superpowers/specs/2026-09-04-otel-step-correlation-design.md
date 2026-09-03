@@ -1,8 +1,14 @@
 # OTEL Step Correlation — Design
 
 - **Date:** 2026-09-04
-- **Status:** Design drafted in brainstorming. **One decision needs confirming** before this becomes
-  a plan — see "The late-arrival problem".
+- **Status:** **SHELVED 2026-09-04**, not rejected. The design is sound and the late-arrival problem
+  has a workable answer (option A below), but the cost — losing live per-step progress within a
+  scenario — was judged not worth it for the value, given that an `ILoggerProvider` gets most of the
+  benefit for an in-process SUT at a fraction of the cost. Revisit **only** when an out-of-process
+  SUT (Aspire children) makes per-step server telemetry unobtainable any other way. Keep this
+  document for two findings that cost real effort: the .NET OTLP exporter speaks only `grpc` and
+  `http/protobuf` (so a JSON receiver is not an option), and exporter batching — not correlation — is
+  the actual hard problem.
 - **Scope:** `src/Freista` (per-step `Activity`, telemetry on `StepResult`), a new OTLP receiver,
   `src/Freista.Mtp` (feed the existing per-step output channel), the HTML report.
 - **Out of scope:** being a real collector (batching, retry, sampling, tail sampling, multiple

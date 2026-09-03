@@ -423,6 +423,11 @@ public sealed class ScenarioScheduler
         var context = new ScenarioContext(
             node.StepId, displayName, services, resolver: null, stepTimeProvider, stepCts.Token);
 
+        // Ambient for the duration of this step. Set inside RunNodeAsync (which each step enters on
+        // its own async flow) so it is visible to the step body and to anything it awaits, but never
+        // to the scheduler loop or to a sibling step.
+        ScenarioContext.SetCurrent(context);
+
         try
         {
             object? output;

@@ -100,6 +100,22 @@ else
 await Then.AppointmentExists(appointment);
 ```
 
+### Logging
+
+Steps write through the standard `ILogger` abstraction; the lines are collected as that step's log
+output and appear under it in the runner and the HTML report.
+
+```csharp
+ctx.GetLogger<BookingSteps>().LogInformation("seeded {Count} patients", count);
+```
+
+Registering `FreistaLoggerProvider` with an in-process system under test attributes *its* logs to the
+step that provoked them, because the destination is resolved per write from the step that is running:
+
+```csharp
+builder.Logging.AddProvider(new FreistaLoggerProvider());
+```
+
 See [the design spec](docs/scenario-graph-extension-design.md), the
 [conditionals design](docs/superpowers/specs/2026-09-03-scenario-conditionals-design.md), and the
 [implementation plan](docs/superpowers/plans/2026-06-03-scenario-graph-extension.md).

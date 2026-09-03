@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Microsoft.Extensions.Logging;
 using Freista.Scheduling;
 
 namespace Freista;
@@ -11,8 +12,23 @@ namespace Freista;
 /// </summary>
 public sealed class ScenarioContext
 {
+    private static readonly AsyncLocal<ScenarioContext?> CurrentContext = new();
+
     private readonly ConcurrentQueue<string> _logs = new();
     private readonly ConcurrentDictionary<string, string> _attachments = new();
+
+    /// <summary>
+    /// The context of the step running on this execution flow, or null outside a step. Backed by
+    /// <see cref="AsyncLocal{T}"/>, so concurrent sibling steps each observe their own context and
+    /// never each other's — the same property that makes per-step log attribution correct without
+    /// threading a context through user code.
+    /// </summary>
+    public static ScenarioContext? Current => CurrentContext.Value;
+
+    /// <summary>Sets the ambient context for the calling flow. Called by the scheduler around a
+    /// step's invocation; setting it inside the step's own async method keeps it out of the
+    /// scheduler loop's flow and out of sibling steps'.</summary>
+    internal static void SetCurrent(ScenarioContext? context) => CurrentContext.Value = context;
 
     public ScenarioContext(
         string stepId,
@@ -95,6 +111,15 @@ public sealed class ScenarioContext
 
     /// <summary>Appends a log line associated with the current step.</summary>
     public void Log(string message) => _logs.Enqueue(message);
+
+    /// <summary>
+    /// A logger whose writes are collected as this step's log lines. Category is
+    /// <typeparamref name="T"/>'s full name.
+    /// </summary>
+    public ILogger GetLogger<T>() => GetLogger(typeof(T).FullName ?? typeof(T).Name);
+
+    /// <summary>A logger with an explicit category, writing to the running step.</summary>
+    public ILogger GetLogger(string category) => new FreistaLogger(category, this);
 
     /// <summary>Records a named text attachment associated with the current step.</summary>
     public void AddAttachment(string name, string value) => _attachments[name] = value;
