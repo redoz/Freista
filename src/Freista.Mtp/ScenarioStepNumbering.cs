@@ -31,7 +31,14 @@ internal static class ScenarioStepNumbering
 
         foreach (var node in definition.Nodes.OrderBy(n => n.Index))
         {
-            if (node.GroupId is null)
+            if (node.IsSynthetic)
+            {
+                // Consumes no number (users must not see a gap in 1, 2, 3) but still gets a label so
+                // the HTML report can render it. It reuses the previous top-level number, which would
+                // read as a duplicate — harmless, because a synthetic never reaches a runner's tree.
+                assignments.Add((node.Index, nextTop, 0));
+            }
+            else if (node.GroupId is null)
             {
                 // Standalone step: consume the next top-level number (sub 0 = no sub-index).
                 assignments.Add((node.Index, ++nextTop, 0));

@@ -71,6 +71,14 @@ public static class AppointmentDsl
             return Task.FromResult(new Slot(1));
         }
 
+        [StepName("Given the patient is a priority case")]
+        public static Task<bool> PatientIsPriority([Read] Patient patient, ScenarioContext? ctx = null)
+        {
+            ctx?.SimulateElapsed(TimeSpan.FromMilliseconds(180));
+            // A deterministic demo rule: names starting with a letter before 'M' are priority.
+            return Task.FromResult(patient.Name.Length > 0 && char.ToUpperInvariant(patient.Name[0]) < 'M');
+        }
+
         [StepName("Given user {name} exists")]
         [return: Created]
         public static Task<User> UserExists(string name, ScenarioContext? ctx = null)
@@ -90,6 +98,14 @@ public static class AppointmentDsl
         public static Task<Appointment> CreateAppointment(Patient patient, Slot slot, ScenarioContext? ctx = null)
         {
             ctx?.SimulateElapsed(TimeSpan.FromMilliseconds(600));
+            return Task.FromResult(new Appointment(patient, slot));
+        }
+
+        [StepName("When creating an urgent appointment")]
+        [return: Created(References = [nameof(patient)], Consumes = [nameof(slot)])]
+        public static Task<Appointment> CreateUrgentAppointment(Patient patient, Slot slot, ScenarioContext? ctx = null)
+        {
+            ctx?.SimulateElapsed(TimeSpan.FromMilliseconds(410));
             return Task.FromResult(new Appointment(patient, slot));
         }
 

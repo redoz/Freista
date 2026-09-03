@@ -15,7 +15,7 @@ namespace Freista.Mtp.Test;
 /// </summary>
 public class FreistaDiscovererTests
 {
-    private static ScenarioNode Node(int index, string stepId, string template, string? file = null, int line = 0, string? group = null) => new()
+    private static ScenarioNode Node(int index, string stepId, string template, string? file = null, int line = 0, string? group = null, bool synthetic = false) => new()
     {
         Index = index,
         StepId = stepId,
@@ -26,6 +26,7 @@ public class FreistaDiscovererTests
         SourceLine = line,
         DependsOn = [],
         GroupId = group,
+        IsSynthetic = synthetic,
         Invoke = (_, _) => Task.FromResult<object?>(null),
     };
 
@@ -156,5 +157,37 @@ public class FreistaDiscovererTests
         var node = Assert.Single(FreistaDiscoverer.BuildNodes(definition));
 
         Assert.Empty(node.Properties.OfType<TestFileLocationProperty>());
+    }
+
+    [Fact]
+    public void Synthetic_merge_nodes_are_not_discovered()
+    {
+        var definition = Definition(nodes:
+        [
+            Node(0, "a", "step a"),
+            Node(1, "m", "«merge appt»", synthetic: true),
+            Node(2, "b", "step b"),
+        ]);
+
+        var nodes = FreistaDiscoverer.BuildNodes(definition);
+
+        Assert.Equal(2, nodes.Count);
+        Assert.DoesNotContain(nodes, n => n.DisplayName.Contains("merge", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Numbering_has_no_gap_where_a_synthetic_node_sits()
+    {
+        var definition = Definition(nodes:
+        [
+            Node(0, "a", "step a"),
+            Node(1, "m", "«merge appt»", synthetic: true),
+            Node(2, "b", "step b"),
+        ]);
+
+        var nodes = FreistaDiscoverer.BuildNodes(definition);
+
+        Assert.Equal("1. step a", nodes[0].DisplayName);
+        Assert.Equal("2. step b", nodes[1].DisplayName);
     }
 }

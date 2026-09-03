@@ -24,7 +24,7 @@ public class MtpReportSinkTests
 {
     private static readonly DateTimeOffset TestInstant = new(2026, 6, 9, 12, 0, 0, TimeSpan.Zero);
 
-    private static ScenarioNode Node(int index, string stepId, string template, string? file = null, int line = 0, string? group = null) => new()
+    private static ScenarioNode Node(int index, string stepId, string template, string? file = null, int line = 0, string? group = null, bool synthetic = false) => new()
     {
         Index = index,
         StepId = stepId,
@@ -35,6 +35,7 @@ public class MtpReportSinkTests
         SourceLine = line,
         DependsOn = [],
         GroupId = group,
+        IsSynthetic = synthetic,
         Invoke = (_, _) => Task.FromResult<object?>(null),
     };
 
@@ -451,5 +452,41 @@ public class MtpReportSinkTests
     private sealed class GatedMessageBus(Task gate) : IMessageBus
     {
         public Task PublishAsync(IDataProducer dataProducer, IData data) => gate;
+    }
+
+    [Fact]
+    public async Task Not_taken_step_is_never_reported_as_passed()
+    {
+        var def = Definition("s", "my scenario", Node(0, "a", "step a"));
+        var (sink, bus) = NewSink();
+
+        await sink.PublishAsync(new StepFinished(def, new StepResult
+        {
+            Node = def.Nodes[0],
+            DisplayName = "step a",
+            Status = StepStatus.NotTaken,
+            StartedAt = TestInstant,
+            SkipReason = "not taken: IsPriority",
+        }));
+
+        Assert.Empty(bus.Nodes.SelectMany(n => n.Properties.OfType<PassedTestNodeStateProperty>()));
+    }
+
+    [Fact]
+    public async Task Synthetic_merge_nodes_publish_no_updates()
+    {
+        var merge = Node(0, "m", "«merge appt»", synthetic: true);
+        var def = Definition("s", "my scenario", merge);
+        var (sink, bus) = NewSink();
+
+        await sink.PublishAsync(new StepFinished(def, new StepResult
+        {
+            Node = merge,
+            DisplayName = "«merge appt»",
+            Status = StepStatus.Passed,
+            StartedAt = TestInstant,
+        }));
+
+        Assert.Empty(bus.Updates);
     }
 }

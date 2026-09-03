@@ -25,7 +25,11 @@ public class RunLoopTests
         string stepId,
         string template,
         int[]? dependsOn = null,
-        Func<IStepInputs, ScenarioContext, Task<object?>>? invoke = null) => new()
+        Func<IStepInputs, ScenarioContext, Task<object?>>? invoke = null,
+        Guard[]? guards = null,
+        int[]? mergeSources = null,
+        bool synthetic = false,
+        Func<object?, bool>? evaluate = null) => new()
         {
             Index = index,
             StepId = stepId,
@@ -35,6 +39,10 @@ public class RunLoopTests
             SourceFile = @"C:\src\S.cs",
             SourceLine = index + 1,
             DependsOn = dependsOn ?? [],
+            Guards = guards ?? [],
+            MergeSources = mergeSources ?? [],
+            IsSynthetic = synthetic,
+            EvaluateCondition = evaluate,
             Invoke = invoke ?? ((_, _) => Task.FromResult<object?>(null)),
         };
 
@@ -420,5 +428,43 @@ public class RunLoopTests
 
             return Task.CompletedTask;
         }
+    }
+
+    [Fact]
+    public async Task Conditional_scenario_runs_the_taken_arm_and_reports_the_other_as_not_green()
+    {
+        var def = Definition("c", "Conditional",
+            Node(0, "cond", "is priority",
+                invoke: (_, _) => Task.FromResult<object?>(true),
+                evaluate: static o => (bool)o!),
+            Node(1, "urgent", "create urgent", dependsOn: [0], guards: [new Guard(0, true)]),
+            Node(2, "standard", "create standard", dependsOn: [0], guards: [new Guard(0, false)]),
+            Node(3, "merge", "«merge appt»", mergeSources: [1, 2], synthetic: true));
+
+        var loop = new FreistaRunLoop(() => [def]);
+        var sink = new RecordingSink();
+        await loop.RunAsync(uids: null, sink, CancellationToken.None);
+
+        var finished = sink.Events.OfType<StepFinished>().ToDictionary(e => e.Result.Node.StepId, e => e.Result);
+
+        Assert.Equal(StepStatus.Passed, finished["urgent"].Status);
+        Assert.Equal(StepStatus.NotTaken, finished["standard"].Status);
+        Assert.DoesNotContain("standard", sink.PassedUids.Select(u => u.Split(':')[1]));
+    }
+
+    [Fact]
+    public async Task Not_taken_step_never_reaches_the_passed_tally()
+    {
+        var def = Definition("c2", "Conditional",
+            Node(0, "cond", "is priority",
+                invoke: (_, _) => Task.FromResult<object?>(false),
+                evaluate: static o => (bool)o!),
+            Node(1, "urgent", "create urgent", dependsOn: [0], guards: [new Guard(0, true)]));
+
+        var loop = new FreistaRunLoop(() => [def]);
+        var sink = new RecordingSink();
+        await loop.RunAsync(uids: null, sink, CancellationToken.None);
+
+        Assert.DoesNotContain(Uid("c2", "urgent"), sink.PassedUids);
     }
 }

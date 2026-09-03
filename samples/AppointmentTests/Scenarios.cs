@@ -23,6 +23,24 @@ public static class Scenarios
         await Then.AppointmentExists(appointment);
     }
 
+    // Conditionals: the condition is an ordinary awaited step, so it is discovered, timed, and
+    // reported like any other. Exactly one arm runs; the other is reported not-taken (never green),
+    // and the two definitions of `appointment` merge at the closing brace.
+    [Scenario("priority patients get an urgent appointment")]
+    public static async Task BookingWithPriorityRouting()
+    {
+        var patient = await Given.PatientExists("Alice");
+        var slot = await Given.AvailableSlot();
+
+        Appointment appointment;
+        if (await Given.PatientIsPriority(patient))
+            appointment = await When.CreateUrgentAppointment(patient, slot);
+        else
+            appointment = await When.CreateAppointment(patient, slot);
+
+        await Then.AppointmentExists(appointment);
+    }
+
     // Explicit fork/join with an awaited tuple: the two arrange steps run in parallel after the
     // clean step, and CreateAppointment waits for both.
     [Scenario("customer books with parallel arrange")]

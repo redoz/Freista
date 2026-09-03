@@ -12,7 +12,7 @@ namespace Freista.Mtp.Test;
 /// </summary>
 public class ScenarioStepNumberingTests
 {
-    private static ScenarioNode Node(int index, string? group = null) => new()
+    private static ScenarioNode Node(int index, string? group = null, bool synthetic = false) => new()
     {
         Index = index,
         StepId = "s" + index,
@@ -21,6 +21,7 @@ public class ScenarioStepNumberingTests
         DisplayNameTemplate = "step " + index,
         DependsOn = [],
         GroupId = group,
+        IsSynthetic = synthetic,
         Invoke = (_, _) => Task.FromResult<object?>(null),
     };
 
@@ -184,5 +185,26 @@ public class ScenarioStepNumberingTests
 
         Assert.Equal("2.1 patient Jane exists",
             ScenarioStepNumbering.Format(labels, def.Nodes[1], "patient Jane exists"));
+    }
+
+    [Fact]
+    public void Synthetic_nodes_consume_no_number_and_leave_no_gap()
+    {
+        var labels = ScenarioStepNumbering.Compute(
+            Def(Node(0), Node(1, synthetic: true), Node(2), Node(3, synthetic: true), Node(4)));
+
+        Assert.Equal("1", labels[0]);
+        Assert.Equal("2", labels[2]);
+        Assert.Equal("3", labels[4]);
+    }
+
+    [Fact]
+    public void Synthetic_nodes_still_get_a_label_for_the_html_report()
+    {
+        // The HTML report keeps merge nodes (it wants the merge diamond), so a label must exist —
+        // it simply does not consume a top-level number.
+        var labels = ScenarioStepNumbering.Compute(Def(Node(0), Node(1, synthetic: true), Node(2)));
+
+        Assert.True(labels.ContainsKey(1));
     }
 }

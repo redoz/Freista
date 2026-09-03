@@ -34,6 +34,13 @@ internal static class FreistaDiscoverer
         var nodes = new List<TestNode>(definition.Nodes.Count);
         foreach (var step in definition.Nodes)
         {
+            // Merge/pass-through nodes are graph plumbing, not business steps: discovering them would
+            // put "«merge appt»" in the user's test list. The HTML report keeps them.
+            if (step.IsSynthetic)
+            {
+                continue;
+            }
+
             nodes.Add(BuildNode(definition, step, labels));
         }
 

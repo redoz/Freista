@@ -42,6 +42,11 @@ internal sealed class MtpReportSink : RunEventSink
 
     protected override async ValueTask OnStepStartedAsync(StepStarted e)
     {
+        if (e.Context.Node.IsSynthetic)
+        {
+            return;
+        }
+
         var testNode = BuildNode(e.Definition, e.Context.Node, e.Context.DisplayName);
         testNode.Properties.Add(InProgressTestNodeStateProperty.CachedInstance);
         await Publish(testNode).ConfigureAwait(false);
@@ -50,6 +55,25 @@ internal sealed class MtpReportSink : RunEventSink
     protected override async ValueTask OnStepFinishedAsync(StepFinished e)
     {
         var result = e.Result;
+        if (result.Node.IsSynthetic)
+        {
+            return;
+        }
+
+        // A not-taken branch receives no terminal state at all, so it keeps the
+        // DiscoveredTestNodeStateProperty published at discovery and renders as grey "Not Run". The
+        // scheduler does not raise OnStepStarting for NotTaken, so the node is never left InProgress.
+        //
+        // Verified 2026-09-03 against samples/AppointmentTests: MTP tolerates a discovered node that
+        // never receives a terminal state — 24 discovered, 23 reported, exit 0, no warning. The
+        // trade-off is that the untaken step is absent from the console tally rather than listed as
+        // "not run"; the alternative (SkippedTestNodeStateProperty with a "not taken: …" reason) is a
+        // one-line change here if that visibility is wanted. It is never reported green either way.
+        if (result.Status == StepStatus.NotTaken)
+        {
+            return;
+        }
+
         var testNode = BuildNode(e.Definition, result.Node, result.DisplayName);
         testNode.Properties.Add(MapState(result));
 

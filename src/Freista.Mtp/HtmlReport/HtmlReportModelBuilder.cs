@@ -192,6 +192,10 @@ internal sealed class HtmlReportModelBuilder
             StepStatus.Passed => "passed",
             StepStatus.Failed => "failed",
             StepStatus.Skipped => "skipped",
+            // NotTaken renders with the existing "skipped" styling; the distinction survives in the
+            // step's SkipReason ("not taken: …"). Distinct rendering (and decision/merge diamonds) is
+            // a separate spec — deliberately out of scope here.
+            StepStatus.NotTaken => "skipped",
             _ => throw new ArgumentOutOfRangeException(nameof(status), status, null),
         };
     }
