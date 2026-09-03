@@ -245,7 +245,8 @@ public class FreistaTestFramework :
         }
 
         var bus = new RunEventBus(sinks);
-        var loop = new FreistaRunLoop(EnumerateRegisteredScenarios, simulateTime: _simulateTime);
+        var loop = new FreistaRunLoop(
+            EnumerateRegisteredScenarios, simulateTime: _simulateTime, services: _services);
         await loop.RunAsync(uids, bus, cancellationToken).ConfigureAwait(false);
 
         if (bus.Failures.Count > 0)

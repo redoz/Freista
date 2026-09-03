@@ -36,6 +36,7 @@ internal sealed class FreistaRunLoop
     private readonly Func<IEnumerable<ScenarioDefinition>> scenarioSource;
     private readonly RunScenario runScenario;
     private readonly bool simulateTime;
+    private readonly IServiceProvider? services;
 
     /// <param name="scenarioSource">Supplies the registered scenarios to consider for the run.</param>
     /// <param name="runScenario">
@@ -47,14 +48,22 @@ internal sealed class FreistaRunLoop
     /// <see cref="ScenarioContext.SimulateElapsed"/>). Defaults to <see langword="false"/> so production
     /// runs use real timing. Ignored when an explicit <paramref name="runScenario"/> seam is supplied.
     /// </param>
+    /// <param name="services">
+    /// The service provider handed to every <see cref="ScenarioContext"/> the default runner creates,
+    /// surfacing as <c>ctx.Services</c> to step bodies. <see langword="null"/> (the default) is a real,
+    /// supported path — <see cref="FreistaTestFramework"/>'s parameterless ctor has no provider — and
+    /// leaves <c>ctx.Services</c> null. Ignored when an explicit <paramref name="runScenario"/> seam is supplied.
+    /// </param>
     public FreistaRunLoop(
         Func<IEnumerable<ScenarioDefinition>> scenarioSource,
         RunScenario? runScenario = null,
-        bool simulateTime = false)
+        bool simulateTime = false,
+        IServiceProvider? services = null)
     {
         ArgumentNullException.ThrowIfNull(scenarioSource);
         this.scenarioSource = scenarioSource;
         this.simulateTime = simulateTime;
+        this.services = services;
         this.runScenario = runScenario ?? DefaultRunScenario;
     }
 
@@ -137,12 +146,13 @@ internal sealed class FreistaRunLoop
         await bus.PublishAsync(new ScenarioFinished(definition, results)).ConfigureAwait(false);
     }
 
-    // Instance (not static) because it reads the simulateTime field to pick the scheduler's timing mode.
+    // Instance (not static) because it reads the simulateTime field to pick the scheduler's timing
+    // mode and the services field to populate each ScenarioContext.Services.
     private async Task<IReadOnlyList<StepResult>> DefaultRunScenario(
         ScenarioDefinition definition, IStepObserver observer, CancellationToken cancellationToken)
         => await new ScenarioScheduler(simulatedTime: simulateTime).RunAsync(
             definition,
-            services: null,
+            services: services,
             observer: observer,
             cancellationToken: cancellationToken).ConfigureAwait(false);
 

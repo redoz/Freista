@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Microsoft.Testing.Platform.CommandLine;
 using Microsoft.Testing.Platform.Extensions.Messages;
 using Microsoft.Testing.Platform.Messages;
 using Microsoft.Testing.Platform.TestHost;
@@ -387,6 +388,85 @@ public class RunLoopTests
             && n.Properties.OfType<PassedTestNodeStateProperty>().Length != 0);
         var timing = node.Properties.OfType<TimingProperty>().Single();
         Assert.Equal(work, timing.GlobalTiming.Duration);
+    }
+
+    // -- Service provider threaded through the loop into ScenarioContext.Services ------------------
+
+    [Fact]
+    public async Task Provider_given_to_the_loop_reaches_a_steps_ScenarioContext()
+    {
+        // The loop's default runner must hand its provider to the scheduler, which puts it on every
+        // ScenarioContext — otherwise ctx.Services is null for user step code in a real run.
+        IServiceProvider? seen = null;
+        var def = Definition("di", "di",
+            Node(0, "x", "x", invoke: (_, ctx) => { seen = ctx.Services; return Task.FromResult<object?>(null); }));
+
+        var provider = new StubServiceProvider();
+        var loop = new FreistaRunLoop(() => [def], services: provider);
+        await loop.RunAsync(uids: null, new RecordingSink(), CancellationToken.None);
+
+        Assert.Same(provider, seen);
+    }
+
+    [Fact]
+    public async Task No_provider_leaves_ScenarioContext_Services_null_without_throwing()
+    {
+        // The null path is real: FreistaTestFramework's parameterless ctor leaves the provider null.
+        IServiceProvider? seen = new StubServiceProvider();
+        var ran = false;
+        var def = Definition("no-di", "no-di",
+            Node(0, "x", "x", invoke: (_, ctx) => { seen = ctx.Services; ran = true; return Task.FromResult<object?>(null); }));
+
+        var loop = new FreistaRunLoop(() => [def]);
+        var sink = new RecordingSink();
+        await loop.RunAsync(uids: null, sink, CancellationToken.None);
+
+        Assert.True(ran);
+        Assert.Null(seen);
+        Assert.Contains(Uid("no-di", "x"), sink.PassedUids);
+    }
+
+    [Fact]
+    public async Task Framework_built_with_a_provider_threads_it_to_the_step_context()
+    {
+        // End-to-end: FreistaTestFramework(IServiceProvider) -> run loop -> scheduler -> ctx.Services.
+        var method = $"Freista.Mtp.Test.DiRun.{Guid.NewGuid():N}";
+        IServiceProvider? seen = null;
+        ScenarioRegistry.Register(method, () => Definition("di-fw", "di scenario",
+            Node(0, "a", "a", invoke: (_, ctx) => { seen = ctx.Services; return Task.FromResult<object?>(null); })));
+
+        var provider = new StubServiceProvider();
+        var framework = new FreistaTestFramework(provider);
+        var uid = new SessionUid("di-fw-run");
+        await framework.CreateTestSession(uid);
+
+        await framework.OnExecute(uid, filter: null, new RecordingMessageBus(), () => { }, CancellationToken.None);
+
+        Assert.Same(provider, seen);
+    }
+
+    /// <summary>
+    /// A provider standing in for MTP's own. Identity is what these tests assert on; it only has to
+    /// answer <see cref="ICommandLineOptions"/> because the framework consults it (for --report-html)
+    /// before the run loop starts, and MTP's accessor extension throws on a missing service.
+    /// </summary>
+    private sealed class StubServiceProvider : IServiceProvider
+    {
+        public object? GetService(Type serviceType) =>
+            serviceType == typeof(ICommandLineOptions) ? new NoOptions() : null;
+
+        private sealed class NoOptions : ICommandLineOptions
+        {
+            public bool IsOptionSet(string optionName) => false;
+
+            public bool TryGetOptionArgumentList(
+                string optionName,
+                [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string[]? arguments)
+            {
+                arguments = null;
+                return false;
+            }
+        }
     }
 
     private sealed class RecordingSink : IRunEventSink
