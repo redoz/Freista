@@ -79,29 +79,6 @@ public sealed class ScenarioScheduler
 
                 var node = nodes[i];
 
-                // 1a. Merge (phi) nodes: any-of over mutually exclusive sources.
-                if (node.MergeSources.Count > 0)
-                {
-                    if (TryResolveMerge(node, out var mergeStatus, out var mergeReason, out var mergeOutput))
-                    {
-                        if (mergeStatus == StepStatus.Passed)
-                        {
-                            pending.Remove(i);
-                            outputs[i] = mergeOutput;
-                            status[i] = StepStatus.Passed;
-                            await ApplyMergePassAsync(i).ConfigureAwait(false);
-                        }
-                        else
-                        {
-                            await ApplyTerminalAsync(i, mergeStatus, mergeReason!).ConfigureAwait(false);
-                        }
-
-                        progressed = true;
-                    }
-
-                    continue;
-                }
-
                 var anyUnresolved = false;
                 List<string>? failed = null;
                 List<string>? skipped = null;
@@ -127,7 +104,9 @@ public sealed class ScenarioScheduler
                     }
                 }
 
-                // 1b. Guards. A resolved-false guard is a decision (NotTaken); a guard whose condition
+                // 1b. Guards. These apply to EVERY node, merge and pass-through nodes included — a
+                // pass-through is guarded on the arm it stands in for, so resolving its sources
+                // without first checking its guard would let the parent value through on both sides. A resolved-false guard is a decision (NotTaken); a guard whose condition
                 // failed/was skipped/was itself not taken is a cascade (Skipped) — no branch was chosen.
                 var guardNotTaken = (string?)null;
                 foreach (var guard in node.Guards)
@@ -177,6 +156,26 @@ public sealed class ScenarioScheduler
                     await ApplyTerminalAsync(
                         i, StepStatus.NotTaken, $"not taken: {string.Join(", ", notTaken)}").ConfigureAwait(false);
                     progressed = true;
+                }
+                else if (node.MergeSources.Count > 0)
+                {
+                    // Guards hold; now the any-of over mutually exclusive sources.
+                    if (TryResolveMerge(node, out var mergeStatus, out var mergeReason, out var mergeOutput))
+                    {
+                        if (mergeStatus == StepStatus.Passed)
+                        {
+                            pending.Remove(i);
+                            outputs[i] = mergeOutput;
+                            status[i] = StepStatus.Passed;
+                            await ApplyMergePassAsync(i).ConfigureAwait(false);
+                        }
+                        else
+                        {
+                            await ApplyTerminalAsync(i, mergeStatus, mergeReason!).ConfigureAwait(false);
+                        }
+
+                        progressed = true;
+                    }
                 }
             }
 

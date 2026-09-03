@@ -16,6 +16,14 @@ internal sealed record Binding(BindingKind Kind, IReadOnlyList<string> Names)
     /// <summary>The binding for the left-hand side of an awaited assignment, or null if unsupported.</summary>
     public static Binding? FromAssignment(ExpressionSyntax left)
     {
+        // appointment = await When.X(...)  — re-assignment of an existing step-output local. This is
+        // how an `if` arm redefines a local; the parser's definition map turns the two definitions
+        // into a phi.
+        if (left is IdentifierNameSyntax identifier)
+        {
+            return Single(identifier.Identifier.Text);
+        }
+
         // var (a, b) = ...
         if (left is DeclarationExpressionSyntax { Designation: ParenthesizedVariableDesignationSyntax paren })
         {

@@ -31,6 +31,9 @@ internal sealed class ScenarioParser
     // Indices introduced by the previous top-level statement (source-order barrier / join target).
     private List<int> _prevFrontier = [];
 
+    // Guards accumulated by the enclosing if/else arms; every step created inherits a snapshot.
+    private readonly List<ParsedGuard> _guards = [];
+
     private int _nextIndex;
     private string _scenarioId = "";
 
@@ -97,15 +100,268 @@ internal sealed class ScenarioParser
         {
             LocalDeclarationStatementSyntax local => ParseLocalDeclaration(local),
             ExpressionStatementSyntax expr => ParseExpressionStatement(expr),
+            IfStatementSyntax ifStatement => ParseIf(ifStatement),
+            BlockSyntax block => ParseBlock(block),
             _ => false,
         };
 
     }
 
+    private bool ParseBlock(BlockSyntax block)
+    {
+        foreach (var statement in block.Statements)
+        {
+            if (!ParseStatement(statement))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Lowers <c>if (await Given.C(...)) A else B</c>. The condition is an ordinary node; each arm is
+    /// walked with an extra guard pushed. Locals defined differently by the two arms become phi
+    /// (merge) nodes at the closing brace — a definition map diff, which is all SSA needs when the
+    /// control flow is structured (every merge point IS the closing brace).
+    /// </summary>
+    private bool ParseIf(IfStatementSyntax statement)
+    {
+        if (statement.Condition is not AwaitExpressionSyntax { Expression: InvocationExpressionSyntax call })
+        {
+            return false; // FRST011
+        }
+
+        var condition = BuildStep(call, groupId: null, _prevFrontier);
+        if (condition is null || !condition.HasResult)
+        {
+            return false; // FRST011: a condition must produce a value
+        }
+
+        MarkAsCondition(condition);
+
+        var parentVars = new Dictionary<string, VarSource>(_vars);
+
+        var thenVars = WalkArm(statement.Statement, condition.Index, whenValue: true, parentVars);
+        if (thenVars is null)
+        {
+            return false;
+        }
+
+        Dictionary<string, VarSource>? elseVars = null;
+        if (statement.Else is { } elseClause)
+        {
+            elseVars = WalkArm(elseClause.Statement, condition.Index, whenValue: false, parentVars);
+            if (elseVars is null)
+            {
+                return false;
+            }
+        }
+
+        // Rejoin: start from the parent map, then insert a phi for every local the arms disagree on.
+        _vars.Clear();
+        foreach (var pair in parentVars)
+        {
+            _vars[pair.Key] = pair.Value;
+        }
+
+        var frontier = new List<int>();
+        foreach (var name in DifferingLocals(parentVars, thenVars, elseVars))
+        {
+            var mergeIndex = InsertMerge(name, condition.Index, parentVars, thenVars, elseVars);
+            if (mergeIndex < 0)
+            {
+                return false;
+            }
+
+            frontier.Add(mergeIndex);
+        }
+
+        // A following statement must never depend on an arm's node (DependsOn is all-of and an arm may
+        // not run); it joins on the merges, or on the condition when there are none.
+        _prevFrontier = frontier.Count > 0 ? frontier : [condition.Index];
+        return true;
+    }
+
+    private void MarkAsCondition(ParsedStep condition)
+    {
+        var position = _steps.FindIndex(s => s.Index == condition.Index);
+        _steps[position] = _steps[position] with { ConditionCoercionType = condition.ResultTypeFqn };
+    }
+
+    /// <summary>Walks one arm with <paramref name="whenValue"/> pushed onto the guard stack, on a child
+    /// copy of the definition map. Returns that child map, or null when the arm is unsupported.</summary>
+    private Dictionary<string, VarSource>? WalkArm(
+        StatementSyntax arm, int conditionIndex, bool whenValue, Dictionary<string, VarSource> parentVars)
+    {
+        var savedFrontier = _prevFrontier;
+        _vars.Clear();
+        foreach (var pair in parentVars)
+        {
+            _vars[pair.Key] = pair.Value;
+        }
+
+        _guards.Add(new ParsedGuard(conditionIndex, whenValue));
+        _prevFrontier = [conditionIndex];
+        var ok = ParseStatement(arm);
+        _guards.RemoveAt(_guards.Count - 1);
+        _prevFrontier = savedFrontier;
+
+        return ok ? new Dictionary<string, VarSource>(_vars) : null;
+    }
+
+    /// <summary>Locals whose definition differs between the arms (or between an arm and the parent) —
+    /// exactly the set that needs a phi. A local defined only inside one arm and absent from the parent
+    /// is branch-local: C# scoping already forbids its later use, so it is dropped.</summary>
+    private static IEnumerable<string> DifferingLocals(
+        Dictionary<string, VarSource> parentVars,
+        Dictionary<string, VarSource> thenVars,
+        Dictionary<string, VarSource>? elseVars)
+    {
+        var names = new SortedSet<string>(System.StringComparer.Ordinal);
+        foreach (var name in thenVars.Keys)
+        {
+            names.Add(name);
+        }
+
+        if (elseVars is not null)
+        {
+            foreach (var name in elseVars.Keys)
+            {
+                names.Add(name);
+            }
+        }
+
+        foreach (var name in names)
+        {
+            var inThen = thenVars.TryGetValue(name, out var thenSource);
+            var inElse = elseVars is not null && elseVars.TryGetValue(name, out _);
+            var inParent = parentVars.TryGetValue(name, out var parentSource);
+
+            if (!inParent && !(inThen && inElse))
+            {
+                continue; // branch-local
+            }
+
+            var thenDef = inThen ? thenSource : parentSource;
+            var elseDef = elseVars is not null && elseVars.TryGetValue(name, out var elseSource)
+                ? elseSource
+                : parentSource;
+
+            if (!thenDef.Equals(elseDef))
+            {
+                yield return name;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Inserts the phi for one local: a synthetic merge over the two arm definitions. When an arm did
+    /// not redefine the local, that side is a synthetic PASS-THROUGH node — guarded on the opposite
+    /// value, aliasing the parent definition — so the merge's sources stay mutually exclusive (what
+    /// <c>ScenarioDefinition.Validate</c> requires) and the parent value flows through when the arm is
+    /// not taken. Arrays are not mergeable; returns -1 (the analyzer rejects the shape).
+    /// </summary>
+    private int InsertMerge(
+        string name,
+        int conditionIndex,
+        Dictionary<string, VarSource> parentVars,
+        Dictionary<string, VarSource> thenVars,
+        Dictionary<string, VarSource>? elseVars)
+    {
+        var thenDef = Side(thenVars, whenValue: true);
+        var elseDef = Side(elseVars, whenValue: false);
+        if (thenDef < 0 || elseDef < 0)
+        {
+            return -1;
+        }
+
+        var producer = _steps.First(s => s.Index == thenDef);
+        var index = _nextIndex++;
+        var merge = new ParsedStep
+        {
+            Index = index,
+            StepId = GenStableId.ForStep(_scenarioId, "merge:" + name + ":" + index),
+            Phase = producer.Phase,
+            OperationName = "Merge",
+            HasResult = true,
+            ResultTypeFqn = producer.ResultTypeFqn,
+            InvokeCallText = "",
+            DisplayNameTemplate = "«merge " + name + "»",
+            MergeSources = [thenDef, elseDef],
+            IsSynthetic = true,
+            Guards = [.. _guards],
+            DependsOn = [],
+        };
+
+        _steps.Add(merge);
+        _vars[name] = VarSource.Scalar(index);
+        return index;
+
+        int Side(Dictionary<string, VarSource>? armVars, bool whenValue)
+        {
+            if (armVars is not null && armVars.TryGetValue(name, out var armSource))
+            {
+                return armSource.IsArray ? -1 : armSource.Index;
+            }
+
+            if (!parentVars.TryGetValue(name, out var parentSource) || parentSource.IsArray)
+            {
+                return -1;
+            }
+
+            return InsertPassThrough(name, conditionIndex, whenValue, parentSource.Index);
+        }
+    }
+
+    /// <summary>
+    /// Stands in for the arm that did not redefine the local (the missing <c>else</c> of a bare
+    /// <c>if</c>, or an arm that simply left the local alone): a synthetic node aliasing the parent
+    /// definition, guarded on <paramref name="whenValue"/> — the value of the side it OCCUPIES, so the
+    /// merge's two sources end up mutually exclusive, as <c>ScenarioDefinition.Validate</c> requires.
+    /// </summary>
+    private int InsertPassThrough(string name, int conditionIndex, bool whenValue, int parentDef)
+    {
+        var producer = _steps.First(s => s.Index == parentDef);
+        var index = _nextIndex++;
+        var guards = new List<ParsedGuard>(_guards) { new(conditionIndex, whenValue) };
+        _steps.Add(new ParsedStep
+        {
+            Index = index,
+            StepId = GenStableId.ForStep(_scenarioId, "phi:" + name + ":" + index),
+            Phase = producer.Phase,
+            OperationName = "Unchanged",
+            HasResult = true,
+            ResultTypeFqn = producer.ResultTypeFqn,
+            InvokeCallText = "",
+            DisplayNameTemplate = "«" + name + " unchanged»",
+            MergeSources = [parentDef],
+            IsSynthetic = true,
+            Guards = guards,
+            DependsOn = [],
+        });
+
+        return index;
+    }
+
     private bool ParseLocalDeclaration(LocalDeclarationStatementSyntax local)
     {
         var variables = local.Declaration.Variables;
-        if (variables.Count != 1 || variables[0].Initializer?.Value is not AwaitExpressionSyntax await)
+        if (variables.Count != 1)
+        {
+            return false;
+        }
+
+        // `Appointment appointment;` — a declaration with no initializer produces no step. It only
+        // introduces the name; the definition arrives from an assignment, typically one per `if` arm,
+        // and the definition-map diff turns those into a phi at the closing brace.
+        if (variables[0].Initializer is null)
+        {
+            return true;
+        }
+
+        if (variables[0].Initializer?.Value is not AwaitExpressionSyntax await)
         {
             return false;
         }
@@ -374,6 +630,7 @@ internal sealed class ScenarioParser
             CallSpan = SpanOf(invocation),
             DependsOn = [.. deps],
             ResourceClaims = resourceClaims,
+            Guards = [.. _guards],
         };
 
         _steps.Add(step);

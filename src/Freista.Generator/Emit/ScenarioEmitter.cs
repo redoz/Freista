@@ -195,8 +195,34 @@ internal static class ScenarioEmitter
             Set("GroupId", Lit(step.GroupId)),
             Set("Timeout", Timeout(step.TimeoutMs)),
             Set("DependsOn", IntArray(step.DependsOn)),
-            Set("Invoke", BuildInvokeLambda(step)),
         };
+
+        // Conditional members: emitted only when non-default, so a scenario without conditionals
+        // produces byte-identical output to before this feature (existing snapshots must not move).
+        if (step.Guards.Count > 0)
+        {
+            members.Add(Set("Guards", GuardArray(step.Guards)));
+        }
+
+        if (step.MergeSources.Count > 0)
+        {
+            members.Add(Set("MergeSources", IntArray(step.MergeSources)));
+        }
+
+        if (step.IsSynthetic)
+        {
+            members.Add(Set("IsSynthetic", LiteralExpression(SyntaxKind.TrueLiteralExpression)));
+        }
+
+        if (step.ConditionCoercionType is { } coercionType)
+        {
+            // static __o => ((T)__o!) ? true : false — Roslyn picks bool / implicit conversion /
+            // operator true at COMPILE time, so the scheduler never reflects over the boxed output.
+            members.Add(Set("EvaluateCondition", ParseExpression(
+                $"static __o => (({coercionType})__o!) ? true : false")));
+        }
+
+        members.Add(Set("Invoke", BuildInvokeLambda(step)));
 
         if (step.FormatExpression is not null)
         {
@@ -219,6 +245,21 @@ internal static class ScenarioEmitter
     /// </summary>
     private static ParenthesizedLambdaExpressionSyntax BuildInvokeLambda(ParsedStep step)
     {
+        if (step.IsSynthetic)
+        {
+            // A merge/pass-through never runs: the scheduler resolves it from its sources. The
+            // delegate exists only to satisfy the required member.
+            return ParenthesizedLambdaExpression()
+                .WithModifiers(TokenList(Token(SyntaxKind.StaticKeyword)))
+                .WithParameterList(ParameterList(SeparatedList(new[]
+                {
+                    Parameter(Identifier("__inputs")),
+                    Parameter(Identifier("__ctx")),
+                })))
+                .WithExpressionBody(ParseExpression(
+                    "global::System.Threading.Tasks.Task.FromResult<object?>(null)"));
+        }
+
         var callExpr = ParseExpression(step.InvokeCallText);
         var awaitExpr = AwaitExpression(callExpr);
 
@@ -319,6 +360,19 @@ internal static class ScenarioEmitter
             isActive: true);
         return TriviaList(Trivia(directive), EndOfLine("\n"));
     }
+
+    /// <summary>Builds <c>new global::Freista.Model.Guard[] { new(i, true), … }</c>.</summary>
+    private static ArrayCreationExpressionSyntax GuardArray(IEnumerable<ParsedGuard> guards)
+        => ArrayCreationExpression(
+            ArrayType(ParseTypeName("global::Freista.Model.Guard"))
+                .WithRankSpecifiers(SingletonList(
+                    ArrayRankSpecifier(SingletonSeparatedList<ExpressionSyntax>(
+                        OmittedArraySizeExpression())))))
+            .WithInitializer(InitializerExpression(
+                SyntaxKind.ArrayInitializerExpression,
+                SeparatedList<ExpressionSyntax>(guards.Select(g =>
+                    (ExpressionSyntax)ParseExpression(
+                        $"new global::Freista.Model.Guard({g.ConditionIndex}, {(g.WhenValue ? "true" : "false")})")))));
 
     /// <summary>Builds <c>new int[] { i0, i1, … }</c> (empty initializer when the list is empty).</summary>
     private static ArrayCreationExpressionSyntax IntArray(IEnumerable<int> ints)

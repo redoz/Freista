@@ -224,6 +224,11 @@ it matters for merges nested inside an outer untaken branch. `ApplySkipAsync` be
 
 ### Merge readiness
 
+**Guards resolve before merge sources.** A pass-through node is both guarded and a merge, so
+resolving its sources first would let the parent value through on *both* sides of the branch and
+defeat the mutual exclusion the merge depends on. Guard resolution applies to every node; only once
+its guards hold does a merge consult its sources.
+
 - ready when all sources are terminal
 - exactly one `Passed` — merge passes, output = that source's output
 - all sources `NotTaken` — merge is `NotTaken`

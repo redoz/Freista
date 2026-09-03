@@ -23,6 +23,10 @@ internal readonly record struct ResourceRoleClaim(string Verb, string Expression
     public IReadOnlyList<string> SubjectExpressions { get; init; } = [];
 }
 
+/// <summary>A lowered branch guard: the node runs only when node <see cref="ConditionIndex"/> passed
+/// and its condition evaluates to <see cref="WhenValue"/>. Mirrors <c>Freista.Model.Guard</c>.</summary>
+internal readonly record struct ParsedGuard(int ConditionIndex, bool WhenValue);
+
 /// <summary>A lowered scenario ready for emission.</summary>
 internal sealed record ParsedScenario
 {
@@ -79,4 +83,18 @@ internal sealed record ParsedStep
     /// first, then a return role). Empty when the step declares no roles ⇒ the emitter inserts nothing.
     /// </summary>
     public IReadOnlyList<ResourceRoleClaim> ResourceClaims { get; init; } = [];
+
+    /// <summary>Branch guards gating this step; all must hold. Empty for an unconditional step.</summary>
+    public IReadOnlyList<ParsedGuard> Guards { get; init; } = [];
+
+    /// <summary>Mutually exclusive candidate producers for a merge (phi) node, or the single source of
+    /// a pass-through alias. Empty for an ordinary step.</summary>
+    public IReadOnlyList<int> MergeSources { get; init; } = [];
+
+    /// <summary>True for generator plumbing (merge/pass-through) rather than a business step.</summary>
+    public bool IsSynthetic { get; init; }
+
+    /// <summary>When this step is used as an <c>if</c> condition, its fully-qualified result type — the
+    /// cast target in the emitted <c>EvaluateCondition</c> coercion. Null otherwise.</summary>
+    public string? ConditionCoercionType { get; init; }
 }

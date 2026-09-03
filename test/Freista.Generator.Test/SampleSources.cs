@@ -315,4 +315,176 @@ public static class SampleSources
             }
         }
         """;
+
+    // A DSL with condition steps: an awaited phase-marker call whose result is usable as a C#
+    // condition. `IsPriority` returns bool; `HasCapacity` returns a type with `operator true`, proving
+    // the generator emits the coercion rather than the scheduler unboxing to bool.
+    public const string ConditionalDsl =
+        """
+        using System.Threading.Tasks;
+        using Freista;
+
+        namespace CondDemo;
+
+        public sealed record Patient(string Name);
+        public sealed record Appointment(string Kind);
+
+        public readonly struct Capacity
+        {
+            public Capacity(bool value) => Value = value;
+            public bool Value { get; }
+            public static bool operator true(Capacity c) => c.Value;
+            public static bool operator false(Capacity c) => !c.Value;
+        }
+
+        public static class CondDsl
+        {
+            extension(Given)
+            {
+                [StepName("patient {name} exists")]
+                public static async Task<Patient> PatientExists(string name)
+                {
+                    await Task.Yield();
+                    return new Patient(name);
+                }
+
+                [StepName("the patient is priority")]
+                public static async Task<bool> IsPriority()
+                {
+                    await Task.Yield();
+                    return true;
+                }
+
+                [StepName("the clinic has capacity")]
+                public static async Task<Capacity> HasCapacity()
+                {
+                    await Task.Yield();
+                    return new Capacity(true);
+                }
+            }
+
+            extension(When)
+            {
+                [StepName("creating an urgent appointment")]
+                public static async Task<Appointment> CreateUrgent(Patient patient)
+                {
+                    await Task.Yield();
+                    return new Appointment("urgent");
+                }
+
+                [StepName("creating a standard appointment")]
+                public static async Task<Appointment> CreateStandard(Patient patient)
+                {
+                    await Task.Yield();
+                    return new Appointment("standard");
+                }
+
+                [StepName("notifying the patient")]
+                public static Task Notify(Patient patient) => Task.CompletedTask;
+            }
+
+            extension(Then)
+            {
+                [StepName("the appointment should exist")]
+                public static Task AppointmentExists(Appointment appointment) => Task.CompletedTask;
+            }
+        }
+        """;
+
+    // if/else, both arms defining `appointment` => a phi at the closing brace.
+    public const string IfElseScenario =
+        """
+
+        public static class IfElseScenarios
+        {
+            [Scenario("priority routing")]
+            public static async Task Routing()
+            {
+                var patient = await Given.PatientExists("Jane");
+
+                Appointment appointment;
+                if (await Given.IsPriority())
+                    appointment = await When.CreateUrgent(patient);
+                else
+                    appointment = await When.CreateStandard(patient);
+
+                await Then.AppointmentExists(appointment);
+            }
+        }
+        """;
+
+    // A bare `if` with no else and no assignment: the arm's step is simply guarded.
+    public const string BareIfScenario =
+        """
+
+        public static class BareIfScenarios
+        {
+            [Scenario("notify priority patients")]
+            public static async Task Notify()
+            {
+                var patient = await Given.PatientExists("Jane");
+
+                if (await Given.IsPriority())
+                    await When.Notify(patient);
+            }
+        }
+        """;
+
+    // A bare `if` that conditionally OVERWRITES a local defined before the branch: the merge takes the
+    // arm's definition and a synthetic pass-through of the parent definition.
+    public const string ConditionalOverwriteScenario =
+        """
+
+        public static class OverwriteScenarios
+        {
+            [Scenario("upgrade to urgent when priority")]
+            public static async Task Upgrade()
+            {
+                var patient = await Given.PatientExists("Jane");
+                var appointment = await When.CreateStandard(patient);
+
+                if (await Given.IsPriority())
+                    appointment = await When.CreateUrgent(patient);
+
+                await Then.AppointmentExists(appointment);
+            }
+        }
+        """;
+
+    // Nested ifs: the inner arm carries BOTH guards.
+    public const string NestedIfScenario =
+        """
+
+        public static class NestedIfScenarios
+        {
+            [Scenario("nested routing")]
+            public static async Task Routing()
+            {
+                var patient = await Given.PatientExists("Jane");
+
+                if (await Given.IsPriority())
+                {
+                    if (await Given.HasCapacity())
+                        await When.Notify(patient);
+                }
+            }
+        }
+        """;
+
+    // A condition whose result type is not bool but defines `operator true`.
+    public const string OperatorTrueScenario =
+        """
+
+        public static class OperatorTrueScenarios
+        {
+            [Scenario("capacity routing")]
+            public static async Task Routing()
+            {
+                var patient = await Given.PatientExists("Jane");
+
+                if (await Given.HasCapacity())
+                    await When.Notify(patient);
+            }
+        }
+        """;
 }
