@@ -73,6 +73,24 @@ internal sealed class ScenarioParser
             }
         }
 
+        // Always emitted: the generator cannot see OnTeardown calls (they happen at run time inside
+        // DSL bodies), so emitting conditionally would let a registered cleanup fail silently. With
+        // nothing registered the scheduler reports it NotTaken.
+        var teardownIndex = _nextIndex++;
+        _steps.Add(new ParsedStep
+        {
+            Index = teardownIndex,
+            StepId = GenStableId.ForStep(_scenarioId, "teardown"),
+            Phase = "Then",
+            OperationName = "Teardown",
+            HasResult = false,
+            ResultTypeFqn = "object",
+            InvokeCallText = "",
+            DisplayNameTemplate = "Teardown",
+            IsTeardown = true,
+            DependsOn = [],
+        });
+
         var usings = CollectUsings().ToList();
         foreach (var ns in _dslNamespaces)
         {
@@ -87,6 +105,7 @@ internal sealed class ScenarioParser
             DisplayName = AttributeReader.ScenarioDisplayName(_method) ?? _method.Name,
             ClassDisplayName = AttributeReader.ClassDisplayName(_method.ContainingType),
             TimeoutMs = AttributeReader.ScenarioTimeout(_method),
+            TeardownPolicy = AttributeReader.TeardownPolicy(_method),
             SourceFile = Location(_syntax.Identifier, out var line),
             SourceLine = line,
             Steps = [.. _steps],

@@ -328,20 +328,25 @@ public sealed class ScenarioScheduler
 
             if (selected.Count == 0)
             {
-                var reason = teardownLog.Entries.Count == 0
-                    ? "no teardown registered"
-                    : $"teardown policy is {definition.TeardownPolicy}"
-                        + (definition.TeardownPolicy == Run.OnSuccess && !succeeded
-                            ? " and the scenario failed"
-                            : string.Empty);
-                status[i] = StepStatus.NotTaken;
+                // Nothing registered is SUCCESS, not suppression: the step ran and had no work, the
+                // same as any step with an empty body. Reporting NotTaken here would put a permanent
+                // non-passing node in every scenario of every suite that never uses teardown.
+                // NotTaken is reserved for the case where cleanups existed and the policy skipped
+                // them — a real decision with real consequences for the leftover state.
+                var nothingRegistered = teardownLog.Entries.Count == 0;
+                status[i] = nothingRegistered ? StepStatus.Passed : StepStatus.NotTaken;
                 results[i] = new StepResult
                 {
                     Node = node,
                     DisplayName = name,
-                    Status = StepStatus.NotTaken,
+                    Status = status[i],
                     StartedAt = startedAt,
-                    SkipReason = reason,
+                    SkipReason = nothingRegistered
+                        ? null
+                        : $"teardown policy is {definition.TeardownPolicy}"
+                            + (definition.TeardownPolicy == Run.OnSuccess && !succeeded
+                                ? " and the scenario failed"
+                                : string.Empty),
                 };
                 if (observer is not null)
                 {

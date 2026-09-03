@@ -24,7 +24,7 @@ namespace Freista.Generated
 
         public static global::Freista.Model.ScenarioDefinition Scenario_Demo_BookingScenarios_Booking()
         {
-            var nodes = new global::Freista.Model.ScenarioNode[4];
+            var nodes = new global::Freista.Model.ScenarioNode[5];
             nodes[0] = new global::Freista.Model.ScenarioNode
             {
                 Index = 0,
@@ -117,6 +117,23 @@ namespace Freista.Generated
                     return (object? )null;
                 }
             };
+            nodes[4] = new global::Freista.Model.ScenarioNode
+            {
+                Index = 4,
+                StepId = "47d7b0d2df24045d",
+                Phase = "Then",
+                OperationName = "Teardown",
+                DisplayNameTemplate = "Teardown",
+                SourceFile = null,
+                SourceLine = 0,
+                GroupId = null,
+                Timeout = null,
+                DependsOn = new int[]
+                {
+                },
+                IsTeardown = true,
+                Invoke = static (__inputs, __ctx) => global::System.Threading.Tasks.Task.FromResult<object?>(null)
+            };
             return new global::Freista.Model.ScenarioDefinition
             {
                 ScenarioId = "3907d8692f8a5dab",
@@ -126,6 +143,7 @@ namespace Freista.Generated
                 SourceFile = "Scenario.cs",
                 SourceLine = 74,
                 Timeout = null,
+                TeardownPolicy = (global::Freista.Run)0,
                 Nodes = nodes
             };
         }

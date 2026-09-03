@@ -169,6 +169,7 @@ internal static class ScenarioEmitter
                 Set("SourceFile", Lit(scenario.SourceFile)),
                 Set("SourceLine", Num(scenario.SourceLine)),
                 Set("Timeout", Timeout(scenario.TimeoutMs)),
+                Set("TeardownPolicy", ParseExpression($"(global::Freista.Run){scenario.TeardownPolicy}")),
                 Set("Nodes", IdentifierName("nodes")),
             ])));
 
@@ -214,6 +215,11 @@ internal static class ScenarioEmitter
             members.Add(Set("IsSynthetic", LiteralExpression(SyntaxKind.TrueLiteralExpression)));
         }
 
+        if (step.IsTeardown)
+        {
+            members.Add(Set("IsTeardown", LiteralExpression(SyntaxKind.TrueLiteralExpression)));
+        }
+
         if (step.ConditionCoercionType is { } coercionType)
         {
             // static __o => ((T)__o!) ? true : false — Roslyn picks bool / implicit conversion /
@@ -245,7 +251,7 @@ internal static class ScenarioEmitter
     /// </summary>
     private static ParenthesizedLambdaExpressionSyntax BuildInvokeLambda(ParsedStep step)
     {
-        if (step.IsSynthetic)
+        if (step.IsSynthetic || step.IsTeardown)
         {
             // A merge/pass-through never runs: the scheduler resolves it from its sources. The
             // delegate exists only to satisfy the required member.

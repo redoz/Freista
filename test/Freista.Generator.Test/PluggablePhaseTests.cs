@@ -48,7 +48,8 @@ public class PluggablePhaseTests
         result.AssertCompiles();
 
         var def = Assert.Single(result.Definitions());
-        var node = Assert.Single(def.Nodes);
+        // Every scenario also carries a trailing teardown node; the business step is the other one.
+        var node = Assert.Single(def.Nodes, n => !n.IsTeardown);
         Assert.Equal("Arrange", node.Phase);
         Assert.Equal("a widget exists", node.DisplayNameTemplate);
     }

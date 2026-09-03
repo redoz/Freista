@@ -222,13 +222,29 @@ public class TeardownTests
     }
 
     [Fact]
-    public async Task Teardown_node_is_not_taken_when_nothing_registered()
+    public async Task Teardown_node_passes_when_nothing_was_registered()
     {
+        // Nothing to clean up is success, not suppression. Otherwise every scenario in every suite
+        // that never uses teardown would carry a permanent non-passing node.
         var def = Def(Run.Always, Step(0, (_, _) => Task.FromResult<object?>(null)), TeardownNode(1));
 
         var results = await new ScenarioScheduler().RunAsync(def);
 
+        Assert.Equal(StepStatus.Passed, results[1].Status);
+        Assert.Null(results[1].SkipReason);
+    }
+
+    [Fact]
+    public async Task Teardown_node_is_not_taken_when_the_policy_suppressed_real_registrations()
+    {
+        var def = Def(Run.Never,
+            Step(0, (_, ctx) => { ctx.OnTeardown(() => Task.CompletedTask); return Task.FromResult<object?>(null); }),
+            TeardownNode(1));
+
+        var results = await new ScenarioScheduler().RunAsync(def);
+
         Assert.Equal(StepStatus.NotTaken, results[1].Status);
+        Assert.Contains("Never", results[1].SkipReason!, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -262,7 +278,7 @@ public class TeardownTests
 
         Assert.Equal(StepStatus.NotTaken, results[1].Status);
         Assert.False(ran);
-        Assert.Equal(StepStatus.NotTaken, results[2].Status);
+        Assert.Equal(StepStatus.Passed, results[2].Status);   // nothing was registered to clean up
     }
 
     [Fact]

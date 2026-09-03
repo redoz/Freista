@@ -111,10 +111,19 @@ The node's status:
 |---|---|
 | Cleanups ran, none threw | `Passed` |
 | One or more threw | `Failed`, message listing every error |
-| Policy skipped everything (and nothing was required) | `NotTaken` |
+| Policy skipped real registrations (and none were required) | `NotTaken` |
+| **Nothing was registered at all** | **`Passed`** |
 
-`NotTaken` is deliberate: a teardown suppressed by `Run.Never` did not run, and reporting it green
-would say something false. The status already exists from the conditionals work.
+`NotTaken` for a suppressed teardown is deliberate: cleanups existed and `Run.Never` (or a failed
+scenario under `OnSuccess`) chose not to run them, which has real consequences for the leftover
+state, and reporting that green would say something false.
+
+The last row is a **correction made during implementation**. The design originally said `NotTaken`
+here too, but since the node is emitted for every scenario, that would put a permanent non-passing
+node in every scenario of every suite that never uses teardown — it broke every existing
+"all steps passed" assertion in the repo the moment the node was emitted, which is exactly what
+users would experience. Nothing to clean up is success, the same as a step with an empty body.
+Suppression and vacuity are different things and now report differently.
 
 ### Numbering and discovery need no changes
 

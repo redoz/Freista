@@ -13,7 +13,7 @@ public class ParallelLoweringTests
         result.AssertCompiles();
         var def = result.Definitions().Single();
 
-        Assert.Equal(5, def.Nodes.Count);
+        Assert.Equal(6, def.Nodes.Count);
         Assert.Empty(def.Nodes[0].DependsOn);                 // DatabaseIsClean
         Assert.Equal([0], def.Nodes[1].DependsOn);             // PatientExists
         Assert.Equal([0], def.Nodes[2].DependsOn);             // AvailableSlot
@@ -42,7 +42,7 @@ public class ParallelLoweringTests
         result.AssertCompiles();
         var def = result.Definitions().Single();
 
-        Assert.Equal(4, def.Nodes.Count);
+        Assert.Equal(5, def.Nodes.Count);
         Assert.Empty(def.Nodes[0].DependsOn);                 // UserExists alice
         Assert.Empty(def.Nodes[1].DependsOn);                 // UserExists bob
         Assert.Equal(def.Nodes[0].GroupId, def.Nodes[1].GroupId);
@@ -70,7 +70,7 @@ public class ParallelLoweringTests
         result.AssertCompiles();
         var def = result.Definitions().Single();
 
-        Assert.Equal(5, def.Nodes.Count);                      // 3 UserExists + ImportUsers + assertion
+        Assert.Equal(6, def.Nodes.Count);                      // 3 UserExists + ImportUsers + assertion
         Assert.Empty(def.Nodes[0].DependsOn);
         Assert.Empty(def.Nodes[1].DependsOn);
         Assert.Empty(def.Nodes[2].DependsOn);
@@ -86,7 +86,7 @@ public class ParallelLoweringTests
 
         var results = await result.Definitions().Single().RunAsync();
 
-        Assert.Equal(5, results.Count);
+        Assert.Equal(6, results.Count);
         Assert.All(results, r => Assert.Equal(StepStatus.Passed, r.Status));
     }
 }

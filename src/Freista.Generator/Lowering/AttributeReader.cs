@@ -58,6 +58,19 @@ internal static class AttributeReader
         return null;
     }
 
+    /// <summary>The scenario's teardown policy as the underlying <c>Freista.Run</c> value, defaulting
+    /// to 0 (<c>Run.Always</c>) when <c>[Teardown]</c> is absent.</summary>
+    public static int TeardownPolicy(IMethodSymbol method)
+    {
+        var attr = method.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "TeardownAttribute");
+        if (attr is { ConstructorArguments.Length: > 0 } && attr.ConstructorArguments[0].Value is int value)
+        {
+            return value;
+        }
+
+        return 0;
+    }
+
     public static int ScenarioTimeout(IMethodSymbol method)
     {
         var attr = method.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "ScenarioAttribute");

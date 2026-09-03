@@ -24,7 +24,7 @@ namespace Freista.Generated
 
         public static global::Freista.Model.ScenarioDefinition Scenario_ResourceDemo_ResourceScenarios_SuspendedUserCannotSignIn()
         {
-            var nodes = new global::Freista.Model.ScenarioNode[3];
+            var nodes = new global::Freista.Model.ScenarioNode[4];
             nodes[0] = new global::Freista.Model.ScenarioNode
             {
                 Index = 0,
@@ -98,6 +98,23 @@ namespace Freista.Generated
                     return (object? )null;
                 }
             };
+            nodes[3] = new global::Freista.Model.ScenarioNode
+            {
+                Index = 3,
+                StepId = "d4612f2bbb9e7e99",
+                Phase = "Then",
+                OperationName = "Teardown",
+                DisplayNameTemplate = "Teardown",
+                SourceFile = null,
+                SourceLine = 0,
+                GroupId = null,
+                Timeout = null,
+                DependsOn = new int[]
+                {
+                },
+                IsTeardown = true,
+                Invoke = static (__inputs, __ctx) => global::System.Threading.Tasks.Task.FromResult<object?>(null)
+            };
             return new global::Freista.Model.ScenarioDefinition
             {
                 ScenarioId = "c01f329e4fc6cd1a",
@@ -107,6 +124,7 @@ namespace Freista.Generated
                 SourceFile = "",
                 SourceLine = 78,
                 Timeout = null,
+                TeardownPolicy = (global::Freista.Run)0,
                 Nodes = nodes
             };
         }

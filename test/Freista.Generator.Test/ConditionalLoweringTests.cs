@@ -24,7 +24,7 @@ public class ConditionalLoweringTests
 
         // 0 PatientExists, 1 IsPriority (condition), 2 CreateUrgent, 3 CreateStandard,
         // 4 «merge appointment», 5 AppointmentExists
-        Assert.Equal(6, def.Nodes.Count);
+        Assert.Equal(7, def.Nodes.Count);
 
         Assert.NotNull(def.Nodes[1].EvaluateCondition);
         Assert.Equal([new Guard(1, true)], def.Nodes[2].Guards);
@@ -56,7 +56,7 @@ public class ConditionalLoweringTests
         var def = Lower(SampleSources.BareIfScenario);
 
         // 0 PatientExists, 1 IsPriority, 2 Notify — nothing is assigned, so there is no phi.
-        Assert.Equal(3, def.Nodes.Count);
+        Assert.Equal(4, def.Nodes.Count);
         Assert.Equal([new Guard(1, true)], def.Nodes[2].Guards);
         Assert.DoesNotContain(def.Nodes, n => n.IsSynthetic);
     }
@@ -68,7 +68,7 @@ public class ConditionalLoweringTests
 
         // 0 PatientExists, 1 CreateStandard (parent def), 2 IsPriority, 3 CreateUrgent (arm),
         // 4 pass-through of 1 guarded false, 5 «merge appointment», 6 AppointmentExists
-        Assert.Equal(7, def.Nodes.Count);
+        Assert.Equal(8, def.Nodes.Count);
 
         Assert.Equal([new Guard(2, true)], def.Nodes[3].Guards);
 

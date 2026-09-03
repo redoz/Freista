@@ -40,6 +40,9 @@ internal sealed record ParsedScenario
     public int TimeoutMs { get; init; }
     public IReadOnlyList<string> Usings { get; init; } = [];
     public IReadOnlyList<ParsedStep> Steps { get; init; } = [];
+
+    /// <summary>The scenario teardown policy as the underlying <c>Freista.Run</c> value.</summary>
+    public int TeardownPolicy { get; init; }
 }
 
 /// <summary>One lowered step (graph node).</summary>
@@ -93,6 +96,10 @@ internal sealed record ParsedStep
 
     /// <summary>True for generator plumbing (merge/pass-through) rather than a business step.</summary>
     public bool IsSynthetic { get; init; }
+
+    /// <summary>True for the scenario's single teardown node — discovered and numbered like an
+    /// ordinary step, but run by the scheduler after the DAG rather than as part of it.</summary>
+    public bool IsTeardown { get; init; }
 
     /// <summary>When this step is used as an <c>if</c> condition, its fully-qualified result type — the
     /// cast target in the emitted <c>EvaluateCondition</c> coercion. Null otherwise.</summary>

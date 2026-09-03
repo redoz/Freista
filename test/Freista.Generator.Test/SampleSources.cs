@@ -512,4 +512,71 @@ public static class SampleSources
             }
         }
         """;
+
+    // A scenario with an explicit teardown policy.
+    public const string TeardownOnSuccessScenario =
+        """
+
+        public static class TeardownPolicyScenarios
+        {
+            [Scenario("policy")]
+            [Teardown(Run.OnSuccess)]
+            public static async Task Booking()
+            {
+                var patient = await Given.PatientExists("Jane");
+                var slot = await Given.AvailableSlot();
+                var appointment = await When.CreateAppointment(patient, slot);
+                await Then.AppointmentExists(appointment);
+            }
+        }
+        """;
+
+    // A DSL whose step registers a cleanup, proving the closure runs end to end.
+    public const string TeardownDsl =
+        """
+        using System.Threading.Tasks;
+        using Freista;
+
+        namespace TeardownDemo;
+
+        public sealed record Patient(string Name);
+
+        public static class Probe
+        {
+            public static int Cleaned;
+        }
+
+        public static class TeardownDemoDsl
+        {
+            extension(Given)
+            {
+                [StepName("patient {name} exists")]
+                public static Task<Patient> PatientExists(string name, ScenarioContext? ctx = null)
+                {
+                    ctx?.OnTeardown(() => { Probe.Cleaned++; return Task.CompletedTask; });
+                    return Task.FromResult(new Patient(name));
+                }
+            }
+
+            extension(Then)
+            {
+                [StepName("the patient should exist")]
+                public static Task PatientIsThere(Patient patient) => Task.CompletedTask;
+            }
+        }
+        """;
+
+    public const string TeardownScenario =
+        """
+
+        public static class TeardownScenarios
+        {
+            [Scenario("cleanup runs")]
+            public static async Task Booking()
+            {
+                var patient = await Given.PatientExists("Jane");
+                await Then.PatientIsThere(patient);
+            }
+        }
+        """;
 }

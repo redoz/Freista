@@ -19,7 +19,7 @@ public class LinearLoweringTests
 
         Assert.Equal("booking", def.DisplayName);
         Assert.Equal("Demo.BookingScenarios.Booking", def.MethodName);
-        Assert.Equal(4, def.Nodes.Count);
+        Assert.Equal(5, def.Nodes.Count);
 
         Assert.Empty(def.Nodes[0].DependsOn);              // PatientExists
         Assert.Equal([0], def.Nodes[1].DependsOn);          // AvailableSlot (source order)
@@ -50,7 +50,7 @@ public class LinearLoweringTests
 
         var results = await result.Definitions().Single().RunAsync();
 
-        Assert.Equal(4, results.Count);
+        Assert.Equal(5, results.Count);
         Assert.All(results, r => Assert.Equal(StepStatus.Passed, r.Status));
         Assert.Equal("patient Jane exists", results[0].DisplayName);
     }

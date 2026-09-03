@@ -24,7 +24,7 @@ namespace Freista.Generated
 
         public static global::Freista.Model.ScenarioDefinition Scenario_Demo_ArrayScenarios_Import()
         {
-            var nodes = new global::Freista.Model.ScenarioNode[4];
+            var nodes = new global::Freista.Model.ScenarioNode[5];
             nodes[0] = new global::Freista.Model.ScenarioNode
             {
                 Index = 0,
@@ -114,6 +114,23 @@ namespace Freista.Generated
                     return (object? )null;
                 }
             };
+            nodes[4] = new global::Freista.Model.ScenarioNode
+            {
+                Index = 4,
+                StepId = "afa7e3343e6dbe45",
+                Phase = "Then",
+                OperationName = "Teardown",
+                DisplayNameTemplate = "Teardown",
+                SourceFile = null,
+                SourceLine = 0,
+                GroupId = null,
+                Timeout = null,
+                DependsOn = new int[]
+                {
+                },
+                IsTeardown = true,
+                Invoke = static (__inputs, __ctx) => global::System.Threading.Tasks.Task.FromResult<object?>(null)
+            };
             return new global::Freista.Model.ScenarioDefinition
             {
                 ScenarioId = "903e3e1cb803db83",
@@ -123,6 +140,7 @@ namespace Freista.Generated
                 SourceFile = "",
                 SourceLine = 74,
                 Timeout = null,
+                TeardownPolicy = (global::Freista.Run)0,
                 Nodes = nodes
             };
         }
