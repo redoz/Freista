@@ -15,7 +15,7 @@ namespace Freista.Mtp.Test;
 /// </summary>
 public class FreistaDiscovererTests
 {
-    private static ScenarioNode Node(int index, string stepId, string template, string? file = null, int line = 0, string? group = null, bool synthetic = false) => new()
+    private static ScenarioNode Node(int index, string stepId, string template, string? file = null, int line = 0, string? group = null, bool synthetic = false, bool teardown = false) => new()
     {
         Index = index,
         StepId = stepId,
@@ -27,6 +27,7 @@ public class FreistaDiscovererTests
         DependsOn = [],
         GroupId = group,
         IsSynthetic = synthetic,
+        IsTeardown = teardown,
         Invoke = (_, _) => Task.FromResult<object?>(null),
     };
 
@@ -189,5 +190,38 @@ public class FreistaDiscovererTests
 
         Assert.Equal("1. step a", nodes[0].DisplayName);
         Assert.Equal("2. step b", nodes[1].DisplayName);
+    }
+
+    [Fact]
+    public void Teardown_nodes_are_discovered_unlike_synthetic_ones()
+    {
+        // The two markers are opposites: a merge node is graph plumbing and stays hidden, a teardown
+        // node is a real reportable step. Conflating them would hide a failing cleanup from CI.
+        var definition = Definition(nodes:
+        [
+            Node(0, "a", "step a"),
+            Node(1, "m", "«merge»", synthetic: true),
+            Node(2, "t", "Teardown", teardown: true),
+        ]);
+
+        var nodes = FreistaDiscoverer.BuildNodes(definition);
+
+        Assert.Equal(2, nodes.Count);
+        Assert.Contains(nodes, n => n.DisplayName.Contains("Teardown", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Teardown_node_takes_the_final_step_number()
+    {
+        var definition = Definition(nodes:
+        [
+            Node(0, "a", "step a"),
+            Node(1, "b", "step b"),
+            Node(2, "t", "Teardown", teardown: true),
+        ]);
+
+        var nodes = FreistaDiscoverer.BuildNodes(definition);
+
+        Assert.Equal("3. Teardown", nodes[^1].DisplayName);
     }
 }

@@ -60,6 +60,15 @@ public static class AppointmentDsl
         public static Task<Patient> PatientExists(string name, ScenarioContext? ctx = null)
         {
             ctx?.SimulateElapsed(TimeSpan.FromMilliseconds(320));
+
+            // Registered where the value is in scope: a real suite would delete the row here, on the
+            // connection this step used. The sample only has to show the closure running afterwards.
+            ctx?.OnTeardown(() =>
+            {
+                ctx.Log($"cleaned up patient {name}");
+                return Task.CompletedTask;
+            });
+
             return Task.FromResult(new Patient(name));
         }
 

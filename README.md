@@ -116,6 +116,36 @@ step that provoked them, because the destination is resolved per write from the 
 builder.Logging.AddProvider(new FreistaLoggerProvider());
 ```
 
+### Teardown
+
+Cleanup is registered by the step that created the thing, so the closure captures both the object and
+the connection it needs — nothing to derive, nothing to wire:
+
+```csharp
+[StepName("patient {name} exists")]
+[return: Created]
+public static async Task<Patient> PatientExists(string name, ScenarioContext? ctx = null)
+{
+    var patient = await Db.InsertPatient(name);
+    ctx?.OnTeardown(() => Db.DeletePatient(patient.Id));
+    return patient;
+}
+```
+
+Every scenario reports a final `Teardown` step, so a cleanup that throws fails visibly instead of
+being swallowed. Cleanups run in reverse dependency order, and one that throws does not stop the
+rest — every error is collected onto that step.
+
+`[Teardown(Run.OnSuccess)]` on the scenario leaves state intact when the test failed; `Run.Never`
+disables cleanup entirely while you go and poke at it. A registration marked `Cleanup.Required`
+ignores that policy and runs regardless — including after cancellation or a timeout — for things
+whose absence is a leak rather than a choice:
+
+```csharp
+ctx?.OnTeardown(Cleanup.Required, () => container.StopAsync());
+```
+
 See [the design spec](docs/scenario-graph-extension-design.md), the
-[conditionals design](docs/superpowers/specs/2026-09-03-scenario-conditionals-design.md), and the
+[conditionals design](docs/superpowers/specs/2026-09-03-scenario-conditionals-design.md), the
+[teardown design](docs/superpowers/specs/2026-09-04-scenario-teardown-design.md), and the
 [implementation plan](docs/superpowers/plans/2026-06-03-scenario-graph-extension.md).
