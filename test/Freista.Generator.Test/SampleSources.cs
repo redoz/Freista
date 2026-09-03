@@ -487,4 +487,29 @@ public static class SampleSources
             }
         }
         """;
+
+    // An else-if chain: N-way routing today, without any switch support. Each `else if` is just a
+    // nested `if` in the else arm, so the guards stack and the merges chain.
+    public const string ElseIfChainScenario =
+        """
+
+        public static class ElseIfScenarios
+        {
+            [Scenario("three-way routing")]
+            public static async Task Routing()
+            {
+                var patient = await Given.PatientExists("Jane");
+
+                Appointment appointment;
+                if (await Given.IsPriority())
+                    appointment = await When.CreateUrgent(patient);
+                else if (await Given.HasCapacity())
+                    appointment = await When.CreateStandard(patient);
+                else
+                    appointment = await When.CreateStandard(patient);
+
+                await Then.AppointmentExists(appointment);
+            }
+        }
+        """;
 }

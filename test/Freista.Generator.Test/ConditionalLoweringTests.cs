@@ -135,4 +135,26 @@ public class ConditionalLoweringTests
         Assert.Equal(StepStatus.Passed, results[1].Status);   // HasCapacity
         Assert.Equal(StepStatus.Passed, results[2].Status);   // Notify ran: the guard held
     }
+
+    [Fact]
+    public async Task Else_if_chains_give_n_way_routing_without_switch_support()
+    {
+        // An `else if` is an IfStatementSyntax inside the else arm, so it recurses through ParseIf:
+        // guards stack, merges chain, and exactly one arm runs. This is why a switch expression would
+        // be ergonomics rather than new capability.
+        var result = GeneratorHarness.Run(
+            SampleSources.ConditionalDsl + SampleSources.ElseIfChainScenario);
+        result.AssertCompiles();
+        var def = Assert.Single(result.Definitions());
+
+        var results = await def.RunAsync();
+
+        Assert.All(results, r => Assert.True(
+            r.Status is StepStatus.Passed or StepStatus.NotTaken,
+            $"step {r.Node.Index} ({r.Node.OperationName}) was {r.Status}: {r.SkipReason}{r.Exception}"));
+
+        // IsPriority is true, so exactly the first arm runs and the consumer still gets a value.
+        Assert.Single(results, r => r.Node.OperationName == "CreateUrgent" && r.Status == StepStatus.Passed);
+        Assert.Equal(StepStatus.Passed, results[^1].Status);
+    }
 }
