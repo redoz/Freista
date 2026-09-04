@@ -134,7 +134,14 @@ public static async Task<Patient> PatientExists(string name, ScenarioContext? ct
 
 Every scenario reports a final `Teardown` step, so a cleanup that throws fails visibly instead of
 being swallowed. Cleanups run in reverse dependency order, and one that throws does not stop the
-rest — every error is collected onto that step.
+rest — every error is collected onto that step. The step's log records what ran and what was skipped,
+naming the step each cleanup came from:
+
+```
+cleaned up: CreateAppointment
+cleaned up: PatientExists
+skipped 2 optional cleanup(s) — teardown policy is OnSuccess and the scenario failed: AvailableSlot, DatabaseIsClean
+```
 
 `[Teardown(Run.OnSuccess)]` on the scenario leaves state intact when the test failed; `Run.Never`
 disables cleanup entirely while you go and poke at it. A registration marked `Cleanup.Required`

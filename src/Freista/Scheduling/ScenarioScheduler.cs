@@ -313,8 +313,7 @@ public sealed class ScenarioScheduler
 
             // Reverse topological order of the owning step, then reverse registration order within a
             // step. Registration order alone is nondeterministic: steps run concurrently.
-            var selected = teardownLog.Entries
-                .Where(e => e.Kind == Cleanup.Required || optionalAllowed)
+            var ordered = teardownLog.Entries
                 .OrderByDescending(e => e.OwningStepIndex)
                 .ThenByDescending(e => e.Sequence)
                 .ToList();
@@ -326,58 +325,58 @@ public sealed class ScenarioScheduler
                 simFinishOffset![i] = TimeSpan.Zero;
             }
 
-            if (selected.Count == 0)
-            {
-                // Nothing registered is SUCCESS, not suppression: the step ran and had no work, the
-                // same as any step with an empty body. Reporting NotTaken here would put a permanent
-                // non-passing node in every scenario of every suite that never uses teardown.
-                // NotTaken is reserved for the case where cleanups existed and the policy skipped
-                // them — a real decision with real consequences for the leftover state.
-                var nothingRegistered = teardownLog.Entries.Count == 0;
-                status[i] = nothingRegistered ? StepStatus.Passed : StepStatus.NotTaken;
-                results[i] = new StepResult
-                {
-                    Node = node,
-                    DisplayName = name,
-                    Status = status[i],
-                    StartedAt = startedAt,
-                    SkipReason = nothingRegistered
-                        ? null
-                        : $"teardown policy is {definition.TeardownPolicy}"
-                            + (definition.TeardownPolicy == Run.OnSuccess && !succeeded
-                                ? " and the scenario failed"
-                                : string.Empty),
-                };
-                if (observer is not null)
-                {
-                    await observer.OnStepFinishedAsync(results[i]!).ConfigureAwait(false);
-                }
-
-                return;
-            }
-
             if (observer is not null)
             {
                 await observer.OnStepStartingAsync(
                     new StepContext { Node = node, DisplayName = name }).ConfigureAwait(false);
             }
 
+            // The STATUS answers one question — did teardown succeed? Whether the policy skipped
+            // anything is information, not a verdict, so it goes in the log. Otherwise every suite
+            // that never uses teardown, and every deliberate Run.Never, would carry a non-passing node.
+            var log = new List<string>();
+            var skipped = new List<string>();
             var stopwatch = Stopwatch.StartNew();
             List<Exception>? errors = null;
-            foreach (var entry in selected)
+
+            foreach (var entry in ordered)
             {
+                var owner = nodes[entry.OwningStepIndex].OperationName;
+                if (entry.Kind == Cleanup.Optional && !optionalAllowed)
+                {
+                    skipped.Add(owner);
+                    continue;
+                }
+
                 try
                 {
                     await entry.Cleanup().ConfigureAwait(false);
+                    log.Add($"cleaned up: {owner}");
                 }
                 catch (Exception ex)
                 {
                     // Recorded, never rethrown here: aborting would leak everything behind it.
                     (errors ??= []).Add(ex);
+                    log.Add($"cleanup FAILED: {owner} — {ex.Message}");
                 }
             }
 
             stopwatch.Stop();
+
+            if (ordered.Count == 0)
+            {
+                log.Add("no cleanup registered");
+            }
+
+            if (skipped.Count > 0)
+            {
+                var why = $"teardown policy is {definition.TeardownPolicy}"
+                    + (definition.TeardownPolicy == Run.OnSuccess && !succeeded
+                        ? " and the scenario failed"
+                        : string.Empty);
+                log.Add($"skipped {skipped.Count} optional cleanup(s) — {why}: {string.Join(", ", skipped)}");
+            }
+
             status[i] = errors is null ? StepStatus.Passed : StepStatus.Failed;
             results[i] = new StepResult
             {
@@ -386,6 +385,7 @@ public sealed class ScenarioScheduler
                 Status = status[i],
                 StartedAt = startedAt,
                 Duration = stopwatch.Elapsed,
+                Logs = log,
                 Exception = errors is null
                     ? null
                     : new AggregateException($"{errors.Count} teardown action(s) failed.", errors),

@@ -168,7 +168,7 @@ public class TeardownTests
         var results = await new ScenarioScheduler().RunAsync(def);
 
         Assert.False(ran);
-        Assert.Equal(StepStatus.NotTaken, results[2].Status);
+        Assert.Equal(StepStatus.Passed, results[2].Status);
     }
 
     [Fact]
@@ -224,27 +224,57 @@ public class TeardownTests
     [Fact]
     public async Task Teardown_node_passes_when_nothing_was_registered()
     {
-        // Nothing to clean up is success, not suppression. Otherwise every scenario in every suite
-        // that never uses teardown would carry a permanent non-passing node.
+        // The status answers "did teardown succeed", nothing more. Anything else would put a
+        // non-passing node in every suite that never uses teardown.
         var def = Def(Run.Always, Step(0, (_, _) => Task.FromResult<object?>(null)), TeardownNode(1));
 
         var results = await new ScenarioScheduler().RunAsync(def);
 
         Assert.Equal(StepStatus.Passed, results[1].Status);
-        Assert.Null(results[1].SkipReason);
+        Assert.Contains("no cleanup registered", Assert.Single(results[1].Logs), StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task Teardown_node_is_not_taken_when_the_policy_suppressed_real_registrations()
+    public async Task Suppressed_cleanups_still_pass_and_are_detailed_in_the_log()
     {
+        // Skipping is information, not a verdict: Run.Never is a deliberate choice, not a failure.
         var def = Def(Run.Never,
             Step(0, (_, ctx) => { ctx.OnTeardown(() => Task.CompletedTask); return Task.FromResult<object?>(null); }),
             TeardownNode(1));
 
         var results = await new ScenarioScheduler().RunAsync(def);
 
-        Assert.Equal(StepStatus.NotTaken, results[1].Status);
-        Assert.Contains("Never", results[1].SkipReason!, StringComparison.Ordinal);
+        Assert.Equal(StepStatus.Passed, results[1].Status);
+        var line = Assert.Single(results[1].Logs);
+        Assert.Contains("skipped 1 optional cleanup(s)", line, StringComparison.Ordinal);
+        Assert.Contains("Never", line, StringComparison.Ordinal);
+        Assert.Contains("Op0", line, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task The_log_names_the_step_each_cleanup_came_from()
+    {
+        var def = Def(Run.Always,
+            Step(0, (_, ctx) => { ctx.OnTeardown(() => Task.CompletedTask); return Task.FromResult<object?>(null); }),
+            TeardownNode(1));
+
+        var results = await new ScenarioScheduler().RunAsync(def);
+
+        Assert.Contains("cleaned up: Op0", Assert.Single(results[1].Logs), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task OnSuccess_skip_after_a_failure_explains_itself_in_the_log()
+    {
+        var def = Def(Run.OnSuccess,
+            Step(0, (_, ctx) => { ctx.OnTeardown(() => Task.CompletedTask); return Task.FromResult<object?>(null); }),
+            Step(1, (_, _) => throw new InvalidOperationException("boom"), [0]),
+            TeardownNode(2));
+
+        var results = await new ScenarioScheduler().RunAsync(def);
+
+        Assert.Equal(StepStatus.Passed, results[2].Status);
+        Assert.Contains("the scenario failed", Assert.Single(results[2].Logs), StringComparison.Ordinal);
     }
 
     [Fact]

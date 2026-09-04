@@ -107,23 +107,33 @@ enough, because the thing that must not be silent is a *failing* cleanup.
 
 The node's status:
 
+The node's status answers exactly one question — **did teardown succeed?**
+
 | Situation | Status |
 |---|---|
 | Cleanups ran, none threw | `Passed` |
-| One or more threw | `Failed`, message listing every error |
-| Policy skipped real registrations (and none were required) | `NotTaken` |
-| **Nothing was registered at all** | **`Passed`** |
+| One or more threw | `Failed`, with an `AggregateException` of every error |
+| Nothing registered, or the policy skipped everything | `Passed` |
 
-`NotTaken` for a suppressed teardown is deliberate: cleanups existed and `Run.Never` (or a failed
-scenario under `OnSuccess`) chose not to run them, which has real consequences for the leftover
-state, and reporting that green would say something false.
+**What ran and what was skipped is information, not a verdict, so it goes in the step's log** —
+which already flows to MTP standard output and the HTML report:
 
-The last row is a **correction made during implementation**. The design originally said `NotTaken`
-here too, but since the node is emitted for every scenario, that would put a permanent non-passing
-node in every scenario of every suite that never uses teardown — it broke every existing
-"all steps passed" assertion in the repo the moment the node was emitted, which is exactly what
-users would experience. Nothing to clean up is success, the same as a step with an empty body.
-Suppression and vacuity are different things and now report differently.
+```
+cleaned up: CreateAppointment
+cleaned up: PatientExists
+skipped 2 optional cleanup(s) — teardown policy is OnSuccess and the scenario failed: AvailableSlot, DatabaseIsClean
+```
+
+Each line names the step the cleanup came from, which is the only identity an anonymous closure has.
+
+This is a **correction made during implementation**, and it went through two rounds. The design first
+said `NotTaken` whenever nothing ran; because the node is emitted for *every* scenario, that put a
+permanent non-passing node in every suite that never uses teardown — it broke every existing
+"all steps passed" assertion in the repo the moment the node started being emitted, which is exactly
+what users would have seen. The narrower fix (`Passed` only when nothing was registered) still
+reported `Run.Never` as `NotTaken`, but `Run.Never` is a *deliberate choice*, not a failed or
+suppressed obligation. A status is a verdict on the step's own success; skipping is context. So
+teardown never reports `NotTaken` at all.
 
 ### Numbering and discovery need no changes
 
