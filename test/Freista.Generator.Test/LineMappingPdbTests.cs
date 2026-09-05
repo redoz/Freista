@@ -46,6 +46,26 @@ public class LineMappingPdbTests(ITestOutputHelper output)
         result.AssertCompiles();
     }
 
+    [Fact]
+    public void Resource_step_with_pre_call_claims_still_maps_to_original_invocation_span()
+    {
+        // When.Suspend([Edited] User) [return: Edited]: the parameter claim is emitted BEFORE the call
+        // under `#line hidden`, the return claim after. The call itself must still carry its own
+        // span directive, so a breakpoint on the scenario line hits and stepping lands on the user's
+        // source — never on generated plumbing.
+        var source = SampleSources.ResourceDsl + SampleSources.ResourceScenario;
+        var expected = InvocationSpan(source, Path, "When", "Suspend");
+
+        var (errors, pdb) = GeneratorHarness.EmitWithPdb(source, Path);
+        Assert.True(errors.IsEmpty, string.Join("; ", errors));
+
+        var visible = GeneratorHarness.ReadSequencePoints(pdb).Where(p => !p.IsHidden).ToList();
+
+        Assert.All(visible, p => Assert.Equal(Path, p.Document));
+        Assert.Contains(visible, p =>
+            p.StartLine == expected.startLine && p.StartColumn == expected.startCol);
+    }
+
     private static (int startLine, int startCol, int endLine, int endCol) InvocationSpan(
         string source, string path, string receiver, string method)
     {
