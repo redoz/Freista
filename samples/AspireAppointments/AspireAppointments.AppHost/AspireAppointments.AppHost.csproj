@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Sdk Name="Aspire.AppHost.Sdk" Version="13.5.3" />
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsAspireHost>true</IsAspireHost>
+    <UserSecretsId>freista-aspire-appointments</UserSecretsId>
+    <NoWarn>$(NoWarn);CA1852;CA2007;ASPIRE010</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AspireAppointments.Api\AspireAppointments.Api.csproj" />
+  </ItemGroup>
+
+</Project>

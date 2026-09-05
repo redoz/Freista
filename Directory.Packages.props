@@ -29,6 +29,8 @@
 
     <!-- Aspire integration (Freista.Aspire + the Aspire sample). -->
     <PackageVersion Include="Aspire.Hosting.Testing" Version="13.5.3" />
+    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.5.3" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.11" />
 
     <!--
       Roslyn the primary generator builds against. Installed SDK 10.0.300 ships Roslyn

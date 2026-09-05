@@ -60,6 +60,7 @@ independent ready branches keep running.
 | `src/Freista.Mtp` | Microsoft.Testing.Platform test framework: `[Scenario]`, discovery, run loop, per-step node reporter. |
 | `src/Freista.Aspire` | Aspire integration: builds the AppHost, starts it as the run's preflight while waiting for the resources you declare, registers it for your steps. Plumbing only — no phase markers, no steps. |
 | `samples/AppointmentTests` | End-to-end sample (linear / tuple / array / LINQ / conditionals / teardown). |
+| `samples/AspireAppointments` | Aspire end-to-end: an AppHost, a mock API, and a suite that starts it as preflight and drives it as two actors. |
 | `test/*` | Scheduler tests (xUnit-free), generator/analyzer tests (behavioral + Verify snapshots), and MTP acceptance tests. |
 
 ## Run it

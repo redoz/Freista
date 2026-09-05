@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <!-- A mock service for the sample, not production code: it holds appointments in memory and
+         trusts an X-Role header. Exempt it from the repo's analyzer strictness. -->
+    <NoWarn>$(NoWarn);CA1852;CA1050;CA2007;CA1812</NoWarn>
+  </PropertyGroup>
+
+</Project>

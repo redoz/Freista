@@ -39,51 +39,70 @@ public static class FreistaAspire
         var options = new AspireRunOptions();
         configure?.Invoke(options);
 
-        var builder = await DistributedApplicationTestingBuilder
-            .CreateAsync<TAppHost>(CancellationToken.None)
-            .ConfigureAwait(false);
-        options.ApplyBuilder(builder);
-
-        // Built, not started: starting is preflight's job so that it is reported.
-        var app = await builder.BuildAsync().ConfigureAwait(false);
+        // Nothing Aspire-related happens until preflight runs. A discovery request (--list-tests,
+        // Test Explorer populating) must not build an AppHost, and must certainly not probe for a
+        // container runtime — which is what disposing a built-but-unstarted application does.
+        var holder = new ApplicationHolder();
 
         try
         {
             var services = new ServiceCollection();
-            services.AddSingleton(app);
+            services.AddSingleton(_ => holder.Application
+                ?? throw new InvalidOperationException(
+                    "The Aspire application is not available: preflight has not run."));
             options.ApplyServices(services);
 
             var provider = services.BuildServiceProvider();
             await using (provider.ConfigureAwait(false))
             {
-
                 return await FreistaTestApplication.RunAsync(
                     args,
                     configure: options.ApplyTestApplication,
                     services: provider,
-                    preflight: ctx => StartAsync(app, options, ctx)).ConfigureAwait(false);
+                    preflight: ctx => StartAsync<TAppHost>(holder, options, ctx)).ConfigureAwait(false);
             }
         }
         finally
         {
-            await app.DisposeAsync().ConfigureAwait(false);
+            if (holder.Application is { } app)
+            {
+                await app.DisposeAsync().ConfigureAwait(false);
+            }
         }
     }
 
+    /// <summary>Holds the application once preflight has built it, so the DI registration can be
+    /// made before it exists.</summary>
+    private sealed class ApplicationHolder
+    {
+        public DistributedApplication? Application { get; set; }
+    }
+
     /// <summary>
-    /// The preflight body: start the app, then wait for each declared resource to report healthy,
-    /// logging each transition onto the preflight node. The whole of it shares one
+    /// The preflight body: build the app, start it, then wait for each declared resource to report
+    /// healthy, logging each transition onto the preflight node. The whole of it shares one
     /// <see cref="AspireRunOptions.StartupTimeout"/> rather than one timeout per resource.
     /// </summary>
-    private static async Task StartAsync(
-        DistributedApplication app, AspireRunOptions options, ScenarioContext ctx)
+    private static async Task StartAsync<TAppHost>(
+        ApplicationHolder holder, AspireRunOptions options, ScenarioContext ctx)
+        where TAppHost : class
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ctx.CancellationToken);
         timeout.CancelAfter(options.StartupTimeout);
 
         var healthy = new List<string>();
+        DistributedApplication? app = null;
         try
         {
+            ctx.Log("building AppHost");
+            var builder = await DistributedApplicationTestingBuilder
+                .CreateAsync<TAppHost>(timeout.Token)
+                .ConfigureAwait(false);
+            options.ApplyBuilder(builder);
+
+            app = await builder.BuildAsync(timeout.Token).ConfigureAwait(false);
+            holder.Application = app;
+
             ctx.Log("starting AppHost");
             await app.StartAsync(timeout.Token).ConfigureAwait(false);
 
@@ -108,7 +127,7 @@ public static class FreistaAspire
     }
 
     private static string BuildTimeoutMessage(
-        DistributedApplication app, AspireRunOptions options, List<string> healthy)
+        DistributedApplication? app, AspireRunOptions options, List<string> healthy)
     {
         var pending = options.WaitForResources.Where(r => !healthy.Contains(r)).ToList();
 
@@ -123,7 +142,8 @@ public static class FreistaAspire
 
         foreach (var resource in pending)
         {
-            var state = app.ResourceNotifications.TryGetCurrentState(resource, out var current)
+            var state = app is not null
+                && app.ResourceNotifications.TryGetCurrentState(resource, out var current)
                 ? current.Snapshot.State?.Text ?? "(no state)"
                 : "(unknown resource)";
             message.Append("  pending: ").Append(resource).Append(" — last state ").AppendLine(state);
