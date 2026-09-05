@@ -235,7 +235,8 @@ public class RunLoopTests
         var loop = new FreistaRunLoop(() => [def]);
 
         var sink = new RecordingSink();
-        var uids = new HashSet<string>([Uid("scn", "lonely")], StringComparer.OrdinalIgnoreCase);
+        // Both steps are selected: a filter naming only "lonely" would (correctly) leave "sibling" out.
+        var uids = new HashSet<string>([Uid("scn", "lonely"), Uid("scn", "sibling")], StringComparer.OrdinalIgnoreCase);
         await loop.RunAsync(uids, sink, CancellationToken.None);
 
         Assert.True(siblingRan);

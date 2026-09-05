@@ -56,8 +56,8 @@ public sealed class ScenarioScheduler
         ScenarioDefinition definition,
         IServiceProvider? services = null,
         IStepObserver? observer = null,
-        CancellationToken cancellationToken = default,
-        IReadOnlySet<int>? targets = null)
+        IReadOnlySet<int>? targets = null,
+        CancellationToken cancellationToken = default)
     {
         definition.Validate();
 
