@@ -34,6 +34,7 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
         Descriptors.InvalidCondition,
         Descriptors.UnmergeableLocal,
         Descriptors.ConflictingParallelAccess,
+        Descriptors.StepContextInCleanup,
     ];
 
     public override void Initialize(AnalysisContext context)
@@ -41,6 +42,20 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
         context.EnableConcurrentExecution();
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
         context.RegisterSyntaxNodeAction(AnalyzeMethod, SyntaxKind.MethodDeclaration);
+        context.RegisterSyntaxNodeAction(AnalyzeInvocation, SyntaxKind.InvocationExpression);
+    }
+
+    private static void AnalyzeInvocation(SyntaxNodeAnalysisContext context)
+    {
+        try
+        {
+            AnalyzeCleanupRegistration(context, (InvocationExpressionSyntax)context.Node);
+        }
+        catch (Exception ex)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                Descriptors.UnhandledException, context.Node.GetLocation(), GeneratorSafety.Describe(ex)));
+        }
     }
 
     private static void AnalyzeMethod(SyntaxNodeAnalysisContext context)
@@ -626,6 +641,76 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
             }
         }
     }
+
+    /// <summary>
+    /// FRST014: a cleanup lambda handed to <c>ScenarioContext.OnTeardown</c> must not reach for a
+    /// <c>ScenarioContext</c> declared outside it — typically the step's own <c>ctx</c>. The cleanup
+    /// runs inside the Teardown node after that step has been reported, so anything logged or attached
+    /// through the captured context is lost. The lambda's own parameter and
+    /// <c>ScenarioContext.Current</c> ARE the teardown context and stay clean.
+    /// </summary>
+    private static void AnalyzeCleanupRegistration(SyntaxNodeAnalysisContext context, InvocationExpressionSyntax invocation)
+    {
+        // Syntactic pre-filter: this runs for every invocation in the compilation, so only pay for a
+        // symbol lookup when the member is literally named OnTeardown (plain or ?. access).
+        var memberName = invocation.Expression switch
+        {
+            MemberAccessExpressionSyntax access => access.Name.Identifier.ValueText,
+            MemberBindingExpressionSyntax binding => binding.Name.Identifier.ValueText,
+            _ => null,
+        };
+        if (memberName != "OnTeardown")
+        {
+            return;
+        }
+
+        if (context.SemanticModel.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method
+            || !IsScenarioContext(method.ContainingType))
+        {
+            return;
+        }
+
+        foreach (var argument in invocation.ArgumentList.Arguments)
+        {
+            if (argument.Expression is not AnonymousFunctionExpressionSyntax cleanup)
+            {
+                continue;
+            }
+
+            foreach (var identifier in cleanup.DescendantNodes().OfType<IdentifierNameSyntax>())
+            {
+                if ((identifier.Parent is MemberAccessExpressionSyntax access && access.Name == identifier)
+                    || identifier.Parent is NameColonSyntax or NameEqualsSyntax)
+                {
+                    continue;
+                }
+
+                var symbol = context.SemanticModel.GetSymbolInfo(identifier).Symbol;
+                var type = symbol switch
+                {
+                    IParameterSymbol parameter => parameter.Type,
+                    ILocalSymbol local => local.Type,
+                    _ => null,
+                };
+
+                if (symbol is null || type is null || !IsScenarioContext(type) || DeclaredInside(symbol, cleanup))
+                {
+                    continue;
+                }
+
+                Report(context, Descriptors.StepContextInCleanup, identifier.GetLocation(), identifier.Identifier.Text);
+            }
+        }
+    }
+
+    private static bool IsScenarioContext(ITypeSymbol type)
+        => type.Name == "ScenarioContext"
+            && type.ContainingNamespace?.ToDisplayString(SymbolHelpers.NoGlobal) == "Freista";
+
+    /// <summary>True when <paramref name="symbol"/> is declared within <paramref name="scope"/> (a lambda's
+    /// own parameter or a local it introduces), so it is not a capture from the enclosing step.</summary>
+    private static bool DeclaredInside(ISymbol symbol, SyntaxNode scope)
+        => symbol.DeclaringSyntaxReferences.Any(r => r.SyntaxTree == scope.SyntaxTree && scope.Span.Contains(r.Span));
 
     private static void RecordDeconstructedLocals(
         SyntaxNodeAnalysisContext context,

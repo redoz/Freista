@@ -19,3 +19,4 @@ FRST010 | Freista.Usage | Error | Lineage subject must name a step subject
 FRST011 | Freista.Usage | Error | Scenario condition must be an awaited phase-marker call
 FRST012 | Freista.Usage | Error | Conditionally assigned local has no step-produced definition
 FRST013 | Freista.Usage | Error | Parallel steps conflict on one resource
+FRST014 | Freista.Usage | Error | Cleanup uses the registering step's context

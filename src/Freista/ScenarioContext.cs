@@ -145,7 +145,8 @@ public sealed class ScenarioContext
     /// connection, because it is written where both are in scope. Runs after the scenario, subject to
     /// the scenario's <c>[Teardown(Run.…)]</c> policy. This form is for cleanups that report nothing;
     /// to log or attach from a cleanup, take the teardown context:
-    /// <see cref="OnTeardown(Func{ScenarioContext, Task})"/>.
+    /// <see cref="OnTeardown(Func{ScenarioContext, Task})"/>. A cleanup that reaches for this step's
+    /// own context instead is a compile-time error (FRST014) — that output would be lost.
     /// </summary>
     public void OnTeardown(Func<Task> cleanup) => OnTeardown(Cleanup.Optional, cleanup);
 

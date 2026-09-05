@@ -118,4 +118,12 @@ internal static class Descriptors
         Category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor StepContextInCleanup = new(
+        "FRST014",
+        "Cleanup uses the registering step's context",
+        "'{0}' is the context of the step that registered this cleanup; that step has already been reported by the time the cleanup runs, so anything logged or attached through it is lost — take the teardown context as the lambda parameter (OnTeardown(teardown => ...)) and use that instead",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

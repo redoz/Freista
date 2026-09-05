@@ -761,4 +761,143 @@ public class AnalyzerTests
             Assert.DoesNotContain(diagnostics, d => d.Id == "FRST013");
         }
     }
+
+    /// <summary>A step body around <paramref name="registration"/>, which sees `ctx` (the step's own
+    /// nullable context) and `id` (a plain captured value).</summary>
+    private static Task<ImmutableArray<Diagnostic>> AnalyzeCleanup(string registration) =>
+        GeneratorHarness.AnalyzeAsync(
+            $$"""
+            using System.Threading.Tasks;
+            using Freista;
+            namespace Cleanups;
+            public static class Db
+            {
+                public static Task Delete(int id) => Task.CompletedTask;
+            }
+            public static class CleanupDsl
+            {
+                extension(Given)
+                {
+                    [StepName("a row exists")]
+                    public static Task<int> RowExists(ScenarioContext? ctx = null)
+                    {
+                        var id = 42;
+            {{registration}}
+                        return Task.FromResult(id);
+                    }
+                }
+            }
+            """);
+
+    [Fact]
+    public void FRST014_is_a_supported_diagnostic()
+    {
+        var analyzer = new Freista.Generator.Analysis.ScenarioAnalyzer();
+
+        Assert.Contains(analyzer.SupportedDiagnostics, d => d.Id == "FRST014");
+    }
+
+    [Fact]
+    public async Task FRST014_captured_step_context_in_a_parameterless_cleanup()
+    {
+        var diagnostics = await AnalyzeCleanup(
+            """
+                        ctx?.OnTeardown(() =>
+                        {
+                            ctx.Log("deleting");
+                            return Db.Delete(id);
+                        });
+            """);
+
+        var diagnostic = Assert.Single(diagnostics, d => d.Id == "FRST014");
+        Assert.Contains("'ctx'", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task FRST014_captured_step_context_beside_the_teardown_parameter()
+    {
+        var diagnostics = await AnalyzeCleanup(
+            """
+                        ctx?.OnTeardown(teardown =>
+                        {
+                            ctx.Log("deleting");
+                            return Db.Delete(id);
+                        });
+            """);
+
+        AssertHas(diagnostics, "FRST014");
+    }
+
+    [Fact]
+    public async Task FRST014_flags_the_kind_overload_and_a_captured_context_local()
+    {
+        var diagnostics = await AnalyzeCleanup(
+            """
+                        var step = ctx;
+                        ctx?.OnTeardown(Cleanup.Required, () =>
+                        {
+                            step?.AddAttachment("deleted", "row");
+                            return Db.Delete(id);
+                        });
+            """);
+
+        AssertHas(diagnostics, "FRST014");
+    }
+
+    [Fact]
+    public async Task FRST014_clean_when_the_teardown_context_is_used()
+    {
+        var diagnostics = await AnalyzeCleanup(
+            """
+                        ctx?.OnTeardown(teardown =>
+                        {
+                            teardown.Log("deleting");
+                            teardown.AddAttachment("deleted", "row");
+                            return Db.Delete(id);
+                        });
+            """);
+
+        Assert.DoesNotContain(diagnostics, d => d.Id == "FRST014");
+    }
+
+    [Fact]
+    public async Task FRST014_clean_for_a_cleanup_that_touches_no_context()
+    {
+        var diagnostics = await AnalyzeCleanup(
+            """
+                        ctx?.OnTeardown(() => Db.Delete(id));
+                        ctx?.OnTeardown(Cleanup.Required, () => Db.Delete(id));
+            """);
+
+        Assert.DoesNotContain(diagnostics, d => d.Id == "FRST014");
+    }
+
+    [Fact]
+    public async Task FRST014_clean_for_the_ambient_context_inside_the_cleanup()
+    {
+        // ScenarioContext.Current IS the teardown context while cleanups run.
+        var diagnostics = await AnalyzeCleanup(
+            """
+                        ctx?.OnTeardown(() =>
+                        {
+                            ScenarioContext.Current?.Log("deleting");
+                            return Db.Delete(id);
+                        });
+            """);
+
+        Assert.DoesNotContain(diagnostics, d => d.Id == "FRST014");
+    }
+
+    [Fact]
+    public async Task FRST014_does_not_fire_on_context_use_outside_the_cleanup()
+    {
+        var diagnostics = await AnalyzeCleanup(
+            """
+                        ctx?.Log("created");
+                        ctx?.OnTeardown(() => Db.Delete(id));
+                        ctx?.Log("registered");
+            """);
+
+        Assert.DoesNotContain(diagnostics, d => d.Id == "FRST014");
+    }
 }
