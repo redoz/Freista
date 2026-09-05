@@ -89,7 +89,9 @@ public sealed class ScenarioContext
     /// <summary>
     /// The resource surface for this step: lifecycle verbs (<c>Create</c>/<c>Load</c>/<c>Read</c>/
     /// <c>Edit</c>/<c>Delete</c>) that record <see cref="Model.ResourceEffect"/>s for the report's
-    /// resource lane. It records effects and takes no locks. The
+    /// resource lane. Under the scheduler each verb also claims the identity in the scenario's
+    /// <see cref="ResourceLedger"/>, so a claim that collides with an unordered sibling's throws
+    /// <see cref="ResourceConflictException"/>; no lock is taken and nothing waits. The
     /// <see cref="ResourceIdentityResolver"/> is selected with the following precedence: an explicit
     /// resolver passed to the 6-arg constructor, then a <see cref="ResourceIdentityResolver"/>
     /// registered in <see cref="Services"/>, then a fresh default instance.
@@ -123,6 +125,11 @@ public sealed class ScenarioContext
 
     /// <summary>A logger with an explicit category, writing to the running step.</summary>
     public ILogger GetLogger(string category) => new FreistaLogger(category, this);
+
+    /// <summary>Wires this step's resource verbs to the scenario's conflict ledger, so a claim that
+    /// collides with an unordered sibling's throws <see cref="ResourceConflictException"/>. Called by
+    /// the scheduler; a context built outside it has no ledger and its verbs only trace.</summary>
+    internal void AttachLedger(ResourceLedger ledger, int stepIndex) => Resources.AttachLedger(ledger, stepIndex);
 
     /// <summary>Wires this context to the scenario's teardown log. Called by the scheduler; a context
     /// built outside it (a DSL method under unit test) simply has nowhere to register, and

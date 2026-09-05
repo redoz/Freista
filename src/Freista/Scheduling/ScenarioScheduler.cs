@@ -70,6 +70,7 @@ public sealed class ScenarioScheduler
         }
 
         var teardownLog = new TeardownLog();
+        var ledger = new ResourceLedger(nodes);
 
         // Simulated-time bookkeeping. The base instant is sampled once; per-node start/finish offsets
         // (TimeSpan from base) compose the DAG-correct timeline. Unused in real mode.
@@ -231,7 +232,7 @@ public sealed class ScenarioScheduler
                         }
 
                         running[RunNodeAsync(
-                            node, inputs, services, displayName, simBase, startOffset, teardownLog, cancellationToken)] = i;
+                            node, inputs, services, displayName, simBase, startOffset, teardownLog, ledger, cancellationToken)] = i;
                         progressed = true;
                     }
                 }
@@ -540,6 +541,7 @@ public sealed class ScenarioScheduler
         DateTimeOffset simBase,
         TimeSpan simStartOffset,
         TeardownLog teardownLog,
+        ResourceLedger ledger,
         CancellationToken scenarioToken)
     {
         // In simulated mode each step runs on its own clock seeded at base + start offset, so the
@@ -556,6 +558,7 @@ public sealed class ScenarioScheduler
             node.StepId, displayName, services, resolver: null, stepTimeProvider, stepCts.Token);
 
         context.AttachTeardown(teardownLog, node.Index);
+        context.AttachLedger(ledger, node.Index);
 
         // Ambient for the duration of this step. Set inside RunNodeAsync (which each step enters on
         // its own async flow) so it is visible to the step body and to anything it awaits, but never

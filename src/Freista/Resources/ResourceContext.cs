@@ -23,6 +23,8 @@ public sealed class ResourceContext
     readonly TimeProvider _timeProvider;
     readonly string _stepId;
     readonly string _stepDisplayName;
+    ResourceLedger? _ledger;
+    int _nodeIndex;
 
     /// <summary>Creates a tracer bound to one step, resolving identities via <paramref name="resolver"/>.</summary>
     public ResourceContext(
@@ -124,8 +126,20 @@ public sealed class ResourceContext
         }
     }
 
+    /// <summary>Wires this step's verbs to the scenario's conflict ledger. Called by the scheduler; a
+    /// context built outside it (a DSL method under unit test) has no ledger and its verbs only trace.</summary>
+    internal void AttachLedger(ResourceLedger ledger, int nodeIndex)
+    {
+        _ledger = ledger;
+        _nodeIndex = nodeIndex;
+    }
+
     ValueTask Record(LifecycleVerb verb, ResourceIdentity identity, object? data)
     {
+        // The ledger first: a refused claim is a ResourceConflictException that fails the step, and it
+        // records no effect — the exception carries the identity instead.
+        _ledger?.Claim(_nodeIndex, _stepDisplayName, identity, verb);
+
         lock (_lock)
         {
             if (_index.TryGetValue(identity, out int idx))
