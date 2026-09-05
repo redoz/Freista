@@ -38,11 +38,26 @@ public sealed class ScenarioScheduler
     }
 
 
+    /// <summary>Skip reason recorded on steps a filtered run left out entirely.</summary>
+    public const string NotSelectedSkipReason = "not selected";
+
+    /// <param name="definition">The scenario graph to run.</param>
+    /// <param name="services">Per-scenario service provider surfaced as <c>ctx.Services</c>.</param>
+    /// <param name="observer">Receives step lifecycle callbacks; nothing is raised for steps a filter left out.</param>
+    /// <param name="cancellationToken">Cancels the scenario; teardown still runs.</param>
+    /// <param name="targets">
+    /// When non-null, a filtered run: only these node indices and everything they transitively need
+    /// (dependencies, merge sources, guard conditions) run, plus teardown. Every other node is left out
+    /// entirely — no observer callback, so neither the runner nor the report ever sees it — and is
+    /// recorded as <see cref="StepStatus.Skipped"/> with <see cref="NotSelectedSkipReason"/> so the
+    /// returned list still has one result per node. Null runs the whole scenario.
+    /// </param>
     public async Task<IReadOnlyList<StepResult>> RunAsync(
         ScenarioDefinition definition,
         IServiceProvider? services = null,
         IStepObserver? observer = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlySet<int>? targets = null)
     {
         definition.Validate();
 
@@ -66,6 +81,34 @@ public sealed class ScenarioScheduler
             {
                 teardownIndex = i;
                 pending.Remove(i);
+            }
+        }
+
+        // A filtered run keeps the targets' predecessor closure and drops the rest before scheduling
+        // starts. Dropped nodes never enter the DAG loop, so nothing can depend on them (the closure
+        // contains every predecessor of every kept node) and no observer ever hears of them.
+        var excluded = new bool[count];
+        if (targets is not null)
+        {
+            var included = ScenarioGraph.Closure(nodes, targets);
+            for (var i = 0; i < count; i++)
+            {
+                if (i == teardownIndex || included.Contains(i))
+                {
+                    continue;
+                }
+
+                excluded[i] = true;
+                pending.Remove(i);
+                status[i] = StepStatus.Skipped;
+                results[i] = new StepResult
+                {
+                    Node = nodes[i],
+                    DisplayName = nodes[i].DisplayNameTemplate,
+                    Status = StepStatus.Skipped,
+                    StartedAt = _timeProvider.GetUtcNow(),
+                    SkipReason = NotSelectedSkipReason,
+                };
             }
         }
 
@@ -294,11 +337,12 @@ public sealed class ScenarioScheduler
             var name = FormatName(node, inputs);
 
             // Success is a property of the SCENARIO, not of the step that registered a cleanup: a
-            // failed run should leave the whole world intact, not a half-torn-down mix of it.
+            // failed run should leave the whole world intact, not a half-torn-down mix of it. Steps a
+            // filter left out did not fail — they were never asked to run — so they do not count.
             var succeeded = true;
             for (var n = 0; n < count; n++)
             {
-                if (n != i && status[n] is not (StepStatus.Passed or StepStatus.NotTaken))
+                if (n != i && !excluded[n] && status[n] is not (StepStatus.Passed or StepStatus.NotTaken))
                 {
                     succeeded = false;
                     break;

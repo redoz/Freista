@@ -14,9 +14,10 @@ namespace Freista.Mtp;
 /// <remarks>
 /// <para>
 /// Selecting several step uids of one scenario yields a single scheduler run (the DAG executes the
-/// scenario's steps once and memoizes their outputs), so a multi-step filter ⇒ one run. Because the
-/// scheduler runs a scenario's transitive dependency closure, naming a single step still runs (and
-/// the sink still receives) all of its executed siblings.
+/// scenario's steps once and memoizes their outputs), so a multi-step filter ⇒ one run. Within that
+/// run the scheduler executes only the selected steps and what they transitively need (dependencies,
+/// merge sources, guard conditions) plus teardown; steps outside that closure are neither run nor
+/// reported. Naming one step therefore runs everything up to and including it, and nothing after.
 /// </para>
 /// <para>
 /// Each scenario run gets its own <see cref="CancellationTokenSource"/>, linked to the platform's
@@ -33,6 +34,7 @@ internal sealed class FreistaRunLoop
         ScenarioDefinition definition,
         IStepObserver observer,
         IServiceProvider? services,
+        IReadOnlySet<int>? targets,
         CancellationToken cancellationToken);
 
     private readonly Func<IEnumerable<ScenarioDefinition>> scenarioSource;
@@ -124,7 +126,7 @@ internal sealed class FreistaRunLoop
         var preflightFailed = false;
         if (preflight is not null)
         {
-            var results = await RunOneAsync(Preflight.Definition(preflight), bus, cancellationToken)
+            var results = await RunOneAsync(Preflight.Definition(preflight), bus, uids: null, cancellationToken)
                 .ConfigureAwait(false);
             preflightFailed = results.Any(r => r.Status is StepStatus.Failed or StepStatus.Skipped);
         }
@@ -153,7 +155,7 @@ internal sealed class FreistaRunLoop
                 continue;
             }
 
-            await RunOneAsync(definition, bus, cancellationToken).ConfigureAwait(false);
+            await RunOneAsync(definition, bus, uids, cancellationToken).ConfigureAwait(false);
             started = true;
         }
 
@@ -184,7 +186,7 @@ internal sealed class FreistaRunLoop
     }
 
     private async ValueTask<IReadOnlyList<StepResult>> RunOneAsync(
-        ScenarioDefinition definition, IRunEventSink bus, CancellationToken cancellationToken)
+        ScenarioDefinition definition, IRunEventSink bus, ISet<string>? uids, CancellationToken cancellationToken)
     {
         // One CTS per scenario run, owned here and linked to the platform token. Tying cancellation
         // to the run (not to any single step node) is what keeps a sibling from canceling the run.
@@ -192,6 +194,7 @@ internal sealed class FreistaRunLoop
         await bus.PublishAsync(new ScenarioStarted(definition)).ConfigureAwait(false);
 
         var observer = new BusObserver(definition, bus);
+        var targets = SelectTargets(definition, uids);
 
         // One DI scope per scenario, so AddScoped means "per scenario" and AddSingleton means "per
         // run" through ordinary .NET semantics. Disposed only after the scenario returns — the
@@ -204,7 +207,7 @@ internal sealed class FreistaRunLoop
         try
         {
             var scenarioServices = scope?.ServiceProvider ?? services;
-            var results = await runScenario(definition, observer, scenarioServices, runCts.Token).ConfigureAwait(false);
+            var results = await runScenario(definition, observer, scenarioServices, targets, runCts.Token).ConfigureAwait(false);
 
             await bus.PublishAsync(new ScenarioFinished(definition, results)).ConfigureAwait(false);
             return results;
@@ -215,18 +218,44 @@ internal sealed class FreistaRunLoop
         }
     }
 
+    /// <summary>
+    /// The node indices a uid filter names within one scenario, or <see langword="null"/> for an
+    /// unfiltered run. The scheduler expands these to their predecessor closure; the loop only says
+    /// which steps were asked for.
+    /// </summary>
+    internal static IReadOnlySet<int>? SelectTargets(ScenarioDefinition definition, ISet<string>? uids)
+    {
+        if (uids is null)
+        {
+            return null;
+        }
+
+        var targets = new HashSet<int>();
+        foreach (var node in definition.Nodes)
+        {
+            if (uids.Contains(FreistaDiscoverer.MakeUid(definition.ScenarioId, node.StepId)))
+            {
+                targets.Add(node.Index);
+            }
+        }
+
+        return targets;
+    }
+
     // Instance (not static) because it reads the simulateTime field to pick the scheduler's timing
     // mode. The provider comes in per scenario: it is the scenario's DI scope, not the root.
     private async Task<IReadOnlyList<StepResult>> DefaultRunScenario(
         ScenarioDefinition definition,
         IStepObserver observer,
         IServiceProvider? scenarioServices,
+        IReadOnlySet<int>? targets,
         CancellationToken cancellationToken)
         => await new ScenarioScheduler(simulatedTime: simulateTime).RunAsync(
             definition,
             services: scenarioServices,
             observer: observer,
-            cancellationToken: cancellationToken).ConfigureAwait(false);
+            cancellationToken: cancellationToken,
+            targets: targets).ConfigureAwait(false);
 
     /// <summary>Republishes the scheduler's per-step callbacks onto the bus, tagged with the scenario.</summary>
     private sealed class BusObserver(ScenarioDefinition definition, IRunEventSink bus) : IStepObserver

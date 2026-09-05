@@ -60,20 +60,11 @@ internal sealed class MtpReportSink : RunEventSink
             return;
         }
 
-        // A not-taken branch receives no terminal state at all, so it keeps the
-        // DiscoveredTestNodeStateProperty published at discovery and renders as grey "Not Run". The
-        // scheduler does not raise OnStepStarting for NotTaken, so the node is never left InProgress.
-        //
-        // Verified 2026-09-03 against samples/AppointmentTests: MTP tolerates a discovered node that
-        // never receives a terminal state — 24 discovered, 23 reported, exit 0, no warning. The
-        // trade-off is that the untaken step is absent from the console tally rather than listed as
-        // "not run"; the alternative (SkippedTestNodeStateProperty with a "not taken: …" reason) is a
-        // one-line change here if that visibility is wanted. It is never reported green either way.
-        if (result.Status == StepStatus.NotTaken)
-        {
-            return;
-        }
-
+        // A not-taken branch is reported as skipped with its "not taken: …" reason (see MapState), so
+        // the console tally stays honest: the step exists, it did not run, and here is why. The
+        // scheduler raises no OnStepStarting for it, so the node goes straight from discovered to
+        // skipped — the same shape any runner's own skipped test has. Before 2026-09-05 it received
+        // no terminal state at all and silently vanished from the count.
         var testNode = BuildNode(e.Definition, result.Node, result.DisplayName);
         testNode.Properties.Add(MapState(result));
 
@@ -119,6 +110,7 @@ internal sealed class MtpReportSink : RunEventSink
     {
         StepStatus.Passed => PassedTestNodeStateProperty.CachedInstance,
         StepStatus.Skipped => new SkippedTestNodeStateProperty(result.SkipReason ?? "skipped"),
+        StepStatus.NotTaken => new SkippedTestNodeStateProperty(result.SkipReason ?? "not taken"),
         StepStatus.Failed => MapFailure(result.Exception),
         // Pending/Running are not terminal; the scheduler never reports them as a finished result.
         _ => new ErrorTestNodeStateProperty(

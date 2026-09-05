@@ -539,8 +539,8 @@ public class SchedulerTests
     [Fact]
     public async Task Not_taken_nodes_do_not_raise_a_step_starting_callback()
     {
-        // A branch that was never chosen never "started"; the MTP sink relies on this so it can leave
-        // the node in its discovered state instead of stranding it InProgress.
+        // A branch that was never chosen never "started"; the MTP sink relies on this to take the
+        // node straight from discovered to skipped without ever showing it InProgress.
         var observer = new RecordingObserver();
         var def = Def(
             Cond(0, false),
@@ -551,6 +551,64 @@ public class SchedulerTests
         Assert.Single(observer.Started);
         Assert.Equal(2, observer.Finished.Count);
         Assert.Contains(observer.Finished, r => r.Status == StepStatus.NotTaken);
+    }
+
+    [Fact]
+    public async Task Targets_run_only_their_predecessor_closure_and_report_nothing_else()
+    {
+        var ran = new HashSet<int>();
+        Func<int, Func<IStepInputs, ScenarioContext, Task<object?>>> rec =
+            i => (_, _) => { lock (ran) ran.Add(i); return Task.FromResult<object?>(null); };
+        var observer = new RecordingObserver();
+
+        // 0 -> 1 -> 2, and 3 hangs off 0 on its own branch. Target 1.
+        var def = Def(Node(0, rec(0)), Node(1, rec(1), [0]), Node(2, rec(2), [1]), Node(3, rec(3), [0]));
+
+        var results = await WithTimeout(new ScenarioScheduler().RunAsync(def, observer: observer, targets: new HashSet<int> { 1 }));
+
+        Assert.Equal([0, 1], ran.Order());
+        Assert.Equal(StepStatus.Passed, results[0].Status);
+        Assert.Equal(StepStatus.Passed, results[1].Status);
+        Assert.Equal(StepStatus.Skipped, results[2].Status);
+        Assert.Equal(ScenarioScheduler.NotSelectedSkipReason, results[2].SkipReason);
+        Assert.Equal(StepStatus.Skipped, results[3].Status);
+        Assert.Equal(ScenarioScheduler.NotSelectedSkipReason, results[3].SkipReason);
+
+        // The observer never hears about the left-out nodes, in either direction.
+        Assert.Equal([0, 1], observer.Started.Select(s => s.Node.Index).Order());
+        Assert.Equal([0, 1], observer.Finished.Select(r => r.Node.Index).Order());
+    }
+
+    [Fact]
+    public async Task Targets_pull_in_merge_sources_and_guard_conditions()
+    {
+        // condition 0; arms 1/2 guarded on it; merge 3 over the arms; 4 consumes the merge. Target 4.
+        var observer = new RecordingObserver();
+        var def = Def(
+            Cond(0, true),
+            Arm(1, [new Guard(0, true)], Pass("urgent"), 0),
+            Arm(2, [new Guard(0, false)], Pass("standard"), 0),
+            MergeNode(3, 1, 2),
+            Node(4, (inputs, _) => Task.FromResult<object?>(inputs.Get<string>(3)), [3]));
+
+        var results = await WithTimeout(new ScenarioScheduler().RunAsync(def, observer: observer, targets: new HashSet<int> { 4 }));
+
+        Assert.Equal(StepStatus.Passed, results[0].Status);
+        Assert.Equal(StepStatus.Passed, results[1].Status);
+        Assert.Equal(StepStatus.NotTaken, results[2].Status);
+        Assert.Equal(StepStatus.Passed, results[3].Status);
+        Assert.Equal(StepStatus.Passed, results[4].Status);
+        Assert.DoesNotContain(observer.Finished, r => r.SkipReason == ScenarioScheduler.NotSelectedSkipReason);
+    }
+
+    [Fact]
+    public async Task Null_targets_run_the_whole_scenario()
+    {
+        var def = Def(Node(0, Pass()), Node(1, Pass()), Node(2, Pass(), [0]));
+
+        var results = await WithTimeout(new ScenarioScheduler().RunAsync(def, targets: null));
+
+        Assert.All(results, r => Assert.Equal(StepStatus.Passed, r.Status));
     }
 
     private sealed class RecordingObserver : IStepObserver

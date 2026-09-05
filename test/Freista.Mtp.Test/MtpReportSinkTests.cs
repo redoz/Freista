@@ -455,8 +455,10 @@ public class MtpReportSinkTests
     }
 
     [Fact]
-    public async Task Not_taken_step_is_never_reported_as_passed()
+    public async Task Not_taken_step_is_reported_as_skipped_with_its_reason()
     {
+        // Honest tally: a branch that was not chosen did not run, and the runner should say so rather
+        // than leave the node in its discovered state and drop it from the count.
         var def = Definition("s", "my scenario", Node(0, "a", "step a"));
         var (sink, bus) = NewSink();
 
@@ -469,7 +471,10 @@ public class MtpReportSinkTests
             SkipReason = "not taken: IsPriority",
         }));
 
-        Assert.Empty(bus.Nodes.SelectMany(n => n.Properties.OfType<PassedTestNodeStateProperty>()));
+        var node = Assert.Single(bus.Nodes);
+        var skipped = Assert.Single(node.Properties.OfType<SkippedTestNodeStateProperty>());
+        Assert.Equal("not taken: IsPriority", skipped.Explanation);
+        Assert.Empty(node.Properties.OfType<PassedTestNodeStateProperty>());
     }
 
     [Fact]

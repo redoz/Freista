@@ -83,9 +83,8 @@ public sealed class ResourceLedger
     private bool IsOrdered(int a, int b) => _after[a][b] || _after[b][a];
 
     /// <summary>
-    /// <c>after[i][j]</c> is true when node <c>i</c> must run after node <c>j</c>, transitively. The
-    /// predecessor edges are DependsOn (all-of), MergeSources (a merge selects one source's output, so
-    /// it runs after every candidate), and Guards (a guarded node runs after its condition).
+    /// <c>after[i][j]</c> is true when node <c>i</c> must run after node <c>j</c>, transitively, over
+    /// the ordering edges <see cref="ScenarioGraph.Predecessors"/> defines.
     /// </summary>
     private static bool[][] ComputeAfter(IReadOnlyList<ScenarioNode> nodes)
     {
@@ -97,7 +96,10 @@ public sealed class ResourceLedger
         {
             var row = new bool[count];
             stack.Clear();
-            Push(nodes[i], stack);
+            foreach (var predecessor in ScenarioGraph.Predecessors(nodes[i]))
+            {
+                stack.Push(predecessor);
+            }
 
             while (stack.Count > 0)
             {
@@ -108,30 +110,15 @@ public sealed class ResourceLedger
                 }
 
                 row[pred] = true;
-                Push(nodes[pred], stack);
+                foreach (var predecessor in ScenarioGraph.Predecessors(nodes[pred]))
+                {
+                    stack.Push(predecessor);
+                }
             }
 
             after[i] = row;
         }
 
         return after;
-
-        static void Push(ScenarioNode node, Stack<int> stack)
-        {
-            foreach (var dep in node.DependsOn)
-            {
-                stack.Push(dep);
-            }
-
-            foreach (var source in node.MergeSources)
-            {
-                stack.Push(source);
-            }
-
-            foreach (var guard in node.Guards)
-            {
-                stack.Push(guard.ConditionIndex);
-            }
-        }
     }
 }

@@ -128,7 +128,7 @@ public class RunLoopTests
         var runs = 0;
         var loop = new FreistaRunLoop(
             () => [def],
-            runScenario: (_, _, _, _) => { Interlocked.Increment(ref runs); return Task.FromResult<IReadOnlyList<StepResult>>([]); });
+            runScenario: (_, _, _, _, _) => { Interlocked.Increment(ref runs); return Task.FromResult<IReadOnlyList<StepResult>>([]); });
 
         var uids = new HashSet<string>([Uid("a", "x"), Uid("a", "z")], StringComparer.OrdinalIgnoreCase);
         var sink = new RecordingSink();
@@ -573,5 +573,107 @@ public class RunLoopTests
         await loop.RunAsync(uids: null, sink, CancellationToken.None);
 
         Assert.DoesNotContain(Uid("c2", "urgent"), sink.PassedUids);
+    }
+
+    // -- Filtered runs: a step runs with everything up to and including it, and nothing after ------
+
+    private static IEnumerable<string> FinishedUids(RecordingSink sink) =>
+        sink.Events.OfType<StepFinished>().Select(PassedUid);
+
+    private static IEnumerable<string> StartedUids(RecordingSink sink) =>
+        sink.Events.OfType<StepStarted>().Select(e => FreistaDiscoverer.MakeUid(e.Definition.ScenarioId, e.Context.Node.StepId));
+
+    [Fact]
+    public async Task Selecting_a_middle_step_runs_its_predecessors_and_leaves_the_rest_out()
+    {
+        var def = Definition("chain", "chain",
+            Node(0, "x", "x"),
+            Node(1, "y", "y", dependsOn: [0]),
+            Node(2, "z", "z", dependsOn: [1]));
+
+        var loop = new FreistaRunLoop(() => [def]);
+        var sink = new RecordingSink();
+        await loop.RunAsync(new HashSet<string>([Uid("chain", "y")], StringComparer.OrdinalIgnoreCase), sink, CancellationToken.None);
+
+        Assert.Contains(Uid("chain", "x"), sink.PassedUids);
+        Assert.Contains(Uid("chain", "y"), sink.PassedUids);
+        // z is not reported at all — not started, not finished, not skipped.
+        Assert.DoesNotContain(Uid("chain", "z"), FinishedUids(sink));
+        Assert.DoesNotContain(Uid("chain", "z"), StartedUids(sink));
+    }
+
+    [Fact]
+    public async Task Selecting_one_branch_of_a_fork_leaves_the_other_branch_out()
+    {
+        var def = Definition("fork", "fork",
+            Node(0, "root", "root"),
+            Node(1, "left", "left", dependsOn: [0]),
+            Node(2, "right", "right", dependsOn: [0]));
+
+        var loop = new FreistaRunLoop(() => [def]);
+        var sink = new RecordingSink();
+        await loop.RunAsync(new HashSet<string>([Uid("fork", "left")], StringComparer.OrdinalIgnoreCase), sink, CancellationToken.None);
+
+        Assert.Contains(Uid("fork", "root"), sink.PassedUids);
+        Assert.Contains(Uid("fork", "left"), sink.PassedUids);
+        Assert.DoesNotContain(Uid("fork", "right"), FinishedUids(sink));
+    }
+
+    [Fact]
+    public async Task Selecting_a_guarded_step_pulls_in_its_condition()
+    {
+        var def = Definition("cond", "cond",
+            Node(0, "patient", "patient"),
+            Node(1, "priority", "priority", dependsOn: [0], invoke: (_, _) => Task.FromResult<object?>(true), evaluate: static o => (bool)o!),
+            Node(2, "urgent", "urgent", dependsOn: [1], guards: [new Guard(1, true)]),
+            Node(3, "notify", "notify", dependsOn: [0]));
+
+        var loop = new FreistaRunLoop(() => [def]);
+        var sink = new RecordingSink();
+        await loop.RunAsync(new HashSet<string>([Uid("cond", "urgent")], StringComparer.OrdinalIgnoreCase), sink, CancellationToken.None);
+
+        Assert.Contains(Uid("cond", "priority"), sink.PassedUids);
+        Assert.Contains(Uid("cond", "urgent"), sink.PassedUids);
+        Assert.DoesNotContain(Uid("cond", "notify"), FinishedUids(sink));
+    }
+
+    [Fact]
+    public async Task A_filtered_run_still_runs_and_reports_teardown()
+    {
+        var teardown = new ScenarioNode
+        {
+            Index = 2,
+            StepId = "teardown",
+            Phase = "Then",
+            OperationName = "Teardown",
+            DisplayNameTemplate = "Teardown",
+            DependsOn = [],
+            IsTeardown = true,
+            Invoke = (_, _) => Task.FromResult<object?>(null),
+        };
+        var def = Definition("td", "td",
+            Node(0, "x", "x"),
+            Node(1, "y", "y", dependsOn: [0]),
+            teardown);
+
+        var loop = new FreistaRunLoop(() => [def]);
+        var sink = new RecordingSink();
+        await loop.RunAsync(new HashSet<string>([Uid("td", "x")], StringComparer.OrdinalIgnoreCase), sink, CancellationToken.None);
+
+        Assert.Contains(Uid("td", "x"), sink.PassedUids);
+        Assert.Contains(Uid("td", "teardown"), sink.PassedUids);
+        Assert.DoesNotContain(Uid("td", "y"), FinishedUids(sink));
+    }
+
+    [Fact]
+    public void SelectTargets_maps_uids_to_node_indices_and_null_to_everything()
+    {
+        var def = Definition("a", "A", Node(0, "x", "x"), Node(1, "y", "y"), Node(2, "z", "z"));
+
+        Assert.Null(FreistaRunLoop.SelectTargets(def, uids: null));
+
+        var targets = FreistaRunLoop.SelectTargets(
+            def, new HashSet<string>([Uid("a", "y"), Uid("other", "x")], StringComparer.OrdinalIgnoreCase));
+        Assert.Equal([1], targets!.Order());
     }
 }

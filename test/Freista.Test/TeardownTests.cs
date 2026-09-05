@@ -254,6 +254,29 @@ public class TeardownTests
         Assert.True(ran);
     }
 
+    [Fact]
+    public async Task Steps_a_filter_left_out_do_not_count_against_Run_OnSuccess()
+    {
+        // Step 1 is unrelated to the target and is left out of the filtered run. It is recorded as
+        // skipped ("not selected"), but that is not a failure, so OnSuccess must still run the cleanup.
+        var cleaned = false;
+        var def = Def(Run.OnSuccess,
+            Step(0, (_, ctx) =>
+            {
+                ctx.OnTeardown(() => { cleaned = true; return Task.CompletedTask; });
+                return Task.FromResult<object?>(null);
+            }),
+            Step(1, (_, _) => throw new InvalidOperationException("never runs")),
+            TeardownNode(2));
+
+        var results = await new ScenarioScheduler().RunAsync(def, targets: new HashSet<int> { 0 });
+
+        Assert.Equal(StepStatus.Skipped, results[1].Status);
+        Assert.True(cleaned);
+        Assert.Equal(StepStatus.Passed, results[2].Status);
+        Assert.DoesNotContain(results[2].Logs, line => line.StartsWith("skipped", StringComparison.Ordinal));
+    }
+
     private sealed class StubServices : IServiceProvider
     {
         public object? GetService(Type serviceType) => null;
