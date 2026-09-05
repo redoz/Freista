@@ -128,7 +128,7 @@ public class RunLoopTests
         var runs = 0;
         var loop = new FreistaRunLoop(
             () => [def],
-            runScenario: (_, _, _) => { Interlocked.Increment(ref runs); return Task.FromResult<IReadOnlyList<StepResult>>([]); });
+            runScenario: (_, _, _, _) => { Interlocked.Increment(ref runs); return Task.FromResult<IReadOnlyList<StepResult>>([]); });
 
         var uids = new HashSet<string>([Uid("a", "x"), Uid("a", "z")], StringComparer.OrdinalIgnoreCase);
         var sink = new RecordingSink();
@@ -429,20 +429,47 @@ public class RunLoopTests
     [Fact]
     public async Task Framework_built_with_a_provider_threads_it_to_the_step_context()
     {
-        // End-to-end: FreistaTestFramework(IServiceProvider) -> run loop -> scheduler -> ctx.Services.
+        // End-to-end: the CONSUMER's provider -> run loop -> scheduler -> ctx.Services.
+        //
+        // MTP's own provider is deliberately NOT what steps see. It carries platform internals
+        // (command-line options, the logger factory), and letting a step resolve those would couple
+        // user code to the platform. The framework keeps it for its own use and threads the
+        // consumer's provider — the one built in their Program.cs — to step bodies instead.
         var method = $"Freista.Mtp.Test.DiRun.{Guid.NewGuid():N}";
         IServiceProvider? seen = null;
         ScenarioRegistry.Register(method, () => Definition("di-fw", "di scenario",
             Node(0, "a", "a", invoke: (_, ctx) => { seen = ctx.Services; return Task.FromResult<object?>(null); })));
 
-        var provider = new StubServiceProvider();
-        var framework = new FreistaTestFramework(provider);
+        var mtpProvider = new StubServiceProvider();
+        var userProvider = new StubServiceProvider();
+        var framework = new FreistaTestFramework(mtpProvider, simulateTime: false, userProvider);
         var uid = new SessionUid("di-fw-run");
         await framework.CreateTestSession(uid);
 
         await framework.OnExecute(uid, filter: null, new RecordingMessageBus(), () => { }, CancellationToken.None);
 
-        Assert.Same(provider, seen);
+        Assert.Same(userProvider, seen);
+        Assert.NotSame(mtpProvider, seen);
+    }
+
+    [Fact]
+    public async Task Without_a_consumer_provider_the_step_context_has_no_services()
+    {
+        // MTP's provider must not leak in as a fallback.
+        var method = $"Freista.Mtp.Test.DiRun.{Guid.NewGuid():N}";
+        IServiceProvider? seen = null;
+        var ran = false;
+        ScenarioRegistry.Register(method, () => Definition("di-none", "no di scenario",
+            Node(0, "a", "a", invoke: (_, ctx) => { seen = ctx.Services; ran = true; return Task.FromResult<object?>(null); })));
+
+        var framework = new FreistaTestFramework(new StubServiceProvider());
+        var uid = new SessionUid("di-none-run");
+        await framework.CreateTestSession(uid);
+
+        await framework.OnExecute(uid, filter: null, new RecordingMessageBus(), () => { }, CancellationToken.None);
+
+        Assert.True(ran);
+        Assert.Null(seen);
     }
 
     /// <summary>

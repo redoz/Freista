@@ -9,7 +9,7 @@ namespace Freista.Mtp;
 /// <remarks>
 /// <para>
 /// This is the escape-hatch API. By default the Freista source generator emits a <c>Program.cs</c>
-/// whose <c>Main</c> calls <see cref="RunAsync(string[], Action{ITestApplicationBuilder}?, bool)"/>, giving
+/// whose <c>Main</c> calls <see cref="RunAsync(string[], Action{ITestApplicationBuilder}?, bool, IServiceProvider?)"/>, giving
 /// "just add the package" UX. Setting the MSBuild property <c>&lt;FreistaGenerateProgram&gt;false&lt;/FreistaGenerateProgram&gt;</c>
 /// suppresses that emission so a consumer can write their own <c>Program.cs</c> and call this method
 /// directly, taking full control of the host (custom MTP extensions, builder configuration, etc.)
@@ -34,11 +34,18 @@ public static class FreistaTestApplication
     /// the source-generated <c>Program</c> (which calls the 2-arg form) leaves production runs on real
     /// timing.
     /// </param>
+    /// <param name="services">
+    /// The consumer's own service provider, surfaced to step bodies as <c>ctx.Services</c> (scoped
+    /// per scenario when it can supply an <c>IServiceScopeFactory</c>). Built and disposed by the
+    /// consumer in their own <c>Main</c>, which is what lets registrations do async setup — an Aspire
+    /// AppHost, for instance. <see langword="null"/> leaves <c>ctx.Services</c> null.
+    /// </param>
     /// <returns>The process exit code to return from <c>Main</c>.</returns>
     public static async Task<int> RunAsync(
         string[] args,
         Action<ITestApplicationBuilder>? configure = null,
-        bool simulateTime = false)
+        bool simulateTime = false,
+        IServiceProvider? services = null)
     {
         ArgumentNullException.ThrowIfNull(args);
 
@@ -50,7 +57,7 @@ public static class FreistaTestApplication
 
         builder.RegisterTestFramework(
             _ => new TestFrameworkCapabilities(),
-            (_, serviceProvider) => new FreistaTestFramework(serviceProvider, simulateTime));
+            (_, serviceProvider) => new FreistaTestFramework(serviceProvider, simulateTime, services));
 
         using var app = await builder.BuildAsync().ConfigureAwait(false);
         return await app.RunAsync().ConfigureAwait(false);

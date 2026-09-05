@@ -1,4 +1,5 @@
 using Freista.Model;
+using Microsoft.Extensions.DependencyInjection;
 using Freista.Reporting;
 using Freista.Scheduling;
 
@@ -31,6 +32,7 @@ internal sealed class FreistaRunLoop
     public delegate Task<IReadOnlyList<StepResult>> RunScenario(
         ScenarioDefinition definition,
         IStepObserver observer,
+        IServiceProvider? services,
         CancellationToken cancellationToken);
 
     private readonly Func<IEnumerable<ScenarioDefinition>> scenarioSource;
@@ -141,18 +143,38 @@ internal sealed class FreistaRunLoop
         await bus.PublishAsync(new ScenarioStarted(definition)).ConfigureAwait(false);
 
         var observer = new BusObserver(definition, bus);
-        var results = await runScenario(definition, observer, runCts.Token).ConfigureAwait(false);
 
-        await bus.PublishAsync(new ScenarioFinished(definition, results)).ConfigureAwait(false);
+        // One DI scope per scenario, so AddScoped means "per scenario" and AddSingleton means "per
+        // run" through ordinary .NET semantics. Disposed only after the scenario returns — the
+        // scheduler runs teardown as the last thing inside it, and a cleanup may hold something
+        // resolved from this scope.
+        var scope = services?.GetService(typeof(IServiceScopeFactory)) is IServiceScopeFactory factory
+            ? factory.CreateScope()
+            : null;
+
+        try
+        {
+            var scenarioServices = scope?.ServiceProvider ?? services;
+            var results = await runScenario(definition, observer, scenarioServices, runCts.Token).ConfigureAwait(false);
+
+            await bus.PublishAsync(new ScenarioFinished(definition, results)).ConfigureAwait(false);
+        }
+        finally
+        {
+            scope?.Dispose();
+        }
     }
 
     // Instance (not static) because it reads the simulateTime field to pick the scheduler's timing
-    // mode and the services field to populate each ScenarioContext.Services.
+    // mode. The provider comes in per scenario: it is the scenario's DI scope, not the root.
     private async Task<IReadOnlyList<StepResult>> DefaultRunScenario(
-        ScenarioDefinition definition, IStepObserver observer, CancellationToken cancellationToken)
+        ScenarioDefinition definition,
+        IStepObserver observer,
+        IServiceProvider? scenarioServices,
+        CancellationToken cancellationToken)
         => await new ScenarioScheduler(simulatedTime: simulateTime).RunAsync(
             definition,
-            services: services,
+            services: scenarioServices,
             observer: observer,
             cancellationToken: cancellationToken).ConfigureAwait(false);
 

@@ -49,6 +49,7 @@ public class FreistaTestFramework :
 
     private readonly ConcurrentDictionary<string, byte> sessions = new(StringComparer.Ordinal);
     private readonly IServiceProvider? _services;
+    private readonly IServiceProvider? _userServices;
     private readonly bool _simulateTime;
 
     /// <summary>Parameterless ctor for tests and the default registration path.</summary>
@@ -63,6 +64,13 @@ public class FreistaTestFramework :
     /// Defaults elsewhere keep production runs on real timing.</summary>
     public FreistaTestFramework(IServiceProvider services, bool simulateTime)
         : this(services) => _simulateTime = simulateTime;
+
+    /// <summary>Production ctor with the consumer's own provider. <paramref name="services"/> is
+    /// MTP's (framework-internal: command-line options, logger factory); <paramref name="userServices"/>
+    /// is what reaches step bodies as <c>ctx.Services</c>. Keeping them apart is deliberate — steps
+    /// must not be able to resolve platform internals.</summary>
+    public FreistaTestFramework(IServiceProvider services, bool simulateTime, IServiceProvider? userServices)
+        : this(services, simulateTime) => _userServices = userServices;
 
     /// <inheritdoc/>
     public string Uid => ExtensionUid;
@@ -246,7 +254,7 @@ public class FreistaTestFramework :
 
         var bus = new RunEventBus(sinks);
         var loop = new FreistaRunLoop(
-            EnumerateRegisteredScenarios, simulateTime: _simulateTime, services: _services);
+            EnumerateRegisteredScenarios, simulateTime: _simulateTime, services: _userServices);
         await loop.RunAsync(uids, bus, cancellationToken).ConfigureAwait(false);
 
         if (bus.Failures.Count > 0)
