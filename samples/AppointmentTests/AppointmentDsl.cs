@@ -7,12 +7,15 @@ namespace AppointmentTests;
 // Domain entities flow between steps as ordinary types — each `await` unwraps Task<T> into T. The
 // shared identities (Patient/Slot/Appointment/User) are CRTP resources so steps can declare what they
 // do to them; ImportResult is a pure count DTO, not a shared identity, so it stays a plain record.
-public sealed record Patient(string Name) : IResource<Patient>
+// A patient's identity is their name; City is state that steps may edit. Because KeyFor projects the
+// stable member, `patient with { City = ... }` is still the SAME resource in the trace.
+public sealed record Patient(string Name, string? City = null) : IResource<Patient>
 {
     public static ResourceKey KeyFor(Patient instance) => instance.Name;
 }
 
-public sealed record Slot(int Id) : IResource<Slot>
+// Same idea for a slot: Id is the identity, Held is state a hold step flips.
+public sealed record Slot(int Id, bool Held = false) : IResource<Slot>
 {
     public static ResourceKey KeyFor(Slot instance) => instance.Id.ToString(CultureInfo.InvariantCulture);
 }

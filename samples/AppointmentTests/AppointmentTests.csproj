@@ -34,6 +34,9 @@
        runtime adapter and wire the generator in as an analyzer, and bring assertions only. -->
   <ItemGroup>
     <PackageReference Include="xunit.v3.assert" />
+    <!-- Only for the [LoggerMessage] source generator the lifecycle DSL uses; ILogger itself arrives
+         transitively through Freista. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>
