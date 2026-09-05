@@ -210,6 +210,11 @@ internal static class ScenarioEmitter
             members.Add(Set("MergeSources", IntArray(step.MergeSources)));
         }
 
+        if (step.WaitsFor.Count > 0)
+        {
+            members.Add(Set("WaitsFor", IntArray(step.WaitsFor)));
+        }
+
         if (step.IsSynthetic)
         {
             members.Add(Set("IsSynthetic", LiteralExpression(SyntaxKind.TrueLiteralExpression)));

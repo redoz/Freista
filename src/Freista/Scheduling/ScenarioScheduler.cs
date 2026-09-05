@@ -162,6 +162,26 @@ public sealed class ScenarioScheduler
                     }
                 }
 
+                // 1a. Waits-for: ordering only. A not-taken predecessor is a decision that does not
+                // concern this node (the arm was simply not chosen, and this node sits after the if),
+                // so it neither blocks nor cascades; failed/skipped cascade exactly as for DependsOn.
+                foreach (var wait in node.WaitsFor)
+                {
+                    switch (status[wait])
+                    {
+                        case StepStatus.Pending:
+                        case StepStatus.Running:
+                            anyUnresolved = true;
+                            break;
+                        case StepStatus.Failed:
+                            (failed ??= []).Add(nodes[wait].OperationName);
+                            break;
+                        case StepStatus.Skipped:
+                            (skipped ??= []).Add(nodes[wait].OperationName);
+                            break;
+                    }
+                }
+
                 // 1b. Guards. These apply to EVERY node, merge and pass-through nodes included — a
                 // pass-through is guarded on the arm it stands in for, so resolving its sources
                 // without first checking its guard would let the parent value through on both sides. A resolved-false guard is a decision (NotTaken); a guard whose condition
@@ -254,6 +274,7 @@ public sealed class ScenarioScheduler
                     }
 
                     if (node.DependsOn.All(d => status[d] == StepStatus.Passed)
+                        && node.WaitsFor.All(w => status[w] is StepStatus.Passed or StepStatus.NotTaken)
                         && node.Guards.All(g => status[g.ConditionIndex] == StepStatus.Passed
                             && EvaluateGuard(nodes[g.ConditionIndex], outputs[g.ConditionIndex]) == g.WhenValue))
                     {
@@ -734,7 +755,7 @@ public sealed class ScenarioScheduler
     private static TimeSpan StartOffset(ScenarioNode node, TimeSpan[] finishOffsets)
     {
         var offset = TimeSpan.Zero;
-        foreach (var dep in node.DependsOn)
+        foreach (var dep in node.DependsOn.Concat(node.WaitsFor))
         {
             if (finishOffsets[dep] > offset)
             {

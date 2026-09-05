@@ -62,6 +62,21 @@ public sealed class ScenarioDefinition
                 }
             }
 
+            foreach (var wait in node.WaitsFor)
+            {
+                if (wait < 0 || wait >= count)
+                {
+                    throw new InvalidOperationException(
+                        $"Step {node.Index} ('{node.OperationName}') waits for out-of-range node {wait}.");
+                }
+
+                if (wait == node.Index)
+                {
+                    throw new InvalidOperationException(
+                        $"Step {node.Index} ('{node.OperationName}') waits for itself.");
+                }
+            }
+
             foreach (var guard in node.Guards)
             {
                 if (guard.ConditionIndex < 0 || guard.ConditionIndex >= count)
@@ -144,9 +159,12 @@ public sealed class ScenarioDefinition
     {
         state[index] = 1;
 
-        // Merge sources are real edges (a merge selects one producer's output), so a cycle through
-        // them is as fatal as one through DependsOn and must be walked the same way.
-        if (HasCycleThrough(Nodes[index].DependsOn, state) || HasCycleThrough(Nodes[index].MergeSources, state))
+        // Merge sources and waits-for edges are real ordering edges (a merge selects one producer's
+        // output; a wait holds a node until another is terminal), so a cycle through either is as
+        // fatal as one through DependsOn and must be walked the same way.
+        if (HasCycleThrough(Nodes[index].DependsOn, state)
+            || HasCycleThrough(Nodes[index].MergeSources, state)
+            || HasCycleThrough(Nodes[index].WaitsFor, state))
         {
             return true;
         }

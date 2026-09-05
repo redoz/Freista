@@ -611,6 +611,104 @@ public class SchedulerTests
         Assert.All(results, r => Assert.Equal(StepStatus.Passed, r.Status));
     }
 
+    private static ScenarioNode Waiting(
+        int index,
+        Func<IStepInputs, ScenarioContext, Task<object?>> invoke,
+        int[] dependsOn,
+        int[] waitsFor) => new()
+    {
+        Index = index,
+        StepId = $"step-{index}",
+        Phase = "Then",
+        OperationName = $"Op{index}",
+        DisplayNameTemplate = $"op {index}",
+        DependsOn = dependsOn,
+        WaitsFor = waitsFor,
+        Invoke = invoke,
+    };
+
+    [Fact]
+    public async Task WaitsFor_holds_a_node_until_the_awaited_node_is_terminal()
+    {
+        // 0 = condition (true); 1 = arm, guarded, slow; 2 = the statement after the if: depends on the
+        // condition only, waits for the arm. It must not start until the arm has finished.
+        var armFinished = false;
+        var startedAfterArm = false;
+        var gate = new TaskCompletionSource();
+        var def = Def(
+            Cond(0, true),
+            Arm(1, [new Guard(0, true)], async (_, _) => { await gate.Task; armFinished = true; return null; }, 0),
+            Waiting(2, (_, _) => { startedAfterArm = armFinished; return Task.FromResult<object?>(null); }, [0], [1]));
+
+        var run = new ScenarioScheduler().RunAsync(def);
+        await Task.Delay(50);
+        Assert.False(armFinished);
+        gate.SetResult();
+        var results = await WithTimeout(run);
+
+        Assert.True(startedAfterArm);
+        Assert.All(results, r => Assert.Equal(StepStatus.Passed, r.Status));
+    }
+
+    [Fact]
+    public async Task A_not_taken_WaitsFor_predecessor_does_not_cascade()
+    {
+        // The arm is not taken. The statement after the if still runs and passes.
+        var def = Def(
+            Cond(0, false),
+            Arm(1, [new Guard(0, true)], Pass(), 0),
+            Waiting(2, Pass(), [0], [1]));
+
+        var results = await WithTimeout(new ScenarioScheduler().RunAsync(def));
+
+        Assert.Equal(StepStatus.NotTaken, results[1].Status);
+        Assert.Equal(StepStatus.Passed, results[2].Status);
+    }
+
+    [Fact]
+    public async Task A_failed_WaitsFor_predecessor_skips_the_node()
+    {
+        var def = Def(
+            Cond(0, true),
+            Arm(1, [new Guard(0, true)], (_, _) => throw new InvalidOperationException("arm failed"), 0),
+            Waiting(2, Pass(), [0], [1]));
+
+        var results = await WithTimeout(new ScenarioScheduler().RunAsync(def));
+
+        Assert.Equal(StepStatus.Failed, results[1].Status);
+        Assert.Equal(StepStatus.Skipped, results[2].Status);
+        Assert.Contains("Op1", results[2].SkipReason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Simulated_start_of_a_waiting_node_is_the_arm_finish()
+    {
+        var def = Def(
+            Cond(0, true),
+            Arm(1, [new Guard(0, true)], (_, ctx) => { ctx.SimulateElapsed(TimeSpan.FromSeconds(3)); return Task.FromResult<object?>(null); }, 0),
+            Waiting(2, Pass(), [0], [1]));
+
+        var results = await WithTimeout(new ScenarioScheduler(simulatedTime: true).RunAsync(def));
+
+        Assert.Equal(results[1].StartedAt + results[1].Duration, results[2].StartedAt);
+    }
+
+    [Fact]
+    public async Task Targets_pull_in_WaitsFor_predecessors()
+    {
+        var ran = new HashSet<int>();
+        Func<int, Func<IStepInputs, ScenarioContext, Task<object?>>> rec =
+            i => (_, _) => { lock (ran) ran.Add(i); return Task.FromResult<object?>(null); };
+        var def = Def(
+            Cond(0, true),
+            Arm(1, [new Guard(0, true)], rec(1), 0),
+            Waiting(2, rec(2), [0], [1]));
+
+        await WithTimeout(new ScenarioScheduler().RunAsync(def, targets: new HashSet<int> { 2 }));
+
+        Assert.Equal([1, 2], ran.Order());
+    }
+
     private sealed class RecordingObserver : IStepObserver
     {
         private readonly object _sync = new();

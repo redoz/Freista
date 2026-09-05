@@ -6,7 +6,8 @@ namespace Freista.Generator.Test;
 /// <summary>
 /// `if`/`else` lowers into guarded nodes plus synthetic merge (phi) nodes. `DependsOn` keeps its
 /// all-of meaning throughout: a following statement never depends on an arm's node, only on the
-/// condition or on a merge.
+/// condition or on a merge — and it WAITS for every arm's last steps through `WaitsFor`, so nothing
+/// after the `if` runs concurrently with what is inside it.
 /// </summary>
 public class ConditionalLoweringTests
 {
@@ -156,5 +157,141 @@ public class ConditionalLoweringTests
         // IsPriority is true, so exactly the first arm runs and the consumer still gets a value.
         Assert.Single(results, r => r.Node.OperationName == "CreateUrgent" && r.Status == StepStatus.Passed);
         Assert.Equal(StepStatus.Passed, results[^1].Status);
+    }
+
+    // -- Ordering after an if: WaitsFor ----------------------------------------------------------------
+    //
+    // Found by the resource conflict ledger through a packaged consumer: a statement after a bare `if`
+    // depended on the condition only, so it could run concurrently with the arm. WaitsFor closes that
+    // hole without giving DependsOn a not-taken cascade.
+
+    private static ScenarioDefinition LowerBody(string body) =>
+        Lower(
+            $$"""
+
+            public static class WaitScenarios
+            {
+                [Scenario("waits")]
+                public static async Task Run()
+                {
+                    var patient = await Given.PatientExists("Jane");
+            {{body}}
+                }
+            }
+            """);
+
+    [Fact]
+    public void Statement_after_a_bare_if_waits_for_the_arm()
+    {
+        // 0 PatientExists, 1 IsPriority, 2 Notify (arm), 3 Notify (after the if), 4 Teardown
+        var def = LowerBody(
+            """
+                    if (await Given.IsPriority())
+                        await When.Notify(patient);
+
+                    await When.Notify(patient);
+            """);
+
+        Assert.Equal([0, 1], def.Nodes[3].DependsOn);   // values: the patient; order: the condition
+        Assert.Equal([2], def.Nodes[3].WaitsFor);       // and the arm's last step, ordering only
+        Assert.Empty(def.Nodes[3].Guards);
+        Assert.Empty(def.Nodes[2].WaitsFor);
+    }
+
+    [Fact]
+    public void Statement_after_an_if_else_waits_for_both_arms()
+    {
+        // 0 PatientExists, 1 IsPriority, 2 CreateUrgent, 3 CreateStandard, 4 «merge», 5 AppointmentExists
+        var def = Lower(SampleSources.IfElseScenario);
+
+        Assert.Equal([4], def.Nodes[5].DependsOn);
+        Assert.Equal([2, 3], def.Nodes[5].WaitsFor);
+    }
+
+    [Fact]
+    public void Statement_after_an_arm_ending_in_a_parallel_group_waits_for_every_member()
+    {
+        // 0 PatientExists, 1 IsPriority, 2 CreateUrgent, 3 CreateStandard (parallel, branch-local), 4 Notify
+        var def = LowerBody(
+            """
+                    if (await Given.IsPriority())
+                    {
+                        var (a, b) = await (When.CreateUrgent(patient), When.CreateStandard(patient));
+                    }
+
+                    await When.Notify(patient);
+            """);
+
+        Assert.Equal([2, 3], def.Nodes[4].WaitsFor);
+    }
+
+    [Fact]
+    public void A_nested_if_propagates_its_arm_to_the_outer_statement()
+    {
+        // 0 PatientExists, 1 IsPriority, 2 HasCapacity (inner condition), 3 Notify (inner arm),
+        // 4 Notify (after the outer if). The outer arm's tail is the inner condition PLUS the inner
+        // arm the inner if left waiting, so the outer post-statement waits for both.
+        var def = LowerBody(
+            """
+                    if (await Given.IsPriority())
+                    {
+                        if (await Given.HasCapacity())
+                            await When.Notify(patient);
+                    }
+
+                    await When.Notify(patient);
+            """);
+
+        Assert.Equal([0, 1], def.Nodes[4].DependsOn);
+        Assert.Equal([2, 3], def.Nodes[4].WaitsFor);
+    }
+
+    [Fact]
+    public void Waits_do_not_leak_into_the_next_next_statement()
+    {
+        // Only the statement immediately after the if waits; the one after that joins on it as usual.
+        var def = LowerBody(
+            """
+                    if (await Given.IsPriority())
+                        await When.Notify(patient);
+
+                    await When.Notify(patient);
+                    await When.Notify(patient);
+            """);
+
+        Assert.Equal([2], def.Nodes[3].WaitsFor);
+        Assert.Empty(def.Nodes[4].WaitsFor);
+        Assert.Equal([0, 3], def.Nodes[4].DependsOn);
+    }
+
+    [Fact]
+    public async Task Statement_after_a_bare_if_runs_after_the_arm_end_to_end()
+    {
+        var result = GeneratorHarness.Run(SampleSources.ConditionalDsl +
+            """
+
+            public static class WaitRunScenarios
+            {
+                [Scenario("notify then confirm")]
+                public static async Task Run()
+                {
+                    var patient = await Given.PatientExists("Jane");
+
+                    if (await Given.IsPriority())
+                        await When.Notify(patient);
+
+                    await When.Notify(patient);
+                }
+            }
+            """);
+        result.AssertCompiles();
+
+        var results = await result.Definitions().Single().RunAsync();
+
+        // 2 = arm Notify (IsPriority is true), 3 = the Notify after the if. Both pass, and the second
+        // did not start before the first finished.
+        Assert.Equal(StepStatus.Passed, results[2].Status);
+        Assert.Equal(StepStatus.Passed, results[3].Status);
+        Assert.True(results[3].StartedAt >= results[2].StartedAt + results[2].Duration);
     }
 }

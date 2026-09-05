@@ -48,6 +48,16 @@ public sealed class ScenarioNode
     /// </summary>
     public IReadOnlyList<int> MergeSources { get; init; } = [];
 
+    /// <summary>
+    /// Ordering-only predecessors: nodes that must be terminal before this node runs, without any
+    /// value flowing. Unlike <see cref="DependsOn"/>, a <see cref="StepStatus.NotTaken"/> entry does
+    /// not make this node not-taken — the branch simply was not chosen and this node runs anyway;
+    /// Failed and Skipped still cascade to Skipped. The generator uses it for the statement after an
+    /// <c>if</c>: it depends on the condition (or the merges) for values, and waits for every arm's
+    /// last steps so nothing after the <c>if</c> runs concurrently with what is inside it.
+    /// </summary>
+    public IReadOnlyList<int> WaitsFor { get; init; } = [];
+
     /// <summary>True for generator plumbing (merge/pass-through nodes) that is not a business step:
     /// excluded from MTP discovery and step numbering, retained in the HTML report model.</summary>
     public bool IsSynthetic { get; init; }

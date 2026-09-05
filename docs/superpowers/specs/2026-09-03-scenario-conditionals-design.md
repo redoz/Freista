@@ -152,6 +152,17 @@ following statement** — a step after the `if` would then wait on a node that m
 post-`if` frontier is the merge nodes when the branch produced any, and otherwise the condition
 node. The condition always runs, so the frontier is always live.
 
+**Amendment 2026-09-05 — `WaitsFor`.** The rule above left a hole: a statement after the `if`
+depended on the condition (or the merges) but not on the arm's *last* steps, so it could run
+concurrently with the inside of the `if`. The resource conflict ledger caught it in a packaged
+consumer (`if (…) { When.Ship(order); } Then.IsTracked(order);` reported Edit vs Read, unordered).
+`ScenarioNode.WaitsFor` is a second, ordering-only edge kind: the statement after an `if` waits for
+every arm's tail (the arm's final frontier, plus anything a nested `if` inside it left waiting). A
+not-taken predecessor neither blocks nor cascades through `WaitsFor`; Failed/Skipped cascade as for
+`DependsOn`. The scheduler, `ScenarioDefinition.Validate` (range, cycles), the conflict ledger, and
+filtered-run closure all honour it; the HTML report does not draw it (the timeline already shows the
+post-`if` bar starting after the arm).
+
 ### Single-assignment / definition map
 
 The existing lowering is already single-assignment by construction: each step output is bound to

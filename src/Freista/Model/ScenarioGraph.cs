@@ -9,8 +9,8 @@ internal static class ScenarioGraph
     /// <summary>
     /// The nodes that must run before <paramref name="node"/>: its <see cref="ScenarioNode.DependsOn"/>
     /// (all-of), its <see cref="ScenarioNode.MergeSources"/> (a merge selects one source's output, so
-    /// it runs after every candidate), and each guard's condition (a guarded node runs after the
-    /// condition that decides it).
+    /// it runs after every candidate), its <see cref="ScenarioNode.WaitsFor"/> (ordering only), and
+    /// each guard's condition (a guarded node runs after the condition that decides it).
     /// </summary>
     public static IEnumerable<int> Predecessors(ScenarioNode node)
     {
@@ -22,6 +22,11 @@ internal static class ScenarioGraph
         foreach (var source in node.MergeSources)
         {
             yield return source;
+        }
+
+        foreach (var wait in node.WaitsFor)
+        {
+            yield return wait;
         }
 
         foreach (var guard in node.Guards)

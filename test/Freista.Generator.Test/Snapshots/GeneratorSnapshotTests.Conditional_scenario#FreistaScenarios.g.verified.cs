@@ -160,6 +160,11 @@ namespace Freista.Generated
                 {
                     4
                 },
+                WaitsFor = new int[]
+                {
+                    2,
+                    3
+                },
                 Invoke = static async (__inputs, __ctx) =>
                 {
                     await Then.AppointmentExists(__inputs.Get<global::CondDemo.Appointment>(4));

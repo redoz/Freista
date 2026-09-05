@@ -31,6 +31,11 @@ internal sealed class ScenarioParser
     // Indices introduced by the previous top-level statement (source-order barrier / join target).
     private List<int> _prevFrontier = [];
 
+    // Ordering-only predecessors the NEXT statement must wait for: the last steps of every arm of the
+    // `if` that just closed. DependsOn cannot carry them (an arm may be not-taken, and DependsOn would
+    // cascade that), so they ride on WaitsFor. Consumed and cleared by the statement that follows.
+    private List<int> _pendingWaits = [];
+
     // Guards accumulated by the enclosing if/else arms; every step created inherits a snapshot.
     private readonly List<ParsedGuard> _guards = [];
 
@@ -162,21 +167,29 @@ internal sealed class ScenarioParser
 
         var parentVars = new Dictionary<string, VarSource>(_vars);
 
-        var thenVars = WalkArm(statement.Statement, condition.Index, whenValue: true, parentVars);
-        if (thenVars is null)
+        var thenArm = WalkArm(statement.Statement, condition.Index, whenValue: true, parentVars);
+        if (thenArm is null)
         {
             return false;
         }
 
+        var thenVars = thenArm.Value.Vars;
         Dictionary<string, VarSource>? elseVars = null;
+        var waits = new SortedSet<int>(thenArm.Value.Waits);
         if (statement.Else is { } elseClause)
         {
-            elseVars = WalkArm(elseClause.Statement, condition.Index, whenValue: false, parentVars);
-            if (elseVars is null)
+            var elseArm = WalkArm(elseClause.Statement, condition.Index, whenValue: false, parentVars);
+            if (elseArm is null)
             {
                 return false;
             }
+
+            elseVars = elseArm.Value.Vars;
+            waits.UnionWith(elseArm.Value.Waits);
         }
+
+        // An empty arm's frontier is the condition itself, which the next statement already depends on.
+        waits.Remove(condition.Index);
 
         // Rejoin: start from the parent map, then insert a phi for every local the arms disagree on.
         _vars.Clear();
@@ -197,10 +210,20 @@ internal sealed class ScenarioParser
             frontier.Add(mergeIndex);
         }
 
-        // A following statement must never depend on an arm's node (DependsOn is all-of and an arm may
-        // not run); it joins on the merges, or on the condition when there are none.
-        _prevFrontier = frontier.Count > 0 ? frontier : [condition.Index];
+        // A following statement must never DEPEND on an arm's node (DependsOn is all-of and an arm may
+        // not run); it joins on the merges, or on the condition when there are none. It must still
+        // WAIT for every arm's last steps, or it would run concurrently with the inside of the if —
+        // that is what WaitsFor carries, and a not-taken arm does not cascade through it.
+        Advance(frontier.Count > 0 ? frontier : [condition.Index], [.. waits]);
         return true;
+    }
+
+    /// <summary>Closes a top-level statement: the next statement joins on <paramref name="frontier"/>
+    /// and additionally waits for <paramref name="waits"/> (ordering only).</summary>
+    private void Advance(List<int> frontier, List<int>? waits = null)
+    {
+        _prevFrontier = frontier;
+        _pendingWaits = waits ?? [];
     }
 
     private void MarkAsCondition(ParsedStep condition)
@@ -209,12 +232,17 @@ internal sealed class ScenarioParser
         _steps[position] = _steps[position] with { ConditionCoercionType = condition.ResultTypeFqn };
     }
 
-    /// <summary>Walks one arm with <paramref name="whenValue"/> pushed onto the guard stack, on a child
-    /// copy of the definition map. Returns that child map, or null when the arm is unsupported.</summary>
-    private Dictionary<string, VarSource>? WalkArm(
+    /// <summary>
+    /// Walks one arm with <paramref name="whenValue"/> pushed onto the guard stack, on a child copy of
+    /// the definition map. Returns that child map plus the arm's tail — its final frontier and any
+    /// waits a nested <c>if</c> left unconsumed — which the statement after the enclosing <c>if</c>
+    /// must wait for. Null when the arm is unsupported.
+    /// </summary>
+    private (Dictionary<string, VarSource> Vars, List<int> Waits)? WalkArm(
         StatementSyntax arm, int conditionIndex, bool whenValue, Dictionary<string, VarSource> parentVars)
     {
         var savedFrontier = _prevFrontier;
+        var savedWaits = _pendingWaits;
         _vars.Clear();
         foreach (var pair in parentVars)
         {
@@ -223,11 +251,16 @@ internal sealed class ScenarioParser
 
         _guards.Add(new ParsedGuard(conditionIndex, whenValue));
         _prevFrontier = [conditionIndex];
+        _pendingWaits = [];
         var ok = ParseStatement(arm);
         _guards.RemoveAt(_guards.Count - 1);
-        _prevFrontier = savedFrontier;
 
-        return ok ? new Dictionary<string, VarSource>(_vars) : null;
+        var tail = new List<int>(_prevFrontier);
+        tail.AddRange(_pendingWaits);
+        _prevFrontier = savedFrontier;
+        _pendingWaits = savedWaits;
+
+        return ok ? (new Dictionary<string, VarSource>(_vars), tail) : null;
     }
 
     /// <summary>Locals whose definition differs between the arms (or between an arm and the parent) —
@@ -436,7 +469,7 @@ internal sealed class ScenarioParser
             _vars[binding.Names[0]] = VarSource.Scalar(step.Index);
         }
 
-        _prevFrontier = [step.Index];
+        Advance([step.Index]);
         return true;
     }
 
@@ -467,7 +500,7 @@ internal sealed class ScenarioParser
             frontier.Add(step.Index);
         }
 
-        _prevFrontier = frontier;
+        Advance(frontier);
         return true;
     }
 
@@ -500,7 +533,7 @@ internal sealed class ScenarioParser
         }
 
         _vars[binding.Names[0]] = VarSource.Array(frontier.ToArray(), elementType);
-        _prevFrontier = frontier;
+        Advance(frontier);
         return true;
     }
 
@@ -568,7 +601,7 @@ internal sealed class ScenarioParser
         }
 
         _vars[binding.Names[0]] = VarSource.Array(frontier.ToArray(), elementType);
-        _prevFrontier = frontier;
+        Advance(frontier);
         return true;
     }
 
@@ -648,6 +681,7 @@ internal sealed class ScenarioParser
             SourceLine = line,
             CallSpan = SpanOf(invocation),
             DependsOn = [.. deps],
+            WaitsFor = [.. _pendingWaits.Where(w => !deps.Contains(w))],
             ResourceClaims = resourceClaims,
             Guards = [.. _guards],
         };

@@ -94,6 +94,10 @@ internal sealed record ParsedStep
     /// a pass-through alias. Empty for an ordinary step.</summary>
     public IReadOnlyList<int> MergeSources { get; init; } = [];
 
+    /// <summary>Ordering-only predecessors (see <c>Freista.Model.ScenarioNode.WaitsFor</c>): the last
+    /// steps of every arm of the <c>if</c> this statement follows. Empty for most steps.</summary>
+    public IReadOnlyList<int> WaitsFor { get; init; } = [];
+
     /// <summary>True for generator plumbing (merge/pass-through) rather than a business step.</summary>
     public bool IsSynthetic { get; init; }
 
