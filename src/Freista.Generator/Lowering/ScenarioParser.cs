@@ -838,7 +838,7 @@ internal sealed class ScenarioParser
     /// (<c>name: value</c>) matching <paramref name="parameterName"/> if present, else the positional
     /// argument at that index. Null when neither exists (e.g. an omitted optional parameter).
     /// </summary>
-    private static ArgumentSyntax? FindArgument(
+    internal static ArgumentSyntax? FindArgument(
         SeparatedSyntaxList<ArgumentSyntax> arguments,
         string parameterName,
         int position)

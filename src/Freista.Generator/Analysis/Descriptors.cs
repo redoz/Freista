@@ -110,4 +110,12 @@ internal static class Descriptors
         Category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor ConflictingParallelAccess = new(
+        "FRST013",
+        "Parallel steps conflict on one resource",
+        "Steps '{0}' and '{1}' run in parallel and both access '{2}', at least one with a mutating role ({3}); give one step a dependency on the other, or declare the access as [Read]",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

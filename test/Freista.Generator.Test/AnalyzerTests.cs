@@ -556,4 +556,209 @@ public class AnalyzerTests
 
         Assert.DoesNotContain(await GeneratorHarness.AnalyzeAsync(source), d => d.Id == "FRST010");
     }
+
+    // A DSL whose steps declare every kind of parameter access on one resource type, so a scenario
+    // can put any two of them side by side in a parallel group.
+    private const string ConflictDsl =
+        """
+        using System.Linq;
+        using System.Threading.Tasks;
+        using Freista;
+        namespace Conflicts;
+        public sealed record Patient(string Name) : IResource<Patient>
+        {
+            public static ResourceKey KeyFor(Patient instance) => instance.Name;
+        }
+        public sealed record Note(string Text) : IResource<Note>
+        {
+            public static ResourceKey KeyFor(Note instance) => instance.Text;
+        }
+        public static class ConflictDsl
+        {
+            extension(Given)
+            {
+                [StepName("patient {name} exists")]
+                [return: Created]
+                public static async Task<Patient> PatientExists(string name) { await Task.Yield(); return new Patient(name); }
+            }
+            extension(When)
+            {
+                [StepName("renaming the patient")]
+                public static async Task Rename([Edited] Patient patient, string name) { await Task.Yield(); }
+
+                [StepName("suspending the patient")]
+                public static async Task Suspend([Edited] Patient patient) { await Task.Yield(); }
+
+                [StepName("deleting the patient")]
+                public static async Task Delete([Deleted] Patient patient) { await Task.Yield(); }
+
+                [StepName("attaching a note")]
+                [return: Created(References = [nameof(patient)])]
+                public static async Task<Note> AttachNote(Patient patient, string text) { await Task.Yield(); return new Note(text); }
+
+                [StepName("tagging the patient {tag}")]
+                [return: Created]
+                public static async Task<Note> Tag([Edited] Patient patient, int tag) { await Task.Yield(); return new Note($"tag-{tag}"); }
+            }
+            extension(Then)
+            {
+                [StepName("the patient can sign in")]
+                public static Task CanSignIn([Read] Patient patient) => Task.CompletedTask;
+
+                [StepName("the patient has a name")]
+                public static Task HasName([Read] Patient patient) => Task.CompletedTask;
+            }
+        }
+        """;
+
+    private static Task<ImmutableArray<Diagnostic>> AnalyzeConflict(string body) =>
+        GeneratorHarness.AnalyzeAsync(ConflictDsl +
+            $$"""
+            public static class S
+            {
+                [Scenario("s")]
+                public static async Task Run()
+                {
+                    var patient = await Given.PatientExists("Jane");
+                    var other = await Given.PatientExists("Bob");
+            {{body}}
+                }
+            }
+            """);
+
+    [Fact]
+    public void FRST013_is_a_supported_diagnostic()
+    {
+        var analyzer = new Freista.Generator.Analysis.ScenarioAnalyzer();
+
+        Assert.Contains(analyzer.SupportedDiagnostics, d => d.Id == "FRST013");
+    }
+
+    [Fact]
+    public async Task FRST013_two_parallel_mutations_of_one_local()
+    {
+        var diagnostics = await AnalyzeConflict(
+            """
+                    await (When.Rename(patient, "J"), When.Suspend(patient));
+            """);
+
+        var diagnostic = Assert.Single(diagnostics, d => d.Id == "FRST013");
+        var message = diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture);
+        Assert.Contains("Rename", message);
+        Assert.Contains("Suspend", message);
+        Assert.Contains("'patient'", message);
+    }
+
+    [Fact]
+    public async Task FRST013_parallel_mutation_and_read_of_one_local()
+    {
+        var diagnostics = await AnalyzeConflict(
+            """
+                    await (When.Suspend(patient), Then.CanSignIn(patient));
+            """);
+
+        AssertHas(diagnostics, "FRST013");
+    }
+
+    [Fact]
+    public async Task FRST013_lineage_target_conflicts_with_a_parallel_mutation()
+    {
+        var diagnostics = await AnalyzeConflict(
+            """
+                    var notes = await new[] { When.AttachNote(patient, "a"), When.Tag(patient, 1) };
+            """);
+
+        // AttachNote's References confers a shared role on `patient`; Tag mutates it.
+        AssertHas(diagnostics, "FRST013");
+    }
+
+    [Fact]
+    public async Task FRST013_clean_for_parallel_reads()
+    {
+        var diagnostics = await AnalyzeConflict(
+            """
+                    await (Then.CanSignIn(patient), Then.HasName(patient));
+            """);
+
+        Assert.DoesNotContain(diagnostics, d => d.Id == "FRST013");
+    }
+
+    [Fact]
+    public async Task FRST013_clean_for_lineage_target_beside_a_read()
+    {
+        var diagnostics = await AnalyzeConflict(
+            """
+                    var notes = await new[] { When.AttachNote(patient, "a"), When.AttachNote(patient, "b") };
+                    await Then.CanSignIn(patient);
+            """);
+
+        Assert.DoesNotContain(diagnostics, d => d.Id == "FRST013");
+    }
+
+    [Fact]
+    public async Task FRST013_clean_for_different_locals()
+    {
+        var diagnostics = await AnalyzeConflict(
+            """
+                    await (When.Suspend(patient), When.Suspend(other));
+            """);
+
+        Assert.DoesNotContain(diagnostics, d => d.Id == "FRST013");
+    }
+
+    [Fact]
+    public async Task FRST013_clean_for_sequential_mutations()
+    {
+        var diagnostics = await AnalyzeConflict(
+            """
+                    await When.Rename(patient, "J");
+                    await When.Suspend(patient);
+                    await When.Delete(patient);
+            """);
+
+        Assert.DoesNotContain(diagnostics, d => d.Id == "FRST013");
+    }
+
+    [Fact]
+    public async Task FRST013_linq_unroll_mutating_an_outer_local()
+    {
+        var diagnostics = await AnalyzeConflict(
+            """
+                    var tags = await Enumerable.Range(1, 2).Select(i => When.Tag(patient, i)).ToArray();
+            """);
+
+        AssertHas(diagnostics, "FRST013");
+    }
+
+    [Fact]
+    public async Task FRST013_linq_unroll_with_one_element_is_clean()
+    {
+        var diagnostics = await AnalyzeConflict(
+            """
+                    var tags = await Enumerable.Range(1, 1).Select(i => When.Tag(patient, i)).ToArray();
+            """);
+
+        Assert.DoesNotContain(diagnostics, d => d.Id == "FRST013");
+    }
+
+    [Fact]
+    public async Task FRST013_matches_named_arguments()
+    {
+        var diagnostics = await AnalyzeConflict(
+            """
+                    await (When.Rename(name: "J", patient: patient), When.Suspend(patient: patient));
+            """);
+
+        AssertHas(diagnostics, "FRST013");
+    }
+
+    [Fact]
+    public async Task FRST013_does_not_fire_on_the_resource_sample_scenarios()
+    {
+        foreach (var scenario in new[] { SampleSources.ResourceScenario, SampleSources.BookingScenario, SampleSources.LineageScenario })
+        {
+            var diagnostics = await GeneratorHarness.AnalyzeAsync(SampleSources.ResourceDsl + scenario);
+            Assert.DoesNotContain(diagnostics, d => d.Id == "FRST013");
+        }
+    }
 }

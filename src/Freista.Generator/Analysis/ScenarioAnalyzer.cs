@@ -33,6 +33,7 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
         Descriptors.InvalidLineageSubject,
         Descriptors.InvalidCondition,
         Descriptors.UnmergeableLocal,
+        Descriptors.ConflictingParallelAccess,
     ];
 
     public override void Initialize(AnalysisContext context)
@@ -319,6 +320,7 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
                     AnalyzeGroupElement(context, arg.Expression, stepOutputs);
                 }
 
+                AnalyzeGroupConflicts(context, tuple.Arguments.Select(a => a.Expression), stepOutputs);
                 return;
 
             case ArrayCreationExpressionSyntax array:
@@ -351,6 +353,8 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
         {
             AnalyzeGroupElement(context, element, stepOutputs);
         }
+
+        AnalyzeGroupConflicts(context, initializer.Expressions, stepOutputs);
     }
 
     private static void AnalyzeGroupElement(
@@ -422,7 +426,7 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
             && rangeInv.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Range" }
             && rangeInv.ArgumentList.Arguments.Count == 2
             && context.SemanticModel.GetConstantValue(rangeInv.ArgumentList.Arguments[0].Expression).Value is int
-            && context.SemanticModel.GetConstantValue(rangeInv.ArgumentList.Arguments[1].Expression).Value is int)
+            && context.SemanticModel.GetConstantValue(rangeInv.ArgumentList.Arguments[1].Expression).Value is int count)
         {
             // Validate the per-element call resolves to a DSL member with a valid return type.
             if (body.Expression is MemberAccessExpressionSyntax bodyMember
@@ -433,6 +437,8 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
                 {
                     Report(context, Descriptors.InvalidReturnType, body.GetLocation(), method.Name);
                 }
+
+                AnalyzeUnrollConflicts(context, body, count, stepOutputs);
             }
             else
             {
@@ -443,6 +449,182 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
         }
 
         Report(context, Descriptors.UnsupportedStatement, toArray.GetLocation());
+    }
+
+    /// <summary>One parallel-group element's declared access to a prior step's output.</summary>
+    private readonly record struct GroupAccess(
+        ILocalSymbol Local, string Verb, bool Exclusive, string Operation, Location Location);
+
+    /// <summary>
+    /// FRST013 for one parallel group (tuple or array). Its elements run concurrently, so two of them
+    /// passing the same step-output local to role-bearing parameters conflict when at least one role
+    /// mutates. Concurrency inside a scenario comes ONLY from these groups — sequential statements
+    /// join on the previous frontier — so no graph is needed: the group IS the concurrency. Two
+    /// different locals that resolve to one runtime identity are the scheduler's conflict ledger's job.
+    /// </summary>
+    private static void AnalyzeGroupConflicts(
+        SyntaxNodeAnalysisContext context,
+        IEnumerable<ExpressionSyntax> elements,
+        HashSet<ILocalSymbol> stepOutputs)
+    {
+        var earlier = new List<GroupAccess>();
+        foreach (var element in elements)
+        {
+            if (element is not InvocationExpressionSyntax invocation)
+            {
+                continue;
+            }
+
+            var accesses = CollectAccesses(context, invocation, stepOutputs);
+            foreach (var access in accesses)
+            {
+                foreach (var prior in earlier)
+                {
+                    if (SymbolEqualityComparer.Default.Equals(prior.Local, access.Local)
+                        && (prior.Exclusive || access.Exclusive))
+                    {
+                        Report(
+                            context,
+                            Descriptors.ConflictingParallelAccess,
+                            access.Location,
+                            prior.Operation,
+                            access.Operation,
+                            access.Local.Name,
+                            $"{prior.Verb}/{access.Verb}");
+                    }
+                }
+            }
+
+            earlier.AddRange(accesses);
+        }
+    }
+
+    /// <summary>FRST013 for a LINQ unroll: the lambda body becomes <paramref name="count"/> concurrent
+    /// copies of one call, so a mutating role on an outer step-output local conflicts with itself.</summary>
+    private static void AnalyzeUnrollConflicts(
+        SyntaxNodeAnalysisContext context,
+        InvocationExpressionSyntax body,
+        int count,
+        HashSet<ILocalSymbol> stepOutputs)
+    {
+        if (count < 2)
+        {
+            return;
+        }
+
+        foreach (var access in CollectAccesses(context, body, stepOutputs))
+        {
+            if (access.Exclusive)
+            {
+                Report(
+                    context,
+                    Descriptors.ConflictingParallelAccess,
+                    access.Location,
+                    access.Operation,
+                    access.Operation,
+                    access.Local.Name,
+                    $"{access.Verb}/{access.Verb}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// The step-output locals a DSL call passes to role-bearing parameters, with each role's verb.
+    /// Parameter roles come from <c>[Read]/[Edited]/[Deleted]</c>; a bare parameter named in a
+    /// producer's <c>References</c>/<c>Consumes</c> carries the shared Reference/Consume role. Return
+    /// roles never appear: a step's return is its own output, shared with no sibling. Argument-to-
+    /// parameter matching mirrors the parser's, so named arguments bind correctly.
+    /// </summary>
+    private static List<GroupAccess> CollectAccesses(
+        SyntaxNodeAnalysisContext context,
+        InvocationExpressionSyntax invocation,
+        HashSet<ILocalSymbol> stepOutputs)
+    {
+        var accesses = new List<GroupAccess>();
+        if (invocation.Expression is not MemberAccessExpressionSyntax member
+            || context.SemanticModel.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method)
+        {
+            return accesses;
+        }
+
+        var operation = member.Name.Identifier.Text;
+        var lineageVerbs = LineageVerbs(method);
+        var arguments = invocation.ArgumentList.Arguments;
+
+        for (var p = 0; p < method.Parameters.Length; p++)
+        {
+            var parameter = method.Parameters[p];
+            var verb = AttributeReader.ParameterRole(parameter)
+                ?? (lineageVerbs.TryGetValue(parameter.Name, out var lineageVerb) ? lineageVerb : null);
+            if (verb is null)
+            {
+                continue;
+            }
+
+            var argument = ScenarioParser.FindArgument(arguments, parameter.Name, p);
+            if (argument is null)
+            {
+                continue;
+            }
+
+            // Mirrors LifecycleVerb.ToLockMode in the runtime assembly: Edit/Delete exclude, the rest share.
+            var exclusive = verb is "Edit" or "Delete";
+            foreach (var identifier in argument.Expression.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>())
+            {
+                if ((identifier.Parent is MemberAccessExpressionSyntax access && access.Name == identifier)
+                    || identifier.Parent is NameColonSyntax or NameEqualsSyntax)
+                {
+                    continue;
+                }
+
+                if (context.SemanticModel.GetSymbolInfo(identifier).Symbol is ILocalSymbol local
+                    && stepOutputs.Contains(local))
+                {
+                    accesses.Add(new GroupAccess(local, verb, exclusive, operation, identifier.GetLocation()));
+                }
+            }
+        }
+
+        return accesses;
+    }
+
+    /// <summary>Parameter name → Reference/Consume for every parameter a producer on this method names
+    /// as a lineage target (return-role producers and <c>[Edited]</c>-parameter producers alike).</summary>
+    private static Dictionary<string, string> LineageVerbs(IMethodSymbol method)
+    {
+        var verbs = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        var returnLineage = AttributeReader.ProducerLineage(method.GetReturnTypeAttributes());
+        if (returnLineage.References.IsEmpty && returnLineage.Consumes.IsEmpty)
+        {
+            returnLineage = AttributeReader.ProducerLineage(method.GetAttributes());
+        }
+
+        AddLineage(verbs, returnLineage);
+        foreach (var parameter in method.Parameters)
+        {
+            if (AttributeReader.ParameterRole(parameter) == "Edit")
+            {
+                AddLineage(verbs, AttributeReader.ProducerLineage(parameter.GetAttributes()));
+            }
+        }
+
+        return verbs;
+
+        static void AddLineage(
+            Dictionary<string, string> verbs,
+            (ImmutableArray<string> References, ImmutableArray<string> Consumes) lineage)
+        {
+            foreach (var target in lineage.References)
+            {
+                verbs[target] = "Reference";
+            }
+
+            foreach (var target in lineage.Consumes)
+            {
+                verbs[target] = "Consume";
+            }
+        }
     }
 
     private static void RecordDeconstructedLocals(
