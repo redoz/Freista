@@ -5,6 +5,8 @@
   `Aspire.Hosting.Testing` / `Aspire.Hosting` **13.5.3** (restored and inspected, not recalled).
 - **Scope:** new `src/Freista.Aspire` package; new `samples/AspireAppointments/` (AppHost, one
   service, one test project).
+- **Depends on:** `2026-09-04-preflight-design.md` — startup runs as the preflight node, so that
+  ships first.
 - **Out of scope:** cross-process code coverage (its own spike, after this), Kiota, phase markers,
   C2.
 
@@ -52,13 +54,47 @@ It performs, in order:
 
 1. `DistributedApplicationTestingBuilder.CreateAsync<TAppHost>(ct)` → `IDistributedApplicationTestingBuilder`
 2. the optional `ConfigureBuilder` callback (so a consumer can alter the app model for tests)
-3. `builder.BuildAsync()` → `DistributedApplication`, then `app.StartAsync()`
-4. for each name passed to `WaitFor`, `app.ResourceNotifications.WaitForResourceHealthyAsync(name, ct)`,
-   all under a single `StartupTimeout`
-5. builds an `IServiceProvider` containing the `DistributedApplication` as a **singleton** plus the
+3. `builder.BuildAsync()` → `DistributedApplication` — **built but not started**
+4. builds an `IServiceProvider` containing the `DistributedApplication` as a **singleton** plus the
    consumer's own registrations
-6. `FreistaTestApplication.RunAsync(args, services: provider)`
-7. disposes the provider, then `await app.DisposeAsync()`, in a `finally`
+5. `FreistaTestApplication.RunAsync(args, services: provider, preflight: …)`, where the preflight
+   delegate does the actual **starting and waiting** — see below
+6. disposes the provider, then `await app.DisposeAsync()`, in a `finally`
+
+### Startup runs as preflight
+
+Starting the app and waiting for resources happens **inside** the MTP session, as the preflight
+delegate (`2026-09-04-preflight-design.md`):
+
+```csharp
+preflight: async ctx =>
+{
+    ctx.Log("starting AppHost");
+    await app.StartAsync(ctx.CancellationToken);
+
+    foreach (var resource in options.WaitForResources)
+    {
+        var started = ctx.TimeProvider.GetTimestamp();
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(resource, timeoutToken);
+        ctx.Log($"{resource} → Healthy ({Elapsed(started)})");
+    }
+}
+```
+
+all under a single `StartupTimeout`, applied by a linked `CancellationTokenSource`.
+
+This is what makes startup **visible**: it becomes a discovered, timed `Preflight` node carrying the
+startup log, and a failed start is a *failing test* rather than a process that exits before anything
+reports.
+
+```
+Preflight                        PASS  6.8s
+  ├ starting AppHost
+  ├ postgres → Healthy (4.1s)
+  └ api → Healthy (2.4s)
+
+1. Given patient Alice exists    PASS   8ms
+```
 
 ### Options
 
@@ -88,18 +124,21 @@ a facade: Aspire already provides `CreateHttpClient(resource, endpoint?)`,
 `DistributedApplication`, and a wrapper that forwarded to them would add a type to learn and nothing
 else.
 
-## Startup failure is the risky path
+## Startup failure
 
-Because the app starts **before** MTP runs the framework, a failed start aborts the run before any
-test node reports. The error must therefore be self-sufficient. When `StartupTimeout` elapses, the
-exception names: which resources were awaited, which reached healthy, which did not, each unhealthy
-resource's last known state via `ResourceNotifications.TryGetCurrentState(name, out _)`, and the
-timeout that was applied.
+Because startup runs as preflight, a failure is a **failing `Preflight` node** and every scenario
+step reports `Skipped` with `preflight failed`. The run still completes and reports, so CI shows the
+thing that actually broke rather than an opaque non-zero exit.
 
-**Accepted cost of plumbing-only:** startup is invisible in the report — there is no
-`Given the app is running — 4.2s` node, and startup time is absent from the timeline. Making it a
-step would have bought that visibility; it was traded for keeping the DSL entirely the consumer's.
-The decision is reversible later, because a consumer-written step can wrap the same facade.
+The timeout message still has to be self-sufficient, because it is the primary diagnostic. When
+`StartupTimeout` elapses, the exception names: which resources were awaited, which reached healthy,
+which did not, each unhealthy resource's last known state via
+`ResourceNotifications.TryGetCurrentState(name, out _)`, and the timeout that was applied.
+
+An earlier draft of this design started the app *before* the MTP session, which made startup
+invisible and its failures unreportable — that was recorded as an accepted cost of plumbing-only. It
+is not a necessary cost: preflight buys the visibility back without shipping a single phase marker,
+so the DSL stays entirely the consumer's **and** the report is complete.
 
 ## The sample
 
