@@ -1,10 +1,17 @@
-# C2 Resource-Aware Scheduling — Findings (deferred to v2)
+# C2 Resource-Aware Scheduling — Findings
 
-- **Date:** 2026-09-04
-- **Status:** **Deferred to v2.** Not designed, not planned. This document exists only so the
-  analysis below is not re-derived from scratch, because it changes what C2 can be.
-- **Trigger to revisit:** a real scenario that needs safe concurrent access to a shared fixture, or
-  a decision to make the resource docs honest (see "Dead weight" below).
+- **Date:** 2026-09-04 (resolved 2026-09-05)
+- **Status:** **Resolved.** Lock-based C2 (two-phase locking + wound-wait) is rejected for good, not
+  deferred: it trades deadlocks for nondeterministic re-execution of real side effects, and half the
+  declared claims can never be locked anyway. What ships instead is **conflict detection** — a
+  compile-time rule (FRST013) plus a scenario-scoped runtime ledger — designed in
+  `2026-09-05-resource-conflict-detection-design.md`. Cross-scenario coordination (type-level
+  admission control) is deferred until scenarios run concurrently at all.
+- **Open question below ("serialize or fail") is answered:** fail inside a scenario, serialize across
+  scenarios. See the design's "Who owns a conflict decides the response".
+- The "Dead weight" listed below was deleted on 2026-09-05.
+
+The analysis that follows is kept verbatim because it is what the decision rests on.
 
 ## The finding that reframes C2
 
