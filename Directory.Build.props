@@ -19,8 +19,8 @@
     <NoWarn>$(NoWarn);CS1591;xUnit1051</NoWarn>
     <Product>Freista</Product>
     <Authors>Patrik Husfloen</Authors>
-    <Version>0.1.0-alpha</Version>
-    <PackageTags>xunit;testing;scenario;given-when-then;bdd;source-generator</PackageTags>
+    <!-- No Version here: MinVer derives it from the nearest v* tag (see Directory.Build.targets). -->
+    <PackageTags>testing;scenario;given-when-then;bdd;source-generator;microsoft-testing-platform</PackageTags>
   </PropertyGroup>
 
   <!--

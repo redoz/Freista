@@ -158,3 +158,7 @@ See [the design spec](docs/scenario-graph-extension-design.md), the
 [conditionals design](docs/superpowers/specs/2026-09-03-scenario-conditionals-design.md), the
 [teardown design](docs/superpowers/specs/2026-09-04-scenario-teardown-design.md), and the
 [implementation plan](docs/superpowers/plans/2026-06-03-scenario-graph-extension.md).
+
+## License
+
+Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE). Releases are tag-driven; see [docs/RELEASING.md](docs/RELEASING.md).
