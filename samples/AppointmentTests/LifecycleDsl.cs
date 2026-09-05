@@ -114,7 +114,7 @@ public static class LifecycleDsl
             var text = $"Hi {appointment.Patient.Name}, your appointment is at {appointment.Slot.Id}:00. "
                 + $"Plan your trip from {appointment.Patient.City}.";
             await Outbox.SendAsync(appointment.Patient.Name, text);
-            ctx?.AddAttachment("reminder.txt", text);
+            ctx?.AddAttachment("reminder", text);
         }
     }
 
