@@ -50,6 +50,7 @@ public class FreistaTestFramework :
     private readonly ConcurrentDictionary<string, byte> sessions = new(StringComparer.Ordinal);
     private readonly IServiceProvider? _services;
     private readonly IServiceProvider? _userServices;
+    private readonly Func<ScenarioContext, Task>? _preflight;
     private readonly bool _simulateTime;
 
     /// <summary>Parameterless ctor for tests and the default registration path.</summary>
@@ -71,6 +72,15 @@ public class FreistaTestFramework :
     /// must not be able to resolve platform internals.</summary>
     public FreistaTestFramework(IServiceProvider services, bool simulateTime, IServiceProvider? userServices)
         : this(services, simulateTime) => _userServices = userServices;
+
+    /// <summary>Production ctor including run-level setup. <paramref name="preflight"/> runs once
+    /// before any scenario and is reported as its own node; null means no preflight node exists.</summary>
+    public FreistaTestFramework(
+        IServiceProvider services,
+        bool simulateTime,
+        IServiceProvider? userServices,
+        Func<ScenarioContext, Task>? preflight)
+        : this(services, simulateTime, userServices) => _preflight = preflight;
 
     /// <inheritdoc/>
     public string Uid => ExtensionUid;
@@ -205,6 +215,22 @@ public class FreistaTestFramework :
         // sink. The same parsing backs both discover and run so a single-step uid resolves identically.
         var uids = ReadUidFilter(filter);
 
+        // Announced like any test, but never executed here: a discovery request must not start
+        // containers or migrate databases.
+        if (_preflight is not null)
+        {
+            foreach (var node in FreistaDiscoverer.BuildNodes(Preflight.Definition(_preflight)))
+            {
+                if (uids is null || uids.Contains(node.Uid.Value))
+                {
+                    NodeDiagnostics.Log("discover", node);
+                    await messageBus
+                        .PublishAsync(this, new TestNodeUpdateMessage(sessionUid, node))
+                        .ConfigureAwait(false);
+                }
+            }
+        }
+
         foreach (var methodName in ScenarioRegistry.RegisteredMethods)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -254,7 +280,10 @@ public class FreistaTestFramework :
 
         var bus = new RunEventBus(sinks);
         var loop = new FreistaRunLoop(
-            EnumerateRegisteredScenarios, simulateTime: _simulateTime, services: _userServices);
+            EnumerateRegisteredScenarios,
+            simulateTime: _simulateTime,
+            services: _userServices,
+            preflight: _preflight);
         await loop.RunAsync(uids, bus, cancellationToken).ConfigureAwait(false);
 
         if (bus.Failures.Count > 0)

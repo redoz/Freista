@@ -39,6 +39,7 @@ internal sealed class FreistaRunLoop
     private readonly RunScenario runScenario;
     private readonly bool simulateTime;
     private readonly IServiceProvider? services;
+    private readonly Func<ScenarioContext, Task>? preflight;
 
     /// <param name="scenarioSource">Supplies the registered scenarios to consider for the run.</param>
     /// <param name="runScenario">
@@ -56,16 +57,23 @@ internal sealed class FreistaRunLoop
     /// supported path — <see cref="FreistaTestFramework"/>'s parameterless ctor has no provider — and
     /// leaves <c>ctx.Services</c> null. Ignored when an explicit <paramref name="runScenario"/> seam is supplied.
     /// </param>
+    /// <param name="preflight">
+    /// Run-level setup executed once before any scenario and reported as its own node. When it fails,
+    /// every scenario's steps report skipped naming preflight, and the run still completes so the
+    /// report stays whole. <see langword="null"/> (the default) means no preflight node exists at all.
+    /// </param>
     public FreistaRunLoop(
         Func<IEnumerable<ScenarioDefinition>> scenarioSource,
         RunScenario? runScenario = null,
         bool simulateTime = false,
-        IServiceProvider? services = null)
+        IServiceProvider? services = null,
+        Func<ScenarioContext, Task>? preflight = null)
     {
         ArgumentNullException.ThrowIfNull(scenarioSource);
         this.scenarioSource = scenarioSource;
         this.simulateTime = simulateTime;
         this.services = services;
+        this.preflight = preflight;
         this.runScenario = runScenario ?? DefaultRunScenario;
     }
 
@@ -111,6 +119,16 @@ internal sealed class FreistaRunLoop
         var selected = SelectScenarios(scenarioSource(), uids);
         await bus.PublishAsync(new RunStarted(selected.Count)).ConfigureAwait(false);
 
+        // Run-level setup, before any scenario. It runs even when the filter selected nothing: a
+        // filtered run of one step still needs whatever preflight brings up.
+        var preflightFailed = false;
+        if (preflight is not null)
+        {
+            var results = await RunOneAsync(Preflight.Definition(preflight), bus, cancellationToken)
+                .ConfigureAwait(false);
+            preflightFailed = results.Any(r => r.Status is StepStatus.Failed or StepStatus.Skipped);
+        }
+
         // v1: sequential cross-scenario execution. The scheduler already parallelizes steps WITHIN a
         // scenario; bounding concurrency ACROSS scenarios is a future enhancement — this foreach is
         // the seam where a SemaphoreSlim / Parallel.ForEachAsync with a bounded degree would slot in.
@@ -127,6 +145,14 @@ internal sealed class FreistaRunLoop
                 break;
             }
 
+            if (preflightFailed)
+            {
+                // Attribute the failure to a row rather than to an exit code: every step reports
+                // skipped naming preflight, and the run still completes so the report is whole.
+                await SkipScenarioAsync(definition, bus).ConfigureAwait(false);
+                continue;
+            }
+
             await RunOneAsync(definition, bus, cancellationToken).ConfigureAwait(false);
             started = true;
         }
@@ -134,7 +160,30 @@ internal sealed class FreistaRunLoop
         await bus.PublishAsync(new RunFinished()).ConfigureAwait(false);
     }
 
-    private async ValueTask RunOneAsync(
+    /// <summary>Reports every step of a scenario that never ran because preflight failed.</summary>
+    private static async ValueTask SkipScenarioAsync(ScenarioDefinition definition, IRunEventSink bus)
+    {
+        await bus.PublishAsync(new ScenarioStarted(definition)).ConfigureAwait(false);
+
+        var results = new List<StepResult>(definition.Nodes.Count);
+        foreach (var node in definition.Nodes)
+        {
+            var result = new StepResult
+            {
+                Node = node,
+                DisplayName = node.DisplayNameTemplate,
+                Status = StepStatus.Skipped,
+                StartedAt = default,
+                SkipReason = Preflight.FailedSkipReason,
+            };
+            results.Add(result);
+            await bus.PublishAsync(new StepFinished(definition, result)).ConfigureAwait(false);
+        }
+
+        await bus.PublishAsync(new ScenarioFinished(definition, results)).ConfigureAwait(false);
+    }
+
+    private async ValueTask<IReadOnlyList<StepResult>> RunOneAsync(
         ScenarioDefinition definition, IRunEventSink bus, CancellationToken cancellationToken)
     {
         // One CTS per scenario run, owned here and linked to the platform token. Tying cancellation
@@ -158,6 +207,7 @@ internal sealed class FreistaRunLoop
             var results = await runScenario(definition, observer, scenarioServices, runCts.Token).ConfigureAwait(false);
 
             await bus.PublishAsync(new ScenarioFinished(definition, results)).ConfigureAwait(false);
+            return results;
         }
         finally
         {
