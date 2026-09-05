@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -34,3 +38,14 @@ jobs:
         with:
           name: packages
           path: artifacts/*.nupkg
+
+      # Every push to main publishes its preview build (0.x.y-preview.0.N) to the repository's
+      # GitHub Packages feed, so the current head is always consumable. Tags publish real versions
+      # through release.yml. GitHub Packages does not accept .snupkg, so only .nupkg is pushed.
+      - name: Publish preview to GitHub Packages
+        if: github.event_name == 'push'
+        run: >
+          dotnet nuget push "artifacts/*.nupkg"
+          --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
+          --api-key "${{ secrets.GITHUB_TOKEN }}"
+          --skip-duplicate

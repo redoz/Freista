@@ -2,12 +2,16 @@ name: Release
 
 # Pushing a tag like v0.1.0 (or v0.2.0-beta.1) publishes that exact version. MinVer reads the tag,
 # so the version is never typed anywhere else. See docs/RELEASING.md.
+#
+# Publishes to the repository's GitHub Packages feed for now. Switching to nuget.org later is one
+# step: change --source to https://api.nuget.org/v3/index.json and --api-key to a NUGET_API_KEY secret.
 on:
   push:
     tags: ['v*']
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
   publish:
@@ -33,11 +37,11 @@ jobs:
           dotnet pack src/Freista.Mtp/Freista.Mtp.csproj -c Release --no-build -o artifacts -p:ContinuousIntegrationBuild=true
           dotnet pack src/Freista.Aspire/Freista.Aspire.csproj -c Release --no-build -o artifacts -p:ContinuousIntegrationBuild=true
 
-      - name: Push to nuget.org
+      - name: Push to GitHub Packages
         run: >
           dotnet nuget push "artifacts/*.nupkg"
-          --source https://api.nuget.org/v3/index.json
-          --api-key "${{ secrets.NUGET_API_KEY }}"
+          --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
+          --api-key "${{ secrets.GITHUB_TOKEN }}"
           --skip-duplicate
 
       - name: GitHub release

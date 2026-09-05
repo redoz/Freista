@@ -36,11 +36,38 @@ carries the source generator as an analyzer), and `Freista.Aspire`.
    jj git fetch
    ```
 
-5. The `Release` workflow builds, tests, packs with `ContinuousIntegrationBuild`, pushes to nuget.org,
-   and creates the GitHub release with the packages attached. It needs the `NUGET_API_KEY` repository
-   secret (an nuget.org API key scoped to push the three `Freista*` package ids).
-6. Verify on nuget.org that all three packages show the version, the license (Apache-2.0), and the
-   README.
+5. The `Release` workflow builds, tests, packs with `ContinuousIntegrationBuild`, pushes to the
+   repository's **GitHub Packages** feed, and creates the GitHub release with the packages attached.
+   It authenticates with the workflow's own `GITHUB_TOKEN`; no secret to set up.
+6. Verify under the repository's Packages tab that all three packages show the version, the license
+   (Apache-2.0), and the README.
+
+## Where the packages live (for now)
+
+- **Feed:** `https://nuget.pkg.github.com/redoz/index.json` (GitHub Packages).
+- **Previews:** every push to `main` publishes its `0.x.y-preview.0.N` build via the CI workflow, so
+  the current head is always consumable without tagging.
+- **Consuming:** GitHub Packages requires authentication even for public packages. A consumer needs
+  a `nuget.config` with the feed and a personal access token that has `read:packages`:
+
+  ```xml
+  <configuration>
+    <packageSources>
+      <add key="freista" value="https://nuget.pkg.github.com/redoz/index.json" />
+    </packageSources>
+    <packageSourceCredentials>
+      <freista>
+        <add key="Username" value="GITHUB_USERNAME" />
+        <add key="ClearTextPassword" value="%GITHUB_PACKAGES_TOKEN%" />
+      </freista>
+    </packageSourceCredentials>
+  </configuration>
+  ```
+
+  Then `dotnet add package Freista.Mtp --prerelease`.
+- **Moving to nuget.org later:** in both workflows change `--source` to
+  `https://api.nuget.org/v3/index.json` and `--api-key` to a `NUGET_API_KEY` secret. Versions and
+  tags stay exactly as they are.
 
 ## Consumer baseline
 
