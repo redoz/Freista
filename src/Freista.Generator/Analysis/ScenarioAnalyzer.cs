@@ -571,8 +571,7 @@ public sealed class ScenarioAnalyzer : DiagnosticAnalyzer
     /// <summary>
     /// True when <paramref name="type"/> participates in the resource model — i.e. it implements
     /// <c>Freista.IResource&lt;TSelf&gt;</c> (arity 1) or <c>Freista.IResourceIdentity</c>. A trailing
-    /// <c>Freista.ScenarioContext</c> param is naturally excluded; so is <c>ISingletonResource&lt;&gt;</c>,
-    /// which does not implement <c>IResource&lt;&gt;</c>.
+    /// <c>Freista.ScenarioContext</c> param is naturally excluded.
     /// </summary>
     private static bool IsResourceType(ITypeSymbol type)
         => type.AllInterfaces.Any(i =>

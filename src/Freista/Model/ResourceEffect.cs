@@ -2,8 +2,7 @@ namespace Freista.Model;
 
 /// <summary>
 /// One symbolic effect a step declared on a resource: the trace event powering the report's resource
-/// lane and debugging ("which step deleted User:123?"). C1 records lifecycle-verb acquires only;
-/// locking transitions (Wounded/Retried/Contended) arrive in C2.
+/// lane and debugging ("which step deleted User:123?").
 /// </summary>
 public sealed record ResourceEffect
 {

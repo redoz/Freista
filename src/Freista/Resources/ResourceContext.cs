@@ -6,12 +6,11 @@ using Freista.Model;
 namespace Freista;
 
 /// <summary>
-/// The imperative resource surface hanging off <see cref="ScenarioContext.Resources"/>. In C1 it is a
-/// pure tracer: each lifecycle verb resolves the resource's identity and records a
-/// <see cref="ResourceEffect"/> for the report's resource lane — no cross-step contention locking yet
-/// (that arrives in C2, when verbs park a token in the scenario scope); the lock here is solely for
-/// per-step dedup correctness. The API is async end to end so call sites
-/// (<c>await ctx.Resources.Create(user)</c>) stay stable across phases.
+/// The imperative resource surface hanging off <see cref="ScenarioContext.Resources"/>: each lifecycle
+/// verb resolves the resource's identity and records a <see cref="ResourceEffect"/> for the report's
+/// resource lane. No resource locks are taken and nothing waits; the lock here is solely for per-step
+/// dedup correctness. The API is async end to end so call sites
+/// (<c>await ctx.Resources.Create(user)</c>) stay stable if a verb ever has to await.
 /// </summary>
 public sealed class ResourceContext
 {
@@ -88,7 +87,7 @@ public sealed class ResourceContext
         return Record(LifecycleVerb.Reference, target, resource);
     }
 
-    /// <summary>Records consuming/using-up <paramref name="resource"/> into the produced resource (shared in C1),
+    /// <summary>Records consuming/using-up <paramref name="resource"/> into the produced resource (shared),
     /// plus a lineage relation from each subject to it.</summary>
     public ValueTask Consume<T>(T resource, params object[] subjects)
         where T : notnull

@@ -4,8 +4,7 @@ using System.Linq;
 namespace Freista;
 
 /// <summary>
-/// A deduped lock/trace claim on one identity. The compile-time catalog and, later, the C2 scheduler
-/// both reduce raw effects to claims.
+/// A deduped claim on one identity: the strongest verb a step (or a set of effects) declares on it.
 /// </summary>
 public readonly record struct ResourceClaim(ResourceIdentity Identity, LifecycleVerb Verb)
 {

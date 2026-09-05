@@ -1,6 +1,6 @@
 namespace Freista;
 
-/// <summary>What a step does to a resource: both a trace label and the lock-mode source.</summary>
+/// <summary>What a step does to a resource: a trace label that also implies a <see cref="LockMode"/>.</summary>
 public enum LifecycleVerb
 {
     /// <summary>Brings a new resource into existence (exclusive).</summary>
@@ -23,8 +23,8 @@ public enum LifecycleVerb
     /// the target's declared subjects).</summary>
     Reference,
 
-    /// <summary>Consumes/uses-up a resource into the one the step produces (composition; shared in
-    /// C1, exclusive in C2). May carry a lineage relation in the report (opt-in via the target's
+    /// <summary>Consumes/uses-up a resource into the one the step produces (composition; shared).
+    /// May carry a lineage relation in the report (opt-in via the target's
     /// declared subjects).</summary>
     Consume,
 }
