@@ -1,8 +1,8 @@
-# Releasing Freista
+# Releasing Raun
 
 Versions come from git tags via [MinVer](https://github.com/adamralph/minver). There is no version
-number in any file. Three packages ship from one tag, in lockstep: `Freista`, `Freista.Mtp` (which
-carries the source generator as an analyzer), and `Freista.Aspire`.
+number in any file. Three packages ship from one tag, in lockstep: `Raun`, `Raun.Mtp` (which
+carries the source generator as an analyzer), and `Raun.Aspire`.
 
 ## Version scheme
 
@@ -13,25 +13,25 @@ carries the source generator as an analyzer), and `Freista.Aspire`.
 
 ## Checklist
 
-1. `main` is green: `dotnet build Freista.slnx` (0 warnings) and `dotnet test Freista.slnx`.
-2. Move the analyzer rules being released from `src/Freista.Generator/AnalyzerReleases.Unshipped.md`
+1. `main` is green: `dotnet build Raun.slnx` (0 warnings) and `dotnet test Raun.slnx`.
+2. Move the analyzer rules being released from `src/Raun.Generator/AnalyzerReleases.Unshipped.md`
    to `AnalyzerReleases.Shipped.md` under a `## Release X.Y.Z` heading (RS2000 release tracking).
    Commit that first.
 3. Check the packages locally and look at the file names — they carry the version MinVer computed
    for the current commit:
 
    ```bash
-   dotnet pack src/Freista/Freista.csproj -c Release -o artifacts
-   dotnet pack src/Freista.Mtp/Freista.Mtp.csproj -c Release -o artifacts
-   dotnet pack src/Freista.Aspire/Freista.Aspire.csproj -c Release -o artifacts
+   dotnet pack src/Raun/Raun.csproj -c Release -o artifacts
+   dotnet pack src/Raun.Mtp/Raun.Mtp.csproj -c Release -o artifacts
+   dotnet pack src/Raun.Aspire/Raun.Aspire.csproj -c Release -o artifacts
    ```
 
    To try them as a consumer would, point a scratch project's `nuget.config` at `artifacts/` (with
-   `<clear/>` and nuget.org as the second source) and reference `Freista.Mtp` with version `*-*`.
+   `<clear/>` and nuget.org as the second source) and reference `Raun.Mtp` with version `*-*`.
 4. Tag with git — jj imports tags but does not create them:
 
    ```bash
-   git tag -a v0.1.0 -m "Freista 0.1.0"
+   git tag -a v0.1.0 -m "Raun 0.1.0"
    git push origin v0.1.0
    jj git fetch
    ```
@@ -53,18 +53,18 @@ carries the source generator as an analyzer), and `Freista.Aspire`.
   ```xml
   <configuration>
     <packageSources>
-      <add key="freista" value="https://nuget.pkg.github.com/redoz/index.json" />
+      <add key="raun" value="https://nuget.pkg.github.com/redoz/index.json" />
     </packageSources>
     <packageSourceCredentials>
-      <freista>
+      <raun>
         <add key="Username" value="GITHUB_USERNAME" />
         <add key="ClearTextPassword" value="%GITHUB_PACKAGES_TOKEN%" />
-      </freista>
+      </raun>
     </packageSourceCredentials>
   </configuration>
   ```
 
-  Then `dotnet add package Freista.Mtp --prerelease`.
+  Then `dotnet add package Raun.Mtp --prerelease`.
 - **Moving to nuget.org later:** in both workflows change `--source` to
   `https://api.nuget.org/v3/index.json` and `--api-key` to a `NUGET_API_KEY` secret. Versions and
   tags stay exactly as they are.
@@ -73,7 +73,7 @@ carries the source generator as an analyzer), and `Freista.Aspire`.
 
 The generator is packed under `analyzers/dotnet/roslyn5.3/cs`. A consumer whose compiler is older
 than Roslyn 5.3 gets no generator and no diagnostics, silently. Supported baseline today: the .NET 10
-SDK. Adding an older baseline means a `Freista.Generator.RoslynNN` variant project (see
+SDK. Adding an older baseline means a `Raun.Generator.RoslynNN` variant project (see
 `Directory.Build.props`), not a version bump.
 
 ## Undoing a bad release

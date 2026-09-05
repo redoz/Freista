@@ -17,7 +17,7 @@
     <!-- CS1591: don't require XML docs on every public member (yet).
          xUnit1051: our tests intentionally pass explicit CancellationTokens (timeout/cancel cases). -->
     <NoWarn>$(NoWarn);CS1591;xUnit1051</NoWarn>
-    <Product>Freista</Product>
+    <Product>Raun</Product>
     <Authors>Patrik Husfloen</Authors>
     <!-- No Version here: MinVer derives it from the nearest v* tag (see Directory.Build.targets). -->
     <PackageTags>testing;scenario;given-when-then;bdd;source-generator;microsoft-testing-platform</PackageTags>
@@ -34,10 +34,10 @@
     'analyzers/dotnet/roslyn<major>.<minor>/cs'. NuGet then hands every consumer the
     highest variant their compiler can load.
 
-    Today we ship a SINGLE baseline: $(FreistaRoslynVersion), below.
+    Today we ship a SINGLE baseline: $(RaunRoslynVersion), below.
 
     To add another later, drop in a project whose name is the generator's name plus
-    '.Roslyn<digits>' (e.g. src/Freista.Generator.Roslyn414/Freista.Generator.Roslyn414.csproj).
+    '.Roslyn<digits>' (e.g. src/Raun.Generator.Roslyn414/Raun.Generator.Roslyn414.csproj).
     The file can be a one-liner — '<Project Sdk="Microsoft.NET.Sdk" />' — because the
     block below derives the target framework, assembly name, Roslyn package version,
     and source set entirely from the project name. No other files change.
@@ -46,7 +46,7 @@
 
   <!-- The Roslyn baseline the primary generator builds against (major.minor). -->
   <PropertyGroup>
-    <FreistaRoslynVersion Condition="'$(FreistaRoslynVersion)' == ''">5.3</FreistaRoslynVersion>
+    <RaunRoslynVersion Condition="'$(RaunRoslynVersion)' == ''">5.3</RaunRoslynVersion>
   </PropertyGroup>
 
   <!-- A variant project ('<Base>.Roslyn<NN>') derives everything from its name. -->
@@ -54,7 +54,7 @@
     <_RoslynBase>$([System.Text.RegularExpressions.Regex]::Replace('$(MSBuildProjectName)', '\.Roslyn\d+$', ''))</_RoslynBase>
     <_RoslynDigits>$([System.Text.RegularExpressions.Regex]::Match('$(MSBuildProjectName)', 'Roslyn(\d+)$').Groups[1].Value)</_RoslynDigits>
     <!-- "50" -> "5.0", "414" -> "4.14": dot after the major (single) digit. -->
-    <FreistaRoslynVersion>$([System.Text.RegularExpressions.Regex]::Replace('$(_RoslynDigits)', '^(\d)(\d+)$', '$1.$2'))</FreistaRoslynVersion>
+    <RaunRoslynVersion>$([System.Text.RegularExpressions.Regex]::Replace('$(_RoslynDigits)', '^(\d)(\d+)$', '$1.$2'))</RaunRoslynVersion>
 
     <TargetFramework>netstandard2.0</TargetFramework>
     <AssemblyName>$(_RoslynBase)</AssemblyName>
@@ -69,7 +69,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)src\$(_RoslynBase)\**\*.cs"
              Exclude="$(MSBuildThisFileDirectory)src\$(_RoslynBase)\obj\**\*.cs" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp"
-                      VersionOverride="$(FreistaRoslynVersion).*" PrivateAssets="all" />
+                      VersionOverride="$(RaunRoslynVersion).*" PrivateAssets="all" />
   </ItemGroup>
 
 </Project>

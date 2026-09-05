@@ -1,19 +1,19 @@
 # Resource conflict detection — Implementation plan
 
 **Spec:** `docs/superpowers/specs/2026-09-05-resource-conflict-detection-design.md`
-**Goal:** Ship FRST013 (compile-time parallel-access conflicts) and the scenario-scoped runtime
+**Goal:** Ship RAUN013 (compile-time parallel-access conflicts) and the scenario-scoped runtime
 conflict ledger, with parameter-role claims emitted before the DSL call. No locks, no waiting.
 
-Each task: failing test first, minimal implementation, `dotnet test Freista.slnx` green, one `jj commit`.
+Each task: failing test first, minimal implementation, `dotnet test Raun.slnx` green, one `jj commit`.
 
-## Task 1 — FRST013 analyzer rule
+## Task 1 — RAUN013 analyzer rule
 
-Files: `src/Freista.Generator/Analysis/Descriptors.cs`, `ScenarioAnalyzer.cs`,
-`test/Freista.Generator.Test/AnalyzerTests.cs`.
+Files: `src/Raun.Generator/Analysis/Descriptors.cs`, `ScenarioAnalyzer.cs`,
+`test/Raun.Generator.Test/AnalyzerTests.cs`.
 
-1. Add `Descriptors.ConflictingParallelAccess` ("FRST013", Error) and register it in
+1. Add `Descriptors.ConflictingParallelAccess` ("RAUN013", Error) and register it in
    `SupportedDiagnostics`.
-2. Tests (self-contained sources, as the FRST009 tests do): supported-diagnostic; tuple Edit/Edit;
+2. Tests (self-contained sources, as the RAUN009 tests do): supported-diagnostic; tuple Edit/Edit;
    tuple Edit/Read; tuple Read/Read clean; different locals clean; sequential clean; lineage target vs
    Edited; LINQ count 2 self-conflict; LINQ count 1 clean; named-argument matching; all existing
    `SampleSources` scenarios stay clean.
@@ -25,8 +25,8 @@ Files: `src/Freista.Generator/Analysis/Descriptors.cs`, `ScenarioAnalyzer.cs`,
 
 ## Task 2 — `ResourceLedger` + `ResourceConflictException`
 
-Files: `src/Freista/Resources/ResourceLedger.cs`, `ResourceConflictException.cs`,
-`test/Freista.Test/Resources/ResourceLedgerTests.cs`.
+Files: `src/Raun/Resources/ResourceLedger.cs`, `ResourceConflictException.cs`,
+`test/Raun.Test/Resources/ResourceLedgerTests.cs`.
 
 1. Tests per spec "Ledger".
 2. Ledger computes transitive ancestors over `DependsOn ∪ MergeSources ∪ Guards.ConditionIndex`
@@ -35,7 +35,7 @@ Files: `src/Freista/Resources/ResourceLedger.cs`, `ResourceConflictException.cs`
 ## Task 3 — Wire the ledger through `ResourceContext`, `ScenarioContext`, `ScenarioScheduler`
 
 Files: `ResourceContext.cs`, `ScenarioContext.cs`, `Scheduling/ScenarioScheduler.cs`,
-`test/Freista.Test/SchedulerTests.cs`.
+`test/Raun.Test/SchedulerTests.cs`.
 
 1. Scheduler tests per spec "Scheduler".
 2. `ResourceContext.AttachLedger` (internal) and the pre-record `Claim`; `ScenarioContext.AttachLedger`
@@ -44,8 +44,8 @@ Files: `ResourceContext.cs`, `ScenarioContext.cs`, `Scheduling/ScenarioScheduler
 
 ## Task 4 — Generator: parameter-role claims before the call
 
-Files: `src/Freista.Generator/Emit/ScenarioEmitter.cs`, `test/Freista.Generator.Test/ResourceLoweringTests.cs`,
-`Snapshots/GeneratorSnapshotTests.Resource_scenario#FreistaScenarios.g.verified.cs`.
+Files: `src/Raun.Generator/Emit/ScenarioEmitter.cs`, `test/Raun.Generator.Test/ResourceLoweringTests.cs`,
+`Snapshots/GeneratorSnapshotTests.Resource_scenario#RaunScenarios.g.verified.cs`.
 
 1. Test: emitted source has `Resources.Edit(__inputs...)` before `var __r = await When.Suspend`, and
    `Resources.Edit(__r)` after. Existing effect-order tests keep passing.
@@ -56,5 +56,5 @@ Files: `src/Freista.Generator/Emit/ScenarioEmitter.cs`, `test/Freista.Generator.
 ## Task 5 — Docs, findings status, final verification
 
 1. Findings doc status → resolved; pointer to the spec.
-2. `dotnet build Freista.slnx` → 0 warnings. `dotnet test Freista.slnx` → all green, count > 386.
+2. `dotnet build Raun.slnx` → 0 warnings. `dotnet test Raun.slnx` → all green, count > 386.
 3. Both samples run: AppointmentTests 28/29 (unchanged expectation), AspireAppointments 9/9.

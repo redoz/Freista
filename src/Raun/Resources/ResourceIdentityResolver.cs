@@ -1,0 +1,106 @@
+using System;
+using System.Collections.Concurrent;
+using System.Reflection;
+
+namespace Raun;
+
+/// <summary>
+/// Resolves a resource instance to its <see cref="ResourceIdentity"/> via the layered key chain
+/// (first match wins), per the resourcing design:
+/// <list type="number">
+/// <item><description><see cref="IResource{TSelf}"/>'s static-abstract <c>KeyFor</c> — the runtime
+/// form of a <c>[ResourceKey]</c>/<c>[Resource(Key)]</c> annotation (hand-written or generator-emitted).</description></item>
+/// <item><description>A registered selector (<see cref="Identify{T}"/>), for types you can't annotate.</description></item>
+/// <item><description><see cref="IResourceIdentity"/>, for runtime-computed keys.</description></item>
+/// <item><description>Whole-record value equality (via <see cref="object.ToString"/>), the fallback
+/// for immutable identity-only records.</description></item>
+/// </list>
+/// Because link 1 projects from a stable key member, a <c>with</c>-edited record keeps its key.
+/// </summary>
+public sealed class ResourceIdentityResolver
+{
+    private readonly ConcurrentDictionary<Type, Func<object, ResourceKey>> _selectors = new();
+    private readonly ConcurrentDictionary<Type, Func<object, ResourceKey>?> _keyForInvokers = new();
+
+    /// <summary>
+    /// Registers a key selector for <typeparamref name="T"/> (chain link 2), for types that can't
+    /// carry a <c>KeyFor</c>. The last registration for a type wins.
+    /// </summary>
+    public void Identify<T>(Func<T, ResourceKey> selector)
+    {
+        ArgumentNullException.ThrowIfNull(selector);
+        _selectors[typeof(T)] = instance => selector((T)instance);
+    }
+
+    /// <summary>Resolves the identity of <paramref name="instance"/> using its static type.</summary>
+    public ResourceIdentity Resolve<T>(T instance)
+        where T : notnull
+        => new(typeof(T), ResolveKey(typeof(T), instance));
+
+    /// <summary>Resolves the identity of <paramref name="instance"/> for a runtime <paramref name="type"/>.</summary>
+    public ResourceIdentity Resolve(Type type, object instance)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        ArgumentNullException.ThrowIfNull(instance);
+        return new(type, ResolveKey(type, instance));
+    }
+
+    private ResourceKey ResolveKey(Type type, object instance)
+    {
+        // 1. IResource<TSelf>.KeyFor (the runtime form of [ResourceKey]/[Resource(Key)]).
+        var keyFor = _keyForInvokers.GetOrAdd(type, BuildKeyForInvoker);
+        if (keyFor is not null)
+        {
+            return keyFor(instance);
+        }
+
+        // 2. Registered selector.
+        if (_selectors.TryGetValue(type, out var selector))
+        {
+            return selector(instance);
+        }
+
+        // 3. Runtime-computed key.
+        if (instance is IResourceIdentity identity)
+        {
+            return identity.GetResourceKey();
+        }
+
+        // 4. Whole-record value-equality fallback.
+        return new ResourceKey(instance.ToString() ?? type.FullName ?? type.Name);
+    }
+
+    static Func<object, ResourceKey>? BuildKeyForInvoker(Type type)
+    {
+        // Only types declaring IResource<TSelf> (with TSelf == type, per CRTP) expose a
+        // static-abstract KeyFor. Scan the interface list rather than MakeGenericType, which would
+        // throw for types that don't satisfy the `where TSelf : IResource<TSelf>` constraint.
+        var contract = typeof(IResource<>);
+        var implementsContract = Array.Exists(
+            type.GetInterfaces(),
+            i => i.IsGenericType
+                && i.GetGenericTypeDefinition() == contract
+                && i.GenericTypeArguments[0] == type);
+
+        if (!implementsContract)
+        {
+            return null;
+        }
+
+        // Both hand-written and generator-emitted halves expose a public static
+        // ResourceKey KeyFor(TSelf) that implements the static-abstract member.
+        var method = type.GetMethod(
+            "KeyFor",
+            BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy,
+            binder: null,
+            types: [type],
+            modifiers: null);
+
+        if (method is null || method.ReturnType != typeof(ResourceKey))
+        {
+            return null;
+        }
+
+        return instance => (ResourceKey)method.Invoke(null, [instance])!;
+    }
+}

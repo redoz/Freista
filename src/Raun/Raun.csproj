@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Description>
+      Runner-agnostic core for Raun scenario tests: phase markers (Given/When/Then),
+      parallel awaiters for tuples and arrays, the scenario manifest model, and the DAG
+      step scheduler. Deliberately has no xUnit dependency so the scheduler can be tested
+      in isolation and generated code stays runner-neutral.
+    </Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The scheduler-facing seams (AttachTeardown, SetCurrent) stay internal; the runtime tests
+         exercise them directly rather than only through a full scenario run. -->
+    <InternalsVisibleTo Include="Raun.Test" />
+  </ItemGroup>
+
+</Project>

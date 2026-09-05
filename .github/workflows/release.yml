@@ -26,16 +26,16 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Build
-        run: dotnet build Freista.slnx -c Release -p:ContinuousIntegrationBuild=true
+        run: dotnet build Raun.slnx -c Release -p:ContinuousIntegrationBuild=true
 
       - name: Test
-        run: dotnet test Freista.slnx -c Release --no-build
+        run: dotnet test Raun.slnx -c Release --no-build
 
       - name: Pack
         run: |
-          dotnet pack src/Freista/Freista.csproj -c Release --no-build -o artifacts -p:ContinuousIntegrationBuild=true
-          dotnet pack src/Freista.Mtp/Freista.Mtp.csproj -c Release --no-build -o artifacts -p:ContinuousIntegrationBuild=true
-          dotnet pack src/Freista.Aspire/Freista.Aspire.csproj -c Release --no-build -o artifacts -p:ContinuousIntegrationBuild=true
+          dotnet pack src/Raun/Raun.csproj -c Release --no-build -o artifacts -p:ContinuousIntegrationBuild=true
+          dotnet pack src/Raun.Mtp/Raun.Mtp.csproj -c Release --no-build -o artifacts -p:ContinuousIntegrationBuild=true
+          dotnet pack src/Raun.Aspire/Raun.Aspire.csproj -c Release --no-build -o artifacts -p:ContinuousIntegrationBuild=true
 
       - name: Push to GitHub Packages
         run: >

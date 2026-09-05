@@ -5,9 +5,9 @@
   of `2026-06-06-resourcing-system-design.md`.
 - **Origin:** `2026-09-04-c2-resource-scheduling-findings.md` — the analysis that showed half the
   declared claims are unlockable by construction.
-- **Scope:** `src/Freista.Generator` (one analyzer rule, claim emission order), `src/Freista`
+- **Scope:** `src/Raun.Generator` (one analyzer rule, claim emission order), `src/Raun`
   (a scenario-scoped conflict ledger wired through the scheduler and `ResourceContext`). No new DSL
-  surface. No change to `Freista.Mtp` or the report.
+  surface. No change to `Raun.Mtp` or the report.
 
 ## Summary
 
@@ -18,7 +18,7 @@ an authoring defect and are reported as one.
 
 Two tiers ship together:
 
-1. **FRST013 (compile time).** Inside one parallel group, two elements pass the *same step-output
+1. **RAUN013 (compile time).** Inside one parallel group, two elements pass the *same step-output
    local* to parameters with a conflicting pair of roles. Caught in the IDE before anything runs.
 2. **Conflict ledger (run time).** Inside one scenario, two *unordered* steps (no dependency path
    between them) record effects on the *same resolved identity* with a conflicting pair of modes.
@@ -79,7 +79,7 @@ Verified in `ScenarioParser`:
 - A local has one definition at any program point (arm re-assignments become merges), so two
   arguments naming the same local in one group name the same producer node.
 
-## Tier 1 — FRST013 `ConflictingParallelAccess`
+## Tier 1 — RAUN013 `ConflictingParallelAccess`
 
 **Where:** `ScenarioAnalyzer`, alongside the existing group analysis (`AnalyzeAwaited` for tuples and
 arrays, `AnalyzeLinqArray` for the unroll). Purely local to one group; no graph is built.
@@ -94,11 +94,11 @@ location)` where:
   parameter named in the method's `References`/`Consumes` ⇒ shared (the lineage confers the role).
 
 Two entries from **different elements** on the **same local** where **at least one is exclusive** is
-FRST013. Report once per offending pair, at the later element's argument. Return roles never
+RAUN013. Report once per offending pair, at the later element's argument. Return roles never
 participate: a step's return is its own output, shared with no sibling.
 
 **LINQ unroll.** The lambda body is one call repeated `count` times. If `count >= 2` and the body
-passes an outer step-output local with an exclusive role, the group conflicts with itself: FRST013 at
+passes an outer step-output local with an exclusive role, the group conflicts with itself: RAUN013 at
 that argument.
 
 **Severity:** Error. The runtime ledger would fail the same scenario deterministically (Tier 2), so
@@ -112,7 +112,7 @@ mutating role ({3}); give one step a dependency on the other, or declare the acc
 
 ## Tier 2 — scenario-scoped conflict ledger
 
-**New types** in `src/Freista/Resources/`:
+**New types** in `src/Raun/Resources/`:
 
 - `ResourceLedger` (public sealed). One per `ScenarioScheduler.RunAsync`. Constructed with the
   scenario's "must run after" relation as an `IReadOnlyList<ScenarioNode>` and computes the
@@ -160,7 +160,7 @@ an explicit opt-in only when a real scenario needs it. No design until then.
 
 ## Tier 3 — deferred: type-level admission across scenarios
 
-When scenarios run concurrently (they do not yet — `FreistaRunLoop` is sequential), the run loop
+When scenarios run concurrently (they do not yet — `RaunRunLoop` is sequential), the run loop
 gains admission control: a scenario starts only when its **static, type-level claim set** (every
 role-bearing parameter/return type with its `LockMode`, emitted by the generator onto the
 definition) does not conflict with any running scenario's; the whole set is acquired atomically at
@@ -173,12 +173,12 @@ argument-derived. Needs its own brainstorm; do not start it from this document.
 ## Testing
 
 **Analyzer (`AnalyzerTests`):**
-- FRST013 is a supported diagnostic.
-- Tuple: `(When.Rename([Edited] p), When.Suspend([Edited] p))` on one local ⇒ FRST013.
-- Tuple: `[Edited]` vs `[Read]` on one local ⇒ FRST013.
+- RAUN013 is a supported diagnostic.
+- Tuple: `(When.Rename([Edited] p), When.Suspend([Edited] p))` on one local ⇒ RAUN013.
+- Tuple: `[Edited]` vs `[Read]` on one local ⇒ RAUN013.
 - Tuple: `[Read]` vs `[Read]` ⇒ clean. Different locals ⇒ clean. Sequential statements ⇒ clean.
-- Lineage-named target (shared) vs `[Edited]` on one local ⇒ FRST013; vs `[Read]` ⇒ clean.
-- LINQ unroll with count 2 passing an outer local to `[Edited]` ⇒ FRST013; count 1 ⇒ clean.
+- Lineage-named target (shared) vs `[Edited]` on one local ⇒ RAUN013; vs `[Read]` ⇒ clean.
+- LINQ unroll with count 2 passing an outer local to `[Edited]` ⇒ RAUN013; count 1 ⇒ clean.
 - Named arguments are matched to parameters correctly.
 - Existing valid scenarios (all `SampleSources`) stay clean.
 
@@ -201,7 +201,7 @@ argument-derived. Needs its own brainstorm; do not start it from this document.
 - Effect order for `When.Book` unchanged: Read, Edit, Create.
 - `Resource_scenario` snapshot re-verified.
 
-**End to end:** `dotnet test Freista.slnx` grows from 386; both samples still run green (their
+**End to end:** `dotnet test Raun.slnx` grows from 386; both samples still run green (their
 parallel groups create distinct identities).
 
 ## Documentation
@@ -219,6 +219,6 @@ parallel groups create distinct identities).
 - **Serialize on intra-scenario conflict.** Picks an arbitrary order and hides the defect.
 - **Timing-based overlap detection** (fail only when the two steps were observed running at the same
   time). Flaky by construction; the structural rule fails deterministically instead.
-- **Warning severity for FRST013.** The runtime would fail the same scenario anyway.
+- **Warning severity for RAUN013.** The runtime would fail the same scenario anyway.
 - **Building the analyzer rule on the full DAG.** Unnecessary: concurrency inside a scenario is
   exactly group membership, which is syntactic.

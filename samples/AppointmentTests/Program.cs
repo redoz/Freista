@@ -1,13 +1,13 @@
-using Freista.Mtp;
+using Raun.Mtp;
 
 namespace AppointmentTests;
 
 /// <summary>
 /// Hand-authored Microsoft.Testing.Platform entry point for the showcase. The generated entry point
-/// is suppressed (<c>&lt;FreistaGenerateProgram&gt;false&lt;/FreistaGenerateProgram&gt;</c>) so this
-/// <c>Main</c> can opt into Freista's deterministic simulated-time scheduler via
+/// is suppressed (<c>&lt;RaunGenerateProgram&gt;false&lt;/RaunGenerateProgram&gt;</c>) so this
+/// <c>Main</c> can opt into Raun's deterministic simulated-time scheduler via
 /// <c>simulateTime: true</c>. The Given/When/Then steps author their own durations with
-/// <see cref="Freista.ScenarioContext.SimulateElapsed(System.TimeSpan)"/> (no real waiting), which
+/// <see cref="Raun.ScenarioContext.SimulateElapsed(System.TimeSpan)"/> (no real waiting), which
 /// lands a realistic, overlapping timeline in the generated HTML report. Production projects omit
 /// the flag
 /// (default <see langword="false"/>) and run on real wall-clock timing.
@@ -15,5 +15,5 @@ namespace AppointmentTests;
 internal static class Program
 {
     private static Task<int> Main(string[] args)
-        => FreistaTestApplication.RunAsync(args, simulateTime: true);
+        => RaunTestApplication.RunAsync(args, simulateTime: true);
 }

@@ -4,7 +4,7 @@
 - **Status:** **Resolved.** Lock-based C2 (two-phase locking + wound-wait) is rejected for good, not
   deferred: it trades deadlocks for nondeterministic re-execution of real side effects, and half the
   declared claims can never be locked anyway. What ships instead is **conflict detection** — a
-  compile-time rule (FRST013) plus a scenario-scoped runtime ledger — designed in
+  compile-time rule (RAUN013) plus a scenario-scoped runtime ledger — designed in
   `2026-09-05-resource-conflict-detection-design.md`. Cross-scenario coordination (type-level
   admission control) is deferred until scenarios run concurrently at all.
 - **Open question below ("serialize or fail") is answered:** fail inside a scenario, serialize across
@@ -55,7 +55,7 @@ honest. This is the first thing to settle if C2 is revived.
 
 Independent of C2, and safe to delete whenever someone is in the area:
 
-- **`Access`** (`src/Freista/Resources/Access.cs`) — zero typed uses anywhere in the repo. Its own
+- **`Access`** (`src/Raun/Resources/Access.cs`) — zero typed uses anywhere in the repo. Its own
   doc comment references `LockAsync` and `[Requires<T>]`, **neither of which exists**.
 - **`ISingletonResource<TSelf>`** — declared once; its only other mention is a comment in the
   analyzer.

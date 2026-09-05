@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Give Freista teardown — cleanup registered as a closure by the step that created the thing, run after the scenario under a per-scenario policy, and reported as its own discovered test node so a failing cleanup is never silent.
+**Goal:** Give Raun teardown — cleanup registered as a closure by the step that created the thing, run after the scenario under a per-scenario policy, and reported as its own discovered test node so a failing cleanup is never silent.
 
 **Architecture:** `ScenarioContext.OnTeardown` appends to a scheduler-owned `TeardownLog`. After the DAG drains, the scheduler runs the registered closures in reverse-topological order of their owning step and reports the outcome on a generator-emitted `Teardown` node — an ordinary discovered, numbered node carrying an `IsTeardown` marker that only the scheduler reads. Ordinary cleanups obey the scenario's `[Teardown(Run.…)]` policy; `Cleanup.Required` ones always run, including after cancellation, on their own token.
 
@@ -15,7 +15,7 @@
 - **Version control: `jj` only.** Never run `git commit/add/branch/checkout/reset/rebase/stash/merge/push`. Read-only `git status`/`log`/`diff` is fine. Commit each task with `jj commit -m "..."`, then `jj bookmark set feat/scenario-conditionals -r @-`.
 - **No `Co-Authored-By` and no tooling trailers of any kind** in commit messages.
 - Conventional-commit prefixes: `feat(scope):`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`.
-- **Build/test:** `dotnet build Freista.slnx`, `dotnet test Freista.slnx`. MTP does **not** accept `--nologo` or `--filter`; run whole projects.
+- **Build/test:** `dotnet build Raun.slnx`, `dotnet test Raun.slnx`. MTP does **not** accept `--nologo` or `--filter`; run whole projects.
 - **Baseline: 323 tests, 0 warnings.** Every task ends green; the count only grows.
 - **TDD:** the failing test is written and seen to fail before the implementation, in the same task.
 - **A not-taken teardown is never green.** `StepStatus.NotTaken` when policy skipped everything.
@@ -26,21 +26,21 @@
 
 | File | Change |
 |---|---|
-| `src/Freista/Teardown/Cleanup.cs` | **new** — `public enum Cleanup { Optional, Required }` |
-| `src/Freista/Teardown/Run.cs` | **new** — `public enum Run { Always, OnSuccess, Never }` (core, because `ScenarioDefinition` carries it) |
-| `src/Freista/Teardown/TeardownLog.cs` | **new** — thread-safe registration list owned by the scheduler |
-| `src/Freista/ScenarioContext.cs` | `OnTeardown` overloads; internal `TeardownLog` reference |
-| `src/Freista/Model/ScenarioNode.cs` | add `IsTeardown` |
-| `src/Freista/Model/ScenarioDefinition.cs` | add `TeardownPolicy` |
-| `src/Freista/Scheduling/ScenarioScheduler.cs` | pass the log into each context; run the teardown node after the DAG |
-| `src/Freista.Mtp/TeardownAttribute.cs` | **new** — `[Teardown(Run)]`, beside `ScenarioAttribute` |
-| `src/Freista.Generator/Lowering/AttributeReader.cs` | read `[Teardown]` |
-| `src/Freista.Generator/Lowering/Ir.cs` | `ParsedScenario.TeardownPolicy`, `ParsedStep.IsTeardown` |
-| `src/Freista.Generator/Lowering/ScenarioParser.cs` | append the teardown node; carry the policy |
-| `src/Freista.Generator/Emit/ScenarioEmitter.cs` | emit `IsTeardown` and `TeardownPolicy` |
-| `test/Freista.Test/TeardownTests.cs` | **new** |
-| `test/Freista.Generator.Test/SampleSources.cs`, `ConditionalLoweringTests.cs` (or new `TeardownLoweringTests.cs`) | lowering coverage |
-| `test/Freista.Mtp.Test/FreistaDiscovererTests.cs` | the teardown node IS discovered and numbered last |
+| `src/Raun/Teardown/Cleanup.cs` | **new** — `public enum Cleanup { Optional, Required }` |
+| `src/Raun/Teardown/Run.cs` | **new** — `public enum Run { Always, OnSuccess, Never }` (core, because `ScenarioDefinition` carries it) |
+| `src/Raun/Teardown/TeardownLog.cs` | **new** — thread-safe registration list owned by the scheduler |
+| `src/Raun/ScenarioContext.cs` | `OnTeardown` overloads; internal `TeardownLog` reference |
+| `src/Raun/Model/ScenarioNode.cs` | add `IsTeardown` |
+| `src/Raun/Model/ScenarioDefinition.cs` | add `TeardownPolicy` |
+| `src/Raun/Scheduling/ScenarioScheduler.cs` | pass the log into each context; run the teardown node after the DAG |
+| `src/Raun.Mtp/TeardownAttribute.cs` | **new** — `[Teardown(Run)]`, beside `ScenarioAttribute` |
+| `src/Raun.Generator/Lowering/AttributeReader.cs` | read `[Teardown]` |
+| `src/Raun.Generator/Lowering/Ir.cs` | `ParsedScenario.TeardownPolicy`, `ParsedStep.IsTeardown` |
+| `src/Raun.Generator/Lowering/ScenarioParser.cs` | append the teardown node; carry the policy |
+| `src/Raun.Generator/Emit/ScenarioEmitter.cs` | emit `IsTeardown` and `TeardownPolicy` |
+| `test/Raun.Test/TeardownTests.cs` | **new** |
+| `test/Raun.Generator.Test/SampleSources.cs`, `ConditionalLoweringTests.cs` (or new `TeardownLoweringTests.cs`) | lowering coverage |
+| `test/Raun.Mtp.Test/RaunDiscovererTests.cs` | the teardown node IS discovered and numbered last |
 | `samples/AppointmentTests/AppointmentDsl.cs` | a step registering cleanup |
 | `README.md` | teardown section |
 
@@ -49,20 +49,20 @@
 ### Task 1: Core model — enums, `IsTeardown`, `TeardownPolicy`, `TeardownLog`, `OnTeardown`
 
 **Files:**
-- Create: `src/Freista/Teardown/Cleanup.cs`, `src/Freista/Teardown/Run.cs`, `src/Freista/Teardown/TeardownLog.cs`
-- Modify: `src/Freista/Model/ScenarioNode.cs`, `src/Freista/Model/ScenarioDefinition.cs`, `src/Freista/ScenarioContext.cs`
-- Test: `test/Freista.Test/TeardownTests.cs`
+- Create: `src/Raun/Teardown/Cleanup.cs`, `src/Raun/Teardown/Run.cs`, `src/Raun/Teardown/TeardownLog.cs`
+- Modify: `src/Raun/Model/ScenarioNode.cs`, `src/Raun/Model/ScenarioDefinition.cs`, `src/Raun/ScenarioContext.cs`
+- Test: `test/Raun.Test/TeardownTests.cs`
 
 **Interfaces:**
 - Produces: `Cleanup.Optional|Required`; `Run.Always|OnSuccess|Never`; `ScenarioNode.IsTeardown` (bool, default false); `ScenarioDefinition.TeardownPolicy` (`Run`, default `Always`); `TeardownLog` with `Add(int owningStepIndex, Cleanup kind, Func<Task> cleanup)` and `IReadOnlyList<TeardownRegistration> Entries`; `TeardownRegistration(int OwningStepIndex, int Sequence, Cleanup Kind, Func<Task> Cleanup)`; `ScenarioContext.OnTeardown(Func<Task>)` and `ScenarioContext.OnTeardown(Cleanup, Func<Task>)`.
 
-- [ ] **Step 1: Write the failing tests** — create `test/Freista.Test/TeardownTests.cs`
+- [ ] **Step 1: Write the failing tests** — create `test/Raun.Test/TeardownTests.cs`
 
 ```csharp
-using Freista.Model;
+using Raun.Model;
 using Xunit;
 
-namespace Freista.Test;
+namespace Raun.Test;
 
 /// <summary>
 /// Cleanup is registered by the step that created the thing, so the closure captures both the object
@@ -152,13 +152,13 @@ public class TeardownTests
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `dotnet test test/Freista.Test/Freista.Test.csproj`
+Run: `dotnet test test/Raun.Test/Raun.Test.csproj`
 Expected: FAIL — compile errors; `TeardownLog`, `Cleanup`, `Run`, `AttachTeardown`, `OnTeardown`, `IsTeardown`, `TeardownPolicy` do not exist.
 
-- [ ] **Step 3: Create `src/Freista/Teardown/Cleanup.cs`**
+- [ ] **Step 3: Create `src/Raun/Teardown/Cleanup.cs`**
 
 ```csharp
-namespace Freista;
+namespace Raun;
 
 /// <summary>
 /// Whether a registered cleanup is optional or mandatory. This is a KIND, not a policy: leaving
@@ -175,10 +175,10 @@ public enum Cleanup
 }
 ```
 
-- [ ] **Step 4: Create `src/Freista/Teardown/Run.cs`**
+- [ ] **Step 4: Create `src/Raun/Teardown/Run.cs`**
 
 ```csharp
-namespace Freista;
+namespace Raun;
 
 /// <summary>When a scenario's <see cref="Cleanup.Optional"/> teardowns run.</summary>
 public enum Run
@@ -195,12 +195,12 @@ public enum Run
 }
 ```
 
-- [ ] **Step 5: Create `src/Freista/Teardown/TeardownLog.cs`**
+- [ ] **Step 5: Create `src/Raun/Teardown/TeardownLog.cs`**
 
 ```csharp
 using System.Collections.Concurrent;
 
-namespace Freista;
+namespace Raun;
 
 /// <summary>One registered cleanup, tagged with the step that registered it.</summary>
 /// <param name="OwningStepIndex">The step whose execution registered this cleanup; the scheduler
@@ -232,7 +232,7 @@ public sealed class TeardownLog
 }
 ```
 
-- [ ] **Step 6: Add `IsTeardown` to `src/Freista/Model/ScenarioNode.cs`** (immediately after `IsSynthetic`)
+- [ ] **Step 6: Add `IsTeardown` to `src/Raun/Model/ScenarioNode.cs`** (immediately after `IsSynthetic`)
 
 ```csharp
     /// <summary>
@@ -243,7 +243,7 @@ public sealed class TeardownLog
     public bool IsTeardown { get; init; }
 ```
 
-- [ ] **Step 7: Add `TeardownPolicy` to `src/Freista/Model/ScenarioDefinition.cs`** (after `Timeout`)
+- [ ] **Step 7: Add `TeardownPolicy` to `src/Raun/Model/ScenarioDefinition.cs`** (after `Timeout`)
 
 ```csharp
     /// <summary>When this scenario's <see cref="Cleanup.Optional"/> teardowns run; from
@@ -251,7 +251,7 @@ public sealed class TeardownLog
     public Run TeardownPolicy { get; init; } = Run.Always;
 ```
 
-- [ ] **Step 8: Add registration to `src/Freista/ScenarioContext.cs`.** Add the fields next to `_logs`, and the members next to `Log`.
+- [ ] **Step 8: Add registration to `src/Raun/ScenarioContext.cs`.** Add the fields next to `_logs`, and the members next to `Log`.
 
 ```csharp
     private TeardownLog? _teardownLog;
@@ -285,12 +285,12 @@ public sealed class TeardownLog
 
 - [ ] **Step 9: Run the tests to verify they pass**
 
-Run: `dotnet test test/Freista.Test/Freista.Test.csproj`
+Run: `dotnet test test/Raun.Test/Raun.Test.csproj`
 Expected: PASS — 323 baseline plus the 5 new.
 
 - [ ] **Step 10: Full solution green**
 
-Run: `dotnet build Freista.slnx` then `dotnet test Freista.slnx`
+Run: `dotnet build Raun.slnx` then `dotnet test Raun.slnx`
 Expected: 0 warnings, all pass.
 
 - [ ] **Step 11: Commit**
@@ -307,8 +307,8 @@ jj bookmark set feat/scenario-conditionals -r @-
 ### Task 2: Scheduler — attach the log, run the teardown node
 
 **Files:**
-- Modify: `src/Freista/Scheduling/ScenarioScheduler.cs`
-- Test: `test/Freista.Test/TeardownTests.cs`
+- Modify: `src/Raun/Scheduling/ScenarioScheduler.cs`
+- Test: `test/Raun.Test/TeardownTests.cs`
 
 **Interfaces:**
 - Consumes: everything from Task 1.
@@ -325,7 +325,7 @@ Rules:
 
 Scenario success = every non-teardown node is `Passed` or `NotTaken`.
 
-- [ ] **Step 1: Write the failing tests** — append to `test/Freista.Test/TeardownTests.cs` (add `using Freista.Scheduling;` at the top)
+- [ ] **Step 1: Write the failing tests** — append to `test/Raun.Test/TeardownTests.cs` (add `using Raun.Scheduling;` at the top)
 
 ```csharp
     private static ScenarioNode Step(
@@ -530,7 +530,7 @@ Scenario success = every non-teardown node is `Passed` or `NotTaken`.
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `dotnet test test/Freista.Test/Freista.Test.csproj`
+Run: `dotnet test test/Raun.Test/Raun.Test.csproj`
 Expected: FAIL — the teardown node is currently run as an ordinary node (its no-op `Invoke` makes it `Passed`), no cleanup runs, and ordering assertions fail.
 
 - [ ] **Step 3: Exclude the teardown node from the DAG and attach the log.** In `RunAsync`, after `var pending = new HashSet<int>(Enumerable.Range(0, count));`, add:
@@ -675,12 +675,12 @@ Note the cancellation requirement: this runs **after** the scheduling loop, and 
 
 - [ ] **Step 7: Run the tests to verify they pass**
 
-Run: `dotnet test test/Freista.Test/Freista.Test.csproj`
+Run: `dotnet test test/Raun.Test/Raun.Test.csproj`
 Expected: PASS.
 
 - [ ] **Step 8: Full solution green**
 
-Run: `dotnet build Freista.slnx` then `dotnet test Freista.slnx`
+Run: `dotnet build Raun.slnx` then `dotnet test Raun.slnx`
 Expected: 0 warnings, all pass.
 
 - [ ] **Step 9: Commit**
@@ -697,9 +697,9 @@ jj bookmark set feat/scenario-conditionals -r @-
 ### Task 3: `[Teardown]` attribute and generator emission
 
 **Files:**
-- Create: `src/Freista.Mtp/TeardownAttribute.cs`
-- Modify: `src/Freista.Generator/Lowering/AttributeReader.cs`, `Ir.cs`, `ScenarioParser.cs`, `src/Freista.Generator/Emit/ScenarioEmitter.cs`
-- Test: `test/Freista.Generator.Test/SampleSources.cs`, new `test/Freista.Generator.Test/TeardownLoweringTests.cs`
+- Create: `src/Raun.Mtp/TeardownAttribute.cs`
+- Modify: `src/Raun.Generator/Lowering/AttributeReader.cs`, `Ir.cs`, `ScenarioParser.cs`, `src/Raun.Generator/Emit/ScenarioEmitter.cs`
+- Test: `test/Raun.Generator.Test/SampleSources.cs`, new `test/Raun.Generator.Test/TeardownLoweringTests.cs`
 
 **Interfaces:**
 - Consumes: `Run`, `ScenarioNode.IsTeardown`, `ScenarioDefinition.TeardownPolicy` (Task 1).
@@ -707,10 +707,10 @@ jj bookmark set feat/scenario-conditionals -r @-
 
 The node is emitted **unconditionally**. The generator cannot see registrations — `OnTeardown` is a runtime call inside a DSL method body — so emitting only when `[Teardown]` is present would make "a step registers cleanup in a scenario with no attribute" fail silently.
 
-- [ ] **Step 1: Create `src/Freista.Mtp/TeardownAttribute.cs`**
+- [ ] **Step 1: Create `src/Raun.Mtp/TeardownAttribute.cs`**
 
 ```csharp
-namespace Freista;
+namespace Raun;
 
 /// <summary>
 /// Sets when a scenario's <see cref="Cleanup.Optional"/> teardowns run. Absent, the policy is
@@ -726,14 +726,14 @@ public sealed class TeardownAttribute(Run run = Run.Always) : Attribute
 }
 ```
 
-- [ ] **Step 2: Write the failing tests** — create `test/Freista.Generator.Test/TeardownLoweringTests.cs`
+- [ ] **Step 2: Write the failing tests** — create `test/Raun.Generator.Test/TeardownLoweringTests.cs`
 
 ```csharp
-using Freista;
-using Freista.Model;
+using Raun;
+using Raun.Model;
 using Xunit;
 
-namespace Freista.Generator.Test;
+namespace Raun.Generator.Test;
 
 /// <summary>
 /// Every lowered scenario ends with a discovered teardown node. It is emitted unconditionally: the
@@ -791,7 +791,7 @@ public class TeardownLoweringTests
 }
 ```
 
-- [ ] **Step 3: Add the sample sources** — append to `test/Freista.Generator.Test/SampleSources.cs`, before the closing brace
+- [ ] **Step 3: Add the sample sources** — append to `test/Raun.Generator.Test/SampleSources.cs`, before the closing brace
 
 ```csharp
     // A scenario with an explicit teardown policy.
@@ -814,7 +814,7 @@ public class TeardownLoweringTests
     public const string TeardownDsl =
         """
         using System.Threading.Tasks;
-        using Freista;
+        using Raun;
 
         namespace TeardownDemo;
 
@@ -864,10 +864,10 @@ Note: `SampleSources.Dsl`-based scenarios reference `Then.AppointmentExists`; ch
 
 - [ ] **Step 4: Run the tests to verify they fail**
 
-Run: `dotnet test test/Freista.Generator.Test/Freista.Generator.Test.csproj`
+Run: `dotnet test test/Raun.Generator.Test/Raun.Generator.Test.csproj`
 Expected: FAIL — no teardown node is emitted; `TeardownPolicy` is always `Always`.
 
-- [ ] **Step 5: Read the attribute.** Add to `src/Freista.Generator/Lowering/AttributeReader.cs`
+- [ ] **Step 5: Read the attribute.** Add to `src/Raun.Generator/Lowering/AttributeReader.cs`
 
 ```csharp
     /// <summary>The scenario's teardown policy as the underlying <c>Run</c> enum value, defaulting to
@@ -884,10 +884,10 @@ Expected: FAIL — no teardown node is emitted; `TeardownPolicy` is always `Alwa
     }
 ```
 
-- [ ] **Step 6: Carry it through the IR.** In `src/Freista.Generator/Lowering/Ir.cs`, add to `ParsedScenario`:
+- [ ] **Step 6: Carry it through the IR.** In `src/Raun.Generator/Lowering/Ir.cs`, add to `ParsedScenario`:
 
 ```csharp
-    /// <summary>The scenario's teardown policy as the underlying <c>Freista.Run</c> value.</summary>
+    /// <summary>The scenario's teardown policy as the underlying <c>Raun.Run</c> value.</summary>
     public int TeardownPolicy { get; init; }
 ```
 
@@ -925,7 +925,7 @@ and to `ParsedStep`:
             TeardownPolicy = AttributeReader.TeardownPolicy(_method),
 ```
 
-- [ ] **Step 8: Emit the new members** in `src/Freista.Generator/Emit/ScenarioEmitter.cs`. In `BuildNode`, beside the `IsSynthetic` block:
+- [ ] **Step 8: Emit the new members** in `src/Raun.Generator/Emit/ScenarioEmitter.cs`. In `BuildNode`, beside the `IsSynthetic` block:
 
 ```csharp
         if (step.IsTeardown)
@@ -943,25 +943,25 @@ In `BuildInvokeLambda`, extend the synthetic early-return so a teardown node als
 And in the `ScenarioDefinition` initializer, after `Set("Timeout", …)`:
 
 ```csharp
-                Set("TeardownPolicy", ParseExpression($"(global::Freista.Run){scenario.TeardownPolicy}")),
+                Set("TeardownPolicy", ParseExpression($"(global::Raun.Run){scenario.TeardownPolicy}")),
 ```
 
 - [ ] **Step 9: Run the generator tests**
 
-Run: `dotnet test test/Freista.Generator.Test/Freista.Generator.Test.csproj`
+Run: `dotnet test test/Raun.Generator.Test/Raun.Generator.Test.csproj`
 Expected: the new tests PASS. **Existing snapshots and lowering tests WILL fail** — every scenario now has one extra node. That is correct and expected.
 
 - [ ] **Step 10: Update the node-count assertions.** In `ConditionalLoweringTests.cs`, every `Assert.Equal(N, def.Nodes.Count)` grows by one, and `results[^1]` in the end-to-end tests is now the teardown node rather than the last step. Fix each by adding one to the expected count; do **not** weaken a guard or merge assertion. Check `LinearLoweringTests.cs`, `ParallelLoweringTests.cs`, `ResourceLoweringTests.cs`, and `EdgeCaseLoweringTests.cs` for the same.
 
 - [ ] **Step 11: Re-accept the snapshots.** Run the snapshot tests, diff each `.received.cs` against its `.verified.cs`, confirm the ONLY change is the appended teardown node plus the `TeardownPolicy` line on the definition, then copy each received over its verified name and re-run.
 
-Run: `dotnet test test/Freista.Generator.Test/Freista.Generator.Test.csproj`
+Run: `dotnet test test/Raun.Generator.Test/Raun.Generator.Test.csproj`
 Expected: PASS.
 
 - [ ] **Step 12: Full solution green**
 
-Run: `dotnet build Freista.slnx` then `dotnet test Freista.slnx`
-Expected: 0 warnings, all pass. `Freista.Mtp.Test`'s discovery and numbering tests may also need `+1` on counts — the teardown node IS discovered, which is the intended behaviour.
+Run: `dotnet build Raun.slnx` then `dotnet test Raun.slnx`
+Expected: 0 warnings, all pass. `Raun.Mtp.Test`'s discovery and numbering tests may also need `+1` on counts — the teardown node IS discovered, which is the intended behaviour.
 
 - [ ] **Step 13: Commit**
 
@@ -977,13 +977,13 @@ jj bookmark set feat/scenario-conditionals -r @-
 ### Task 4: MTP coverage, sample, and docs
 
 **Files:**
-- Test: `test/Freista.Mtp.Test/FreistaDiscovererTests.cs`
+- Test: `test/Raun.Mtp.Test/RaunDiscovererTests.cs`
 - Modify: `samples/AppointmentTests/AppointmentDsl.cs`, `README.md`
 
 **Interfaces:**
-- Consumes: everything above. No production changes are expected in `Freista.Mtp` — the teardown node is an ordinary node to discovery, numbering, and the sink. These tests exist to prove that and to catch a regression that hides it.
+- Consumes: everything above. No production changes are expected in `Raun.Mtp` — the teardown node is an ordinary node to discovery, numbering, and the sink. These tests exist to prove that and to catch a regression that hides it.
 
-- [ ] **Step 1: Write the failing tests** — append to `test/Freista.Mtp.Test/FreistaDiscovererTests.cs`, adding `bool teardown = false` → `IsTeardown = teardown` to the local `Node` helper
+- [ ] **Step 1: Write the failing tests** — append to `test/Raun.Mtp.Test/RaunDiscovererTests.cs`, adding `bool teardown = false` → `IsTeardown = teardown` to the local `Node` helper
 
 ```csharp
     [Fact]
@@ -996,7 +996,7 @@ jj bookmark set feat/scenario-conditionals -r @-
             Node(2, "t", "Teardown", teardown: true),
         ]);
 
-        var nodes = FreistaDiscoverer.BuildNodes(definition);
+        var nodes = RaunDiscoverer.BuildNodes(definition);
 
         Assert.Equal(2, nodes.Count);
         Assert.Contains(nodes, n => n.DisplayName.Contains("Teardown", StringComparison.Ordinal));
@@ -1012,7 +1012,7 @@ jj bookmark set feat/scenario-conditionals -r @-
             Node(2, "t", "Teardown", teardown: true),
         ]);
 
-        var nodes = FreistaDiscoverer.BuildNodes(definition);
+        var nodes = RaunDiscoverer.BuildNodes(definition);
 
         Assert.Equal("3. Teardown", nodes[^1].DisplayName);
     }
@@ -1020,12 +1020,12 @@ jj bookmark set feat/scenario-conditionals -r @-
 
 - [ ] **Step 2: Run to verify they fail**
 
-Run: `dotnet test test/Freista.Mtp.Test/Freista.Mtp.Test.csproj`
+Run: `dotnet test test/Raun.Mtp.Test/Raun.Mtp.Test.csproj`
 Expected: FAIL — compile error, the helper has no `teardown` parameter.
 
 - [ ] **Step 3: Add the helper parameter, then re-run**
 
-Run: `dotnet test test/Freista.Mtp.Test/Freista.Mtp.Test.csproj`
+Run: `dotnet test test/Raun.Mtp.Test/Raun.Mtp.Test.csproj`
 Expected: PASS with no production change. If either fails, `IsTeardown` has been wrongly conflated with `IsSynthetic` somewhere — fix that, do not weaken the test.
 
 - [ ] **Step 4: Register a cleanup in the sample.** In `samples/AppointmentTests/AppointmentDsl.cs`, inside `PatientExists`, before the return:
@@ -1077,7 +1077,7 @@ ctx?.OnTeardown(Cleanup.Required, () => container.StopAsync());
 
 - [ ] **Step 7: Full solution green**
 
-Run: `dotnet build Freista.slnx` then `dotnet test Freista.slnx`
+Run: `dotnet build Raun.slnx` then `dotnet test Raun.slnx`
 Expected: 0 warnings, all pass.
 
 - [ ] **Step 8: Commit**

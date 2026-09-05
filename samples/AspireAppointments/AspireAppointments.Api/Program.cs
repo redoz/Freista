@@ -1,8 +1,8 @@
 using System.Collections.Concurrent;
 
 // A deliberately mock service: appointments live in a dictionary and "authentication" is an X-Role
-// header. The point of the sample is the Freista/Aspire wiring, not this API — anything more would
-// teach ASP.NET rather than Freista, and would drag in a database the sample does not need.
+// header. The point of the sample is the Raun/Aspire wiring, not this API — anything more would
+// teach ASP.NET rather than Raun, and would drag in a database the sample does not need.
 
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();

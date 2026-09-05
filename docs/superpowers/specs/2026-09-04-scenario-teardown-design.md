@@ -2,14 +2,14 @@
 
 - **Date:** 2026-09-04
 - **Status:** Design approved in brainstorming; implementation plan pending.
-- **Scope:** `src/Freista` (context, scheduler, model), `src/Freista.Generator` (emit the teardown
-  node), `src/Freista.Mtp` (report the node), `samples/AppointmentTests`, the three test projects.
+- **Scope:** `src/Raun` (context, scheduler, model), `src/Raun.Generator` (emit the teardown
+  node), `src/Raun.Mtp` (report the node), `samples/AppointmentTests`, the three test projects.
 - **Out of scope:** a user-facing DI registration API, C2 resource-aware scheduling, OTEL
   correlation. Each is its own spec.
 
 ## Problem
 
-Freista has no teardown of any kind — no dispose, cleanup, or lifecycle hook anywhere in the
+Raun has no teardown of any kind — no dispose, cleanup, or lifecycle hook anywhere in the
 runtime. An integration test creates a tenant, a container, a database row, and nothing removes it.
 
 The obvious answers do not transfer:
@@ -217,9 +217,9 @@ TDD, behavioural tests first, following the existing project split.
 
 | Project | Coverage |
 |---|---|
-| `Freista.Test` | `TeardownLog` ordering (reverse-topological across parallel branches, reverse sequence within a step); policy selection for each `Run` value crossed with each `Cleanup` kind; a throwing cleanup does not stop the rest; required cleanups run after cancellation and after a scenario timeout; ordinary cleanups skipped on failure under `OnSuccess`; a step in an untaken branch registers nothing. |
-| `Freista.Generator.Test` | The teardown node is emitted last, carries `IsTeardown`, and is absent when the scenario registers no teardown *and* has no attribute — decide once and test it; snapshot of a scenario with `[Teardown]`. |
-| `Freista.Mtp.Test` | The teardown node **is** discovered (unlike a merge node) and takes the final number; `Failed` carries every collected error; `NotTaken` under `Run.Never`; never `Passed` when a cleanup threw. |
+| `Raun.Test` | `TeardownLog` ordering (reverse-topological across parallel branches, reverse sequence within a step); policy selection for each `Run` value crossed with each `Cleanup` kind; a throwing cleanup does not stop the rest; required cleanups run after cancellation and after a scenario timeout; ordinary cleanups skipped on failure under `OnSuccess`; a step in an untaken branch registers nothing. |
+| `Raun.Generator.Test` | The teardown node is emitted last, carries `IsTeardown`, and is absent when the scenario registers no teardown *and* has no attribute — decide once and test it; snapshot of a scenario with `[Teardown]`. |
+| `Raun.Mtp.Test` | The teardown node **is** discovered (unlike a merge node) and takes the final number; `Failed` carries every collected error; `NotTaken` under `Run.Never`; never `Passed` when a cleanup threw. |
 | `samples/AppointmentTests` | A scenario registering both an ordinary and a required cleanup, visible end-to-end. |
 
 ## Open question deferred to the plan

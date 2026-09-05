@@ -67,7 +67,7 @@ a compile error by construction — no runtime/analyzer check needed for that ca
 `References`/`Consumes` *is* the target parameter's role: it gets the `Reference`/`Consume`
 lifecycle effect (the same shared lock as today) **and** the lineage relation. The target
 stays a **bare parameter** with no attribute of its own — `Book(User user, Slot slot)`,
-not `Book([Read] User user, ...)`. So `FRST009` (every resource param must declare its
+not `Book([Read] User user, ...)`. So `RAUN009` (every resource param must declare its
 access) treats "named as some producer's Reference/Consume target" as a declared role.
 This is exactly the old `Resources.Reference(target, subject)` runtime call relocated from
 the target to the subject — identical effects, identical lineage, only the declaration
@@ -141,12 +141,12 @@ The flip is localized; the emission path is reused.
    `SubjectExpressions = [the producer's resource expression]` (the return var `__r`, or
    the edited parameter). This **reuses** the existing claim shape, so `ScenarioEmitter`
    is untouched — it still emits `await __ctx.Resources.Reference(target, subject)`.
-4. **ScenarioAnalyzer / FRST010**: validation inverts. Each name in `References`/`Consumes`
+4. **ScenarioAnalyzer / RAUN010**: validation inverts. Each name in `References`/`Consumes`
    must resolve to a **parameter of the step** (or `Subject.Return`). A subject naming
-   **itself** is an error. Update the FRST010 message to the subject-side framing
+   **itself** is an error. Update the RAUN010 message to the subject-side framing
    (e.g. *"'{0}' is not an input of step '{1}' — References/Consumes must name a
    parameter or Subject.Return"*). Add a self-reference diagnostic if it warrants a
-   distinct ID; otherwise fold into FRST010.
+   distinct ID; otherwise fold into RAUN010.
 
 ## Migration
 
@@ -159,7 +159,7 @@ The flip is localized; the emission path is reused.
 
 ## Testing
 
-- **Analyzer**: FRST010 fires for an unknown target name; for a self-reference; passes
+- **Analyzer**: RAUN010 fires for an unknown target name; for a self-reference; passes
   for valid param targets and `Subject.Return`. Lineage props on `[Read]`/`[Deleted]`
   fail to compile (the properties don't exist) — assert via a does-not-compile fixture.
 - **Generator (snapshot)**: `[Created]` with both `References` and `Consumes`; `[Edited]`

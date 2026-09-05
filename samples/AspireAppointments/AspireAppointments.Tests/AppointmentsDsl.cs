@@ -1,12 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
-using Freista;
+using Raun;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace AspireAppointments.Tests;
 
 /// <summary>
-/// The suite's own DSL. Freista.Aspire ships no steps — it is plumbing only — so these are ordinary
+/// The suite's own DSL. Raun.Aspire ships no steps — it is plumbing only — so these are ordinary
 /// phase-marker extension members that reach the running application through <c>ctx.Services</c>.
 /// </summary>
 public static class AppointmentsDsl

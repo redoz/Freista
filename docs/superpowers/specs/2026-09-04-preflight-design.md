@@ -2,13 +2,13 @@
 
 - **Date:** 2026-09-04
 - **Status:** Design approved in brainstorming.
-- **Scope:** `src/Freista.Mtp` (`FreistaTestApplication`, `FreistaTestFramework`, discovery,
-  `FreistaRunLoop`). `src/Freista` is untouched.
-- **First consumer:** `Freista.Aspire` — see `2026-09-04-freista-aspire-design.md`.
+- **Scope:** `src/Raun.Mtp` (`RaunTestApplication`, `RaunTestFramework`, discovery,
+  `RaunRunLoop`). `src/Raun` is untouched.
+- **First consumer:** `Raun.Aspire` — see `2026-09-04-raun-aspire-design.md`.
 
 ## Problem
 
-Freista has no run-level setup hook. Anything a suite must do **once, before any scenario** — start an
+Raun has no run-level setup hook. Anything a suite must do **once, before any scenario** — start an
 Aspire AppHost, migrate a database, wait for a dependency to become healthy — has to happen outside
 the Microsoft.Testing.Platform session, in the consumer's `Main`, before `RunAsync` is called.
 
@@ -25,7 +25,7 @@ needs the same for the same reason.
 ## Surface
 
 ```csharp
-return await FreistaTestApplication.RunAsync(
+return await RaunTestApplication.RunAsync(
     args,
     services: provider,
     preflight: async ctx =>
@@ -42,7 +42,7 @@ exists** — nothing is discovered and nothing runs, so suites that do not need 
 `ScenarioContext` is reused rather than inventing a `PreflightContext`. It already carries
 `Services`, `CancellationToken`, `Log`, and `TimeProvider`, and reusing it means
 `ScenarioContext.Current` is set while preflight runs — so **anything writing through
-`FreistaLoggerProvider` during startup is collected into the preflight node automatically**,
+`RaunLoggerProvider` during startup is collected into the preflight node automatically**,
 including a system under test's own `ILogger` output if it is routed there.
 
 ## The node
@@ -58,15 +58,15 @@ Preflight                        PASS  6.8s
 1. Given patient Alice exists    PASS   8ms
 ```
 
-- **Uid:** `freista:preflight` — stable, so a runner can filter to it.
+- **Uid:** `raun:preflight` — stable, so a runner can filter to it.
 - **Display name:** `Preflight`. It carries no step number: numbering is per-scenario
   (`ScenarioStepNumbering`), and preflight belongs to the run, not to a scenario.
-- **Identity:** its own `TestMethodIdentifierProperty` (`Freista.Preflight`) so runners group it
+- **Identity:** its own `TestMethodIdentifierProperty` (`Raun.Preflight`) so runners group it
   apart from scenarios rather than filing it under an empty namespace.
 - **Logs** collected during preflight are published as `StandardOutputProperty`, exactly as step logs
   already are.
 
-Granularity is deliberately **one node**, not one per underlying action. Freista.Mtp stays generic —
+Granularity is deliberately **one node**, not one per underlying action. Raun.Mtp stays generic —
 it knows only that a preflight ran and whether it threw. Naming individual waits would require the
 framework to accept a list of named actions and to own their uid scheme; the single node plus its log
 carries the same information without that surface. It can become plural later on evidence.
@@ -95,12 +95,12 @@ the filter selects none — a filtered run of one step still needs the app up.
   `finally` after `RunAsync` returns, which is a perfectly good place to dispose an AppHost, and its
   failure cannot mislead anyone about test results. Add it only if a real need appears.
 - **Multiple preflights.** One delegate; consumers compose inside it.
-- **A preflight timeout owned by Freista.** The delegate receives the run's `CancellationToken`;
-  imposing an additional timeout is the consumer's business (`Freista.Aspire` has its own
+- **A preflight timeout owned by Raun.** The delegate receives the run's `CancellationToken`;
+  imposing an additional timeout is the consumer's business (`Raun.Aspire` has its own
   `StartupTimeout`).
 
 ## Testing
 
 | Project | Coverage |
 |---|---|
-| `Freista.Mtp.Test` | A preflight node is discovered when a delegate is supplied, and **not** discovered when none is; the delegate runs once before any scenario step; it runs once even with multiple scenarios; logs written during preflight reach the node's standard output; a throwing preflight reports `Failed` and every scenario step reports `Skipped` with `preflight failed`; the run still completes and reports every node; a discovery request does **not** invoke the delegate; `ScenarioContext.Current` is set during preflight. |
+| `Raun.Mtp.Test` | A preflight node is discovered when a delegate is supplied, and **not** discovered when none is; the delegate runs once before any scenario step; it runs once even with multiple scenarios; logs written during preflight reach the node's standard output; a throwing preflight reports `Failed` and every scenario step reports `Skipped` with `preflight failed`; the run still completes and reports every node; a discovery request does **not** invoke the delegate; `ScenarioContext.Current` is set during preflight. |

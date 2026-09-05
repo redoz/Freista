@@ -14,11 +14,11 @@
 
 - **Version control: `jj` only.** Never run `git commit/add/branch/checkout/reset/rebase/stash/merge/push`. Read-only `git status`/`log`/`diff` is fine. Commit each task with `jj commit -m "..."`. **No `Co-Authored-By` and no tooling trailers of any kind.**
 - Conventional-commit prefixes: `feat(scope):`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`.
-- **Build/test:** `dotnet build Freista.slnx` and `dotnet test Freista.slnx`. The test projects use Microsoft.Testing.Platform — `dotnet test --nologo` FAILS with `Unknown option '--nologo'`. Never pass `--nologo`.
+- **Build/test:** `dotnet build Raun.slnx` and `dotnet test Raun.slnx`. The test projects use Microsoft.Testing.Platform — `dotnet test --nologo` FAILS with `Unknown option '--nologo'`. Never pass `--nologo`.
 - **Baseline: 262 tests, all passing, zero warnings.** Every task must end green; the count only grows.
 - **TDD:** behavioural tests are written and seen to fail before the implementation in the same task.
 - **Never green for a not-taken branch.** `StepStatus.NotTaken` is never mapped to `Passed`/`PassedTestNodeStateProperty`.
-- **New diagnostics must be registered** in `src/Freista.Generator/AnalyzerReleases.Unshipped.md` or the analyzer release-tracking analyzer fails the build.
+- **New diagnostics must be registered** in `src/Raun.Generator/AnalyzerReleases.Unshipped.md` or the analyzer release-tracking analyzer fails the build.
 - **Non-goals (do not build):** loops (`for`/`foreach`/`while`/`do`), `switch`, `try`/`catch`, `goto`, HTML-report decision/merge diamonds, a runnable-source execution model.
 
 ## Design decisions resolved beyond the spec
@@ -32,26 +32,26 @@ Two points the spec leaves implicit; both are settled here and must be implement
 
 | File | Change |
 |---|---|
-| `src/Freista/Model/Guard.cs` | **new** — `readonly record struct Guard(int ConditionIndex, bool WhenValue)` |
-| `src/Freista/Model/StepStatus.cs` | add `NotTaken` |
-| `src/Freista/Model/ScenarioNode.cs` | add `Guards`, `MergeSources`, `IsSynthetic`, `EvaluateCondition` |
-| `src/Freista/Model/ScenarioDefinition.cs` | `Validate()` invariants for guards + merges; cycle walk covers merge sources |
-| `src/Freista/Scheduling/ScenarioScheduler.cs` | guard resolution, merge resolution, `NotTaken` propagation, `ApplySkipAsync` → `ApplyTerminalAsync` |
-| `src/Freista.Generator/Lowering/Ir.cs` | `ParsedStep.Guards`/`MergeSources`/`IsSynthetic`/`ConditionCoercionType` |
-| `src/Freista.Generator/Lowering/Binding.cs` | `FromAssignment` accepts a bare `IdentifierNameSyntax` (re-assignment inside an arm) |
-| `src/Freista.Generator/Lowering/ScenarioParser.cs` | `if`/`else` walk, guard stack, scoped definition map, phi/pass-through insertion |
-| `src/Freista.Generator/Emit/ScenarioEmitter.cs` | emit the four new node members (only when non-default, so existing snapshots are byte-identical) |
-| `src/Freista.Generator/Analysis/Descriptors.cs` | narrow FRST003; add FRST011, FRST012 |
-| `src/Freista.Generator/Analysis/ScenarioAnalyzer.cs` | walk `if`, report FRST011/FRST012 |
-| `src/Freista.Generator/AnalyzerReleases.Unshipped.md` | register FRST011/FRST012, reword FRST003 |
-| `src/Freista.Mtp/FreistaDiscoverer.cs` | skip synthetic nodes |
-| `src/Freista.Mtp/ScenarioStepNumbering.cs` | skip synthetic nodes when numbering |
-| `src/Freista.Mtp/MtpReportSink.cs` | skip synthetic nodes; map `NotTaken` |
-| `src/Freista.Mtp/HtmlReport/HtmlReportModelBuilder.cs` | `StatusText` handles `NotTaken` |
-| `test/Freista.Test/ModelTests.cs`, `SchedulerTests.cs` | new invariant + scheduler tests |
-| `test/Freista.Generator.Test/ConditionalLoweringTests.cs` | **new** |
-| `test/Freista.Generator.Test/SampleSources.cs`, `AnalyzerTests.cs`, `GeneratorSnapshotTests.cs` | conditional DSL + scenarios, FRST003/011/012, new snapshot |
-| `test/Freista.Mtp.Test/FreistaDiscovererTests.cs`, `ScenarioStepNumberingTests.cs`, `MtpReportSinkTests.cs`, `RunLoopTests.cs` | synthetic exclusion + `NotTaken` mapping + end-to-end |
+| `src/Raun/Model/Guard.cs` | **new** — `readonly record struct Guard(int ConditionIndex, bool WhenValue)` |
+| `src/Raun/Model/StepStatus.cs` | add `NotTaken` |
+| `src/Raun/Model/ScenarioNode.cs` | add `Guards`, `MergeSources`, `IsSynthetic`, `EvaluateCondition` |
+| `src/Raun/Model/ScenarioDefinition.cs` | `Validate()` invariants for guards + merges; cycle walk covers merge sources |
+| `src/Raun/Scheduling/ScenarioScheduler.cs` | guard resolution, merge resolution, `NotTaken` propagation, `ApplySkipAsync` → `ApplyTerminalAsync` |
+| `src/Raun.Generator/Lowering/Ir.cs` | `ParsedStep.Guards`/`MergeSources`/`IsSynthetic`/`ConditionCoercionType` |
+| `src/Raun.Generator/Lowering/Binding.cs` | `FromAssignment` accepts a bare `IdentifierNameSyntax` (re-assignment inside an arm) |
+| `src/Raun.Generator/Lowering/ScenarioParser.cs` | `if`/`else` walk, guard stack, scoped definition map, phi/pass-through insertion |
+| `src/Raun.Generator/Emit/ScenarioEmitter.cs` | emit the four new node members (only when non-default, so existing snapshots are byte-identical) |
+| `src/Raun.Generator/Analysis/Descriptors.cs` | narrow RAUN003; add RAUN011, RAUN012 |
+| `src/Raun.Generator/Analysis/ScenarioAnalyzer.cs` | walk `if`, report RAUN011/RAUN012 |
+| `src/Raun.Generator/AnalyzerReleases.Unshipped.md` | register RAUN011/RAUN012, reword RAUN003 |
+| `src/Raun.Mtp/RaunDiscoverer.cs` | skip synthetic nodes |
+| `src/Raun.Mtp/ScenarioStepNumbering.cs` | skip synthetic nodes when numbering |
+| `src/Raun.Mtp/MtpReportSink.cs` | skip synthetic nodes; map `NotTaken` |
+| `src/Raun.Mtp/HtmlReport/HtmlReportModelBuilder.cs` | `StatusText` handles `NotTaken` |
+| `test/Raun.Test/ModelTests.cs`, `SchedulerTests.cs` | new invariant + scheduler tests |
+| `test/Raun.Generator.Test/ConditionalLoweringTests.cs` | **new** |
+| `test/Raun.Generator.Test/SampleSources.cs`, `AnalyzerTests.cs`, `GeneratorSnapshotTests.cs` | conditional DSL + scenarios, RAUN003/011/012, new snapshot |
+| `test/Raun.Mtp.Test/RaunDiscovererTests.cs`, `ScenarioStepNumberingTests.cs`, `MtpReportSinkTests.cs`, `RunLoopTests.cs` | synthetic exclusion + `NotTaken` mapping + end-to-end |
 | `samples/AppointmentTests/AppointmentDsl.cs`, `Scenarios.cs` | a conditional scenario (also the spike target) |
 | `README.md` | "Supported scenario subset (v1)" |
 
@@ -60,21 +60,21 @@ Two points the spec leaves implicit; both are settled here and must be implement
 ### Task 1: Domain model — Guard, merge sources, IsSynthetic, NotTaken, Validate
 
 **Files:**
-- Create: `src/Freista/Model/Guard.cs`
-- Modify: `src/Freista/Model/StepStatus.cs`, `src/Freista/Model/ScenarioNode.cs`, `src/Freista/Model/ScenarioDefinition.cs`
-- Test: `test/Freista.Test/ModelTests.cs`
+- Create: `src/Raun/Model/Guard.cs`
+- Modify: `src/Raun/Model/StepStatus.cs`, `src/Raun/Model/ScenarioNode.cs`, `src/Raun/Model/ScenarioDefinition.cs`
+- Test: `test/Raun.Test/ModelTests.cs`
 
 **Interfaces:**
 - Consumes: nothing (first task).
 - Produces:
-  - `public readonly record struct Guard(int ConditionIndex, bool WhenValue)` in `Freista.Model`.
+  - `public readonly record struct Guard(int ConditionIndex, bool WhenValue)` in `Raun.Model`.
   - `ScenarioNode.Guards` → `IReadOnlyList<Guard>` (default `[]`).
   - `ScenarioNode.MergeSources` → `IReadOnlyList<int>` (default `[]`); non-empty marks a merge/pass-through node.
   - `ScenarioNode.IsSynthetic` → `bool` (default `false`).
   - `ScenarioNode.EvaluateCondition` → `Func<object?, bool>?` (default `null`).
   - `StepStatus.NotTaken` (appended last, after `Skipped`).
 
-- [ ] **Step 1: Write the failing tests** — append to `test/Freista.Test/ModelTests.cs`. Note the existing private `Node`/`Def` helpers stay as they are; these tests build nodes inline where they need the new members.
+- [ ] **Step 1: Write the failing tests** — append to `test/Raun.Test/ModelTests.cs`. Note the existing private `Node`/`Def` helpers stay as they are; these tests build nodes inline where they need the new members.
 
 ```csharp
     private static ScenarioNode Cond(int index, params int[] dependsOn) => new()
@@ -191,13 +191,13 @@ Two points the spec leaves implicit; both are settled here and must be implement
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `dotnet test test/Freista.Test/Freista.Test.csproj --filter "FullyQualifiedName~ModelTests"`
+Run: `dotnet test test/Raun.Test/Raun.Test.csproj --filter "FullyQualifiedName~ModelTests"`
 Expected: FAIL — compile errors, `Guard` / `Guards` / `MergeSources` / `IsSynthetic` / `EvaluateCondition` do not exist.
 
-- [ ] **Step 3: Create `src/Freista/Model/Guard.cs`**
+- [ ] **Step 3: Create `src/Raun/Model/Guard.cs`**
 
 ```csharp
-namespace Freista.Model;
+namespace Raun.Model;
 
 /// <summary>
 /// A branch condition a node is gated on: the node runs only when the node at
@@ -208,7 +208,7 @@ namespace Freista.Model;
 public readonly record struct Guard(int ConditionIndex, bool WhenValue);
 ```
 
-- [ ] **Step 4: Add `NotTaken` to `src/Freista/Model/StepStatus.cs`** (append after `Skipped`, keeping existing member order so no numeric value shifts)
+- [ ] **Step 4: Add `NotTaken` to `src/Raun/Model/StepStatus.cs`** (append after `Skipped`, keeping existing member order so no numeric value shifts)
 
 ```csharp
     /// <summary>Not run because the branch it belongs to was not chosen. Distinct from
@@ -217,7 +217,7 @@ public readonly record struct Guard(int ConditionIndex, bool WhenValue);
     NotTaken,
 ```
 
-- [ ] **Step 5: Add the four members to `src/Freista/Model/ScenarioNode.cs`** (after `GroupId`, before `Invoke`)
+- [ ] **Step 5: Add the four members to `src/Raun/Model/ScenarioNode.cs`** (after `GroupId`, before `Invoke`)
 
 ```csharp
     /// <summary>Branch conditions gating this node; ALL must hold for it to run. Empty for an
@@ -245,7 +245,7 @@ public readonly record struct Guard(int ConditionIndex, bool WhenValue);
     public Func<object?, bool>? EvaluateCondition { get; init; }
 ```
 
-- [ ] **Step 6: Extend `Validate()` in `src/Freista/Model/ScenarioDefinition.cs`.** Inside the existing `for` loop over nodes, after the `DependsOn` checks, add the guard and merge checks; then make the cycle walk traverse merge sources too.
+- [ ] **Step 6: Extend `Validate()` in `src/Raun/Model/ScenarioDefinition.cs`.** Inside the existing `for` loop over nodes, after the `DependsOn` checks, add the guard and merge checks; then make the cycle walk traverse merge sources too.
 
 ```csharp
             foreach (var guard in node.Guards)
@@ -339,16 +339,16 @@ In `HasCycle`, walk merge sources as well as dependencies:
     }
 ```
 
-(Add `using System.Linq;` if the file does not already have implicit usings covering it — `Freista.csproj` uses implicit usings, so no change is expected.)
+(Add `using System.Linq;` if the file does not already have implicit usings covering it — `Raun.csproj` uses implicit usings, so no change is expected.)
 
 - [ ] **Step 7: Run the tests to verify they pass**
 
-Run: `dotnet test test/Freista.Test/Freista.Test.csproj --filter "FullyQualifiedName~ModelTests"`
+Run: `dotnet test test/Raun.Test/Raun.Test.csproj --filter "FullyQualifiedName~ModelTests"`
 Expected: PASS (all pre-existing ModelTests plus the 7 new ones).
 
 - [ ] **Step 8: Build the whole solution**
 
-Run: `dotnet build Freista.slnx`
+Run: `dotnet build Raun.slnx`
 Expected: 0 warnings, 0 errors. `MtpReportSink.MapState` and `HtmlReportModelBuilder.StatusText` still compile because both switch on `_ =>` / throw for unknown values — `NotTaken` is handled in Task 5.
 
 - [ ] **Step 9: Commit**
@@ -362,8 +362,8 @@ jj commit -m "feat(model): guards, merge sources, IsSynthetic, and StepStatus.No
 ### Task 2: Scheduler — guard resolution, merge readiness, NotTaken propagation
 
 **Files:**
-- Modify: `src/Freista/Scheduling/ScenarioScheduler.cs` (two-phase loop at lines 66–144; `ApplySkipAsync` at line 188)
-- Test: `test/Freista.Test/SchedulerTests.cs`
+- Modify: `src/Raun/Scheduling/ScenarioScheduler.cs` (two-phase loop at lines 66–144; `ApplySkipAsync` at line 188)
+- Test: `test/Raun.Test/SchedulerTests.cs`
 
 **Interfaces:**
 - Consumes: `Guard`, `ScenarioNode.Guards`/`MergeSources`/`EvaluateCondition`, `StepStatus.NotTaken` (Task 1).
@@ -383,7 +383,7 @@ Rules to implement (from the spec):
 
 `NotTaken` gets zero duration in simulated time, exactly like `Skipped`.
 
-- [ ] **Step 1: Write the failing tests** — append to `test/Freista.Test/SchedulerTests.cs`. Add these helpers next to the existing `Node`/`Def`/`Pass`:
+- [ ] **Step 1: Write the failing tests** — append to `test/Raun.Test/SchedulerTests.cs`. Add these helpers next to the existing `Node`/`Def`/`Pass`:
 
 ```csharp
     private static ScenarioNode Cond(int index, bool value, int[]? dependsOn = null) => new()
@@ -637,7 +637,7 @@ Rules to implement (from the spec):
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `dotnet test test/Freista.Test/Freista.Test.csproj --filter "FullyQualifiedName~SchedulerTests"`
+Run: `dotnet test test/Raun.Test/Raun.Test.csproj --filter "FullyQualifiedName~SchedulerTests"`
 Expected: FAIL — guarded nodes never launch (their guards are ignored, so both arms run) and merge nodes stall the scheduler ("Scenario scheduler stalled with unresolved steps").
 
 - [ ] **Step 3: Rewrite phase 1 (skip/guard/merge resolution)** in `RunAsync`. Replace the body of the `foreach (var i in pending.ToArray())` loop under comment `// 1. Resolve skips:` with:
@@ -913,17 +913,17 @@ Finally, replace the two remaining `ApplySkipAsync(...)` call sites (the cancell
 
 - [ ] **Step 6: Run the scheduler tests**
 
-Run: `dotnet test test/Freista.Test/Freista.Test.csproj --filter "FullyQualifiedName~SchedulerTests"`
+Run: `dotnet test test/Raun.Test/Raun.Test.csproj --filter "FullyQualifiedName~SchedulerTests"`
 Expected: PASS — all pre-existing tests plus the 11 new ones.
 
 - [ ] **Step 7: Run the full runtime test project** (simulated-time tests share the offset bookkeeping just touched)
 
-Run: `dotnet test test/Freista.Test/Freista.Test.csproj`
+Run: `dotnet test test/Raun.Test/Raun.Test.csproj`
 Expected: PASS.
 
 - [ ] **Step 8: Full solution green**
 
-Run: `dotnet build Freista.slnx` then `dotnet test Freista.slnx`
+Run: `dotnet build Raun.slnx` then `dotnet test Raun.slnx`
 Expected: 0 warnings; all tests pass.
 
 - [ ] **Step 9: Commit**
@@ -937,9 +937,9 @@ jj commit -m "feat(scheduler): guard resolution, merge nodes, and NotTaken propa
 ### Task 3: Generator lowering — guard stack, definition map, phi insertion, emit
 
 **Files:**
-- Modify: `src/Freista.Generator/Lowering/Ir.cs`, `src/Freista.Generator/Lowering/Binding.cs`, `src/Freista.Generator/Lowering/ScenarioParser.cs`, `src/Freista.Generator/Emit/ScenarioEmitter.cs`
-- Modify: `test/Freista.Generator.Test/SampleSources.cs`
-- Create: `test/Freista.Generator.Test/ConditionalLoweringTests.cs`
+- Modify: `src/Raun.Generator/Lowering/Ir.cs`, `src/Raun.Generator/Lowering/Binding.cs`, `src/Raun.Generator/Lowering/ScenarioParser.cs`, `src/Raun.Generator/Emit/ScenarioEmitter.cs`
+- Modify: `test/Raun.Generator.Test/SampleSources.cs`
+- Create: `test/Raun.Generator.Test/ConditionalLoweringTests.cs`
 
 **Interfaces:**
 - Consumes: `Guard`, `ScenarioNode.Guards`/`MergeSources`/`IsSynthetic`/`EvaluateCondition` (Task 1); scheduler semantics (Task 2).
@@ -960,7 +960,7 @@ Lowering rules:
 | defined in one arm only, exists in parent | merge node over the arm definition and a **pass-through** node (synthetic, guarded on the opposite value, `MergeSources = [parentDef]`) |
 | defined in one arm only, new local | drop (C# scoping already forbids the use) |
 
-- [ ] **Step 1: Add the conditional DSL and scenarios to `test/Freista.Generator.Test/SampleSources.cs`**
+- [ ] **Step 1: Add the conditional DSL and scenarios to `test/Raun.Generator.Test/SampleSources.cs`**
 
 ```csharp
     // A DSL with condition steps: an awaited phase-marker call whose result is usable as a C#
@@ -969,7 +969,7 @@ Lowering rules:
     public const string ConditionalDsl =
         """
         using System.Threading.Tasks;
-        using Freista;
+        using Raun;
 
         namespace CondDemo;
 
@@ -1158,13 +1158,13 @@ Fix `BareIfScenario` before running anything — it must be a compiling scenario
         """;
 ```
 
-- [ ] **Step 2: Write the failing tests** — create `test/Freista.Generator.Test/ConditionalLoweringTests.cs`
+- [ ] **Step 2: Write the failing tests** — create `test/Raun.Generator.Test/ConditionalLoweringTests.cs`
 
 ```csharp
-using Freista.Model;
+using Raun.Model;
 using Xunit;
 
-namespace Freista.Generator.Test;
+namespace Raun.Generator.Test;
 
 /// <summary>
 /// `if`/`else` lowers into guarded nodes plus synthetic merge (phi) nodes. `DependsOn` keeps its
@@ -1325,14 +1325,14 @@ Replace the placeholder inside `Operator_true_condition_type_is_coerced_by_gener
 
 - [ ] **Step 3: Run the new tests to verify they fail**
 
-Run: `dotnet test test/Freista.Generator.Test/Freista.Generator.Test.csproj --filter "FullyQualifiedName~ConditionalLoweringTests"`
+Run: `dotnet test test/Raun.Generator.Test/Raun.Generator.Test.csproj --filter "FullyQualifiedName~ConditionalLoweringTests"`
 Expected: FAIL — `ScenarioParser.ParseStatement` returns `false` for `IfStatementSyntax`, so no scenario is emitted and `Assert.Single(result.Definitions())` throws.
 
-- [ ] **Step 4: Extend the IR** in `src/Freista.Generator/Lowering/Ir.cs`
+- [ ] **Step 4: Extend the IR** in `src/Raun.Generator/Lowering/Ir.cs`
 
 ```csharp
 /// <summary>A lowered branch guard: the node runs only when node <see cref="ConditionIndex"/> passed
-/// and its condition evaluates to <see cref="WhenValue"/>. Mirrors <c>Freista.Model.Guard</c>.</summary>
+/// and its condition evaluates to <see cref="WhenValue"/>. Mirrors <c>Raun.Model.Guard</c>.</summary>
 internal readonly record struct ParsedGuard(int ConditionIndex, bool WhenValue);
 ```
 
@@ -1354,7 +1354,7 @@ and on `ParsedStep`:
     public string? ConditionCoercionType { get; init; }
 ```
 
-- [ ] **Step 5: Accept re-assignment in `src/Freista.Generator/Lowering/Binding.cs`.** Add, at the top of `FromAssignment` (before the `DeclarationExpressionSyntax` case):
+- [ ] **Step 5: Accept re-assignment in `src/Raun.Generator/Lowering/Binding.cs`.** Add, at the top of `FromAssignment` (before the `DeclarationExpressionSyntax` case):
 
 ```csharp
         // appointment = await When.X(...)  — re-assignment of an existing step-output local. This is
@@ -1366,7 +1366,7 @@ and on `ParsedStep`:
         }
 ```
 
-- [ ] **Step 6: Teach `ScenarioParser` the `if` walk.** In `src/Freista.Generator/Lowering/ScenarioParser.cs`:
+- [ ] **Step 6: Teach `ScenarioParser` the `if` walk.** In `src/Raun.Generator/Lowering/ScenarioParser.cs`:
 
 Add a guard-stack field next to `_prevFrontier`:
 
@@ -1417,13 +1417,13 @@ Add the `if` lowering. `_steps` is append-only and `_nextIndex` monotonic, so an
     {
         if (statement.Condition is not AwaitExpressionSyntax { Expression: InvocationExpressionSyntax call })
         {
-            return false; // FRST011
+            return false; // RAUN011
         }
 
         var condition = BuildStep(call, groupId: null, _prevFrontier);
         if (condition is null || !condition.HasResult)
         {
-            return false; // FRST011: a condition must produce a value
+            return false; // RAUN011: a condition must produce a value
         }
 
         // The condition node carries the coercion the scheduler calls; do it by replacing the step in
@@ -1637,7 +1637,7 @@ Finally, have `BuildStep` stamp the current guard stack onto every step it creat
             Guards = [.. _guards],
 ```
 
-- [ ] **Step 7: Emit the new members** in `src/Freista.Generator/Emit/ScenarioEmitter.cs`. In `BuildNode`, after the `Set("DependsOn", ...)` line but before `Set("Invoke", ...)`, add conditional members so a scenario with no conditionals emits byte-identical output (existing snapshots must not move):
+- [ ] **Step 7: Emit the new members** in `src/Raun.Generator/Emit/ScenarioEmitter.cs`. In `BuildNode`, after the `Set("DependsOn", ...)` line but before `Set("Invoke", ...)`, add conditional members so a scenario with no conditionals emits byte-identical output (existing snapshots must not move):
 
 ```csharp
         if (step.Guards.Count > 0)
@@ -1686,10 +1686,10 @@ Finally, have `BuildStep` stamp the current guard stack onto every step it creat
 Add the guard-array helper next to `IntArray`:
 
 ```csharp
-    /// <summary>Builds <c>new global::Freista.Model.Guard[] { new(i, true), … }</c>.</summary>
+    /// <summary>Builds <c>new global::Raun.Model.Guard[] { new(i, true), … }</c>.</summary>
     private static ArrayCreationExpressionSyntax GuardArray(IEnumerable<ParsedGuard> guards)
         => ArrayCreationExpression(
-            ArrayType(ParseTypeName("global::Freista.Model.Guard"))
+            ArrayType(ParseTypeName("global::Raun.Model.Guard"))
                 .WithRankSpecifiers(SingletonList(
                     ArrayRankSpecifier(SingletonSeparatedList<ExpressionSyntax>(
                         OmittedArraySizeExpression())))))
@@ -1697,23 +1697,23 @@ Add the guard-array helper next to `IntArray`:
                 SyntaxKind.ArrayInitializerExpression,
                 SeparatedList<ExpressionSyntax>(guards.Select(g =>
                     (ExpressionSyntax)ParseExpression(
-                        $"new global::Freista.Model.Guard({g.ConditionIndex}, {(g.WhenValue ? "true" : "false")})")))));
+                        $"new global::Raun.Model.Guard({g.ConditionIndex}, {(g.WhenValue ? "true" : "false")})")))));
 ```
 
 - [ ] **Step 8: Run the conditional lowering tests**
 
-Run: `dotnet test test/Freista.Generator.Test/Freista.Generator.Test.csproj --filter "FullyQualifiedName~ConditionalLoweringTests"`
+Run: `dotnet test test/Raun.Generator.Test/Raun.Generator.Test.csproj --filter "FullyQualifiedName~ConditionalLoweringTests"`
 Expected: PASS. If a node-index assertion is off by one, print the actual graph (`def.Nodes.Select(n => $"{n.Index} {n.OperationName} guards={n.Guards.Count} merge=[{string.Join(",", n.MergeSources)}]")`) and correct the *test's* expected indices only after confirming the shape matches the spec's worked example — do not weaken the guard/merge assertions.
 
 - [ ] **Step 9: Run the whole generator test project — existing snapshots must not move**
 
-Run: `dotnet test test/Freista.Generator.Test/Freista.Generator.Test.csproj`
+Run: `dotnet test test/Raun.Generator.Test/Raun.Generator.Test.csproj`
 Expected: PASS, including all `GeneratorSnapshotTests` with their current `.verified.cs` files (the new node members are emitted only when non-default). If a snapshot moved, the conditional emission in Step 7 is wrong — fix the emitter, do not accept the snapshot.
 
 - [ ] **Step 10: Full solution green**
 
-Run: `dotnet build Freista.slnx` then `dotnet test Freista.slnx`
-Expected: 0 warnings; all tests pass. `AnalyzerTests.FRST003_control_flow` still passes — the analyzer is untouched until Task 4.
+Run: `dotnet build Raun.slnx` then `dotnet test Raun.slnx`
+Expected: 0 warnings; all tests pass. `AnalyzerTests.RAUN003_control_flow` still passes — the analyzer is untouched until Task 4.
 
 - [ ] **Step 11: Commit**
 
@@ -1723,21 +1723,21 @@ jj commit -m "feat(generator): lower if/else into guarded nodes and phi merges"
 
 ---
 
-### Task 4: Analyzer — narrow FRST003, add FRST011 and FRST012
+### Task 4: Analyzer — narrow RAUN003, add RAUN011 and RAUN012
 
 **Files:**
-- Modify: `src/Freista.Generator/Analysis/Descriptors.cs`, `src/Freista.Generator/Analysis/ScenarioAnalyzer.cs`, `src/Freista.Generator/AnalyzerReleases.Unshipped.md`
-- Test: `test/Freista.Generator.Test/AnalyzerTests.cs`
+- Modify: `src/Raun.Generator/Analysis/Descriptors.cs`, `src/Raun.Generator/Analysis/ScenarioAnalyzer.cs`, `src/Raun.Generator/AnalyzerReleases.Unshipped.md`
+- Test: `test/Raun.Generator.Test/AnalyzerTests.cs`
 
 **Interfaces:**
 - Consumes: the supported `if` shape from Task 3.
-- Produces: `Descriptors.UnsupportedLoop` (FRST003, reworded), `Descriptors.InvalidCondition` (FRST011), `Descriptors.UnmergeableLocal` (FRST012), both added to `SupportedDiagnostics`.
+- Produces: `Descriptors.UnsupportedLoop` (RAUN003, reworded), `Descriptors.InvalidCondition` (RAUN011), `Descriptors.UnmergeableLocal` (RAUN012), both added to `SupportedDiagnostics`.
 
-- [ ] **Step 1: Write the failing tests.** In `test/Freista.Generator.Test/AnalyzerTests.cs`, replace `FRST003_control_flow` and append the rest:
+- [ ] **Step 1: Write the failing tests.** In `test/Raun.Generator.Test/AnalyzerTests.cs`, replace `RAUN003_control_flow` and append the rest:
 
 ```csharp
     [Fact]
-    public async Task FRST003_loops_are_still_rejected()
+    public async Task RAUN003_loops_are_still_rejected()
     {
         var diagnostics = await Analyze(
             """
@@ -1750,11 +1750,11 @@ jj commit -m "feat(generator): lower if/else into guarded nodes and phi merges"
             }
             """);
 
-        AssertHas(diagnostics, "FRST003");
+        AssertHas(diagnostics, "RAUN003");
     }
 
     [Fact]
-    public async Task FRST003_while_switch_and_try_are_still_rejected()
+    public async Task RAUN003_while_switch_and_try_are_still_rejected()
     {
         AssertHas(await Analyze(
             """
@@ -1765,7 +1765,7 @@ jj commit -m "feat(generator): lower if/else into guarded nodes and phi merges"
                     while (true) { await Given.AvailableSlot(); }
                 }
             }
-            """), "FRST003");
+            """), "RAUN003");
 
         AssertHas(await Analyze(
             """
@@ -1776,11 +1776,11 @@ jj commit -m "feat(generator): lower if/else into guarded nodes and phi merges"
                     try { await Given.AvailableSlot(); } catch { }
                 }
             }
-            """), "FRST003");
+            """), "RAUN003");
     }
 
     [Fact]
-    public async Task FRST003_message_points_at_putting_the_loop_inside_a_step()
+    public async Task RAUN003_message_points_at_putting_the_loop_inside_a_step()
     {
         var diagnostics = await Analyze(
             """
@@ -1793,26 +1793,26 @@ jj commit -m "feat(generator): lower if/else into guarded nodes and phi merges"
             }
             """);
 
-        var loop = Assert.Single(diagnostics, d => d.Id == "FRST003");
+        var loop = Assert.Single(diagnostics, d => d.Id == "RAUN003");
         Assert.Contains("inside a step", loop.GetMessage(), StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task FRST003_no_longer_fires_on_a_supported_if()
+    public async Task RAUN003_no_longer_fires_on_a_supported_if()
     {
         var diagnostics = await GeneratorHarness.AnalyzeAsync(
             SampleSources.ConditionalDsl + SampleSources.IfElseScenario);
 
-        Assert.DoesNotContain(diagnostics, d => d.Id == "FRST003");
+        Assert.DoesNotContain(diagnostics, d => d.Id == "RAUN003");
     }
 
     [Fact]
-    public void FRST011_and_FRST012_are_supported_diagnostics()
+    public void RAUN011_and_RAUN012_are_supported_diagnostics()
     {
-        var analyzer = new Freista.Generator.Analysis.ScenarioAnalyzer();
+        var analyzer = new Raun.Generator.Analysis.ScenarioAnalyzer();
 
-        Assert.Contains(analyzer.SupportedDiagnostics, d => d.Id == "FRST011");
-        Assert.Contains(analyzer.SupportedDiagnostics, d => d.Id == "FRST012");
+        Assert.Contains(analyzer.SupportedDiagnostics, d => d.Id == "RAUN011");
+        Assert.Contains(analyzer.SupportedDiagnostics, d => d.Id == "RAUN012");
     }
 
     [Fact]
@@ -1831,7 +1831,7 @@ jj commit -m "feat(generator): lower if/else into guarded nodes and phi merges"
     }
 
     [Fact]
-    public async Task FRST011_bare_expression_condition()
+    public async Task RAUN011_bare_expression_condition()
     {
         var source = SampleSources.ConditionalDsl +
             """
@@ -1847,11 +1847,11 @@ jj commit -m "feat(generator): lower if/else into guarded nodes and phi merges"
             }
             """;
 
-        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "FRST011");
+        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "RAUN011");
     }
 
     [Fact]
-    public async Task FRST011_awaited_non_dsl_condition()
+    public async Task RAUN011_awaited_non_dsl_condition()
     {
         var source = SampleSources.ConditionalDsl +
             """
@@ -1867,11 +1867,11 @@ jj commit -m "feat(generator): lower if/else into guarded nodes and phi merges"
             }
             """;
 
-        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "FRST011");
+        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "RAUN011");
     }
 
     [Fact]
-    public async Task FRST011_condition_result_is_not_usable_as_a_condition()
+    public async Task RAUN011_condition_result_is_not_usable_as_a_condition()
     {
         // A step returning a resource-ish value has no conversion to bool and no operator true.
         var source = SampleSources.ConditionalDsl +
@@ -1887,11 +1887,11 @@ jj commit -m "feat(generator): lower if/else into guarded nodes and phi merges"
             }
             """;
 
-        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "FRST011");
+        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "RAUN011");
     }
 
     [Fact]
-    public async Task FRST012_conditional_assignment_to_a_non_step_local()
+    public async Task RAUN012_conditional_assignment_to_a_non_step_local()
     {
         // `appointment` is initialized by a non-step expression, so the merge has no parent NODE to
         // merge against — only an initializer.
@@ -1912,11 +1912,11 @@ jj commit -m "feat(generator): lower if/else into guarded nodes and phi merges"
             }
             """;
 
-        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "FRST012");
+        AssertHas(await GeneratorHarness.AnalyzeAsync(source), "RAUN012");
     }
 
     [Fact]
-    public async Task FRST012_does_not_fire_on_reassignment_within_one_arm()
+    public async Task RAUN012_does_not_fire_on_reassignment_within_one_arm()
     {
         // Two definitions inside the SAME arm are fine — the definition map keeps the last one.
         var source = SampleSources.ConditionalDsl +
@@ -1939,11 +1939,11 @@ jj commit -m "feat(generator): lower if/else into guarded nodes and phi merges"
             }
             """;
 
-        Assert.DoesNotContain(await GeneratorHarness.AnalyzeAsync(source), d => d.Id == "FRST012");
+        Assert.DoesNotContain(await GeneratorHarness.AnalyzeAsync(source), d => d.Id == "RAUN012");
     }
 ```
 
-In `FRST011_condition_result_is_not_usable_as_a_condition`, drop the placeholder call — the body only needs the bad `if`:
+In `RAUN011_condition_result_is_not_usable_as_a_condition`, drop the placeholder call — the body only needs the bad `if`:
 
 ```csharp
                     if (await Given.PatientExists("Jane"))
@@ -1960,14 +1960,14 @@ Replace that whole arm with a simpler legal statement instead — `await When.No
 
 - [ ] **Step 2: Run the analyzer tests to verify they fail**
 
-Run: `dotnet test test/Freista.Generator.Test/Freista.Generator.Test.csproj --filter "FullyQualifiedName~AnalyzerTests"`
-Expected: FAIL — FRST003 still fires on every `if`; FRST011/FRST012 do not exist.
+Run: `dotnet test test/Raun.Generator.Test/Raun.Generator.Test.csproj --filter "FullyQualifiedName~AnalyzerTests"`
+Expected: FAIL — RAUN003 still fires on every `if`; RAUN011/RAUN012 do not exist.
 
-- [ ] **Step 3: Update `Descriptors.cs`.** Reword FRST003 and add the two new descriptors:
+- [ ] **Step 3: Update `Descriptors.cs`.** Reword RAUN003 and add the two new descriptors:
 
 ```csharp
     public static readonly DiagnosticDescriptor UnsupportedControlFlow = new(
-        "FRST003",
+        "RAUN003",
         "Unsupported control flow in scenario",
         "Loops and other control flow are not supported in scenario bodies — put the loop, retry, or polling inside a step. Only if/else (on an awaited phase-marker condition) shapes the graph",
         Category,
@@ -1977,15 +1977,15 @@ Expected: FAIL — FRST003 still fires on every `if`; FRST011/FRST012 do not exi
 
 ```csharp
     public static readonly DiagnosticDescriptor InvalidCondition = new(
-        "FRST011",
+        "RAUN011",
         "Scenario condition must be an awaited phase-marker call",
-        "An 'if' condition in a scenario must be an awaited phase-marker call (Given/When/Then, or any type implementing Freista.IPhase) whose result is usable as a C# condition (bool, an implicit conversion to bool, or 'operator true')",
+        "An 'if' condition in a scenario must be an awaited phase-marker call (Given/When/Then, or any type implementing Raun.IPhase) whose result is usable as a C# condition (bool, an implicit conversion to bool, or 'operator true')",
         Category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
     public static readonly DiagnosticDescriptor UnmergeableLocal = new(
-        "FRST012",
+        "RAUN012",
         "Conditionally assigned local has no step-produced definition",
         "'{0}' is assigned inside a branch but has no step-produced definition outside it, so there is nothing to merge against — give it a prior step output, or assign it in every branch",
         Category,
@@ -1993,18 +1993,18 @@ Expected: FAIL — FRST003 still fires on every `if`; FRST011/FRST012 do not exi
         isEnabledByDefault: true);
 ```
 
-- [ ] **Step 4: Register the rules** in `src/Freista.Generator/AnalyzerReleases.Unshipped.md` (release tracking is enforced at build time). Update the FRST003 note and append:
+- [ ] **Step 4: Register the rules** in `src/Raun.Generator/AnalyzerReleases.Unshipped.md` (release tracking is enforced at build time). Update the RAUN003 note and append:
 
 ```
-FRST003 | Freista.Usage | Error | Unsupported control flow in scenario (loops, switch, try, goto)
+RAUN003 | Raun.Usage | Error | Unsupported control flow in scenario (loops, switch, try, goto)
 ...
-FRST011 | Freista.Usage | Error | Scenario condition must be an awaited phase-marker call
-FRST012 | Freista.Usage | Error | Conditionally assigned local has no step-produced definition
+RAUN011 | Raun.Usage | Error | Scenario condition must be an awaited phase-marker call
+RAUN012 | Raun.Usage | Error | Conditionally assigned local has no step-produced definition
 ```
 
-(Keep the table's existing column order and alignment; FRST010's note text is unchanged.)
+(Keep the table's existing column order and alignment; RAUN010's note text is unchanged.)
 
-- [ ] **Step 5: Update `ScenarioAnalyzer.cs`.** Add both descriptors to `SupportedDiagnostics`, remove `IfStatementSyntax` from the FRST003 pattern list, and handle `if` and blocks:
+- [ ] **Step 5: Update `ScenarioAnalyzer.cs`.** Add both descriptors to `SupportedDiagnostics`, remove `IfStatementSyntax` from the RAUN003 pattern list, and handle `if` and blocks:
 
 ```csharp
             case BlockSyntax block:
@@ -2034,7 +2034,7 @@ FRST012 | Freista.Usage | Error | Conditionally assigned local has no step-produ
     /// <summary>
     /// An `if` is supported when its condition is an awaited phase-marker call whose result is usable
     /// as a C# condition. Each arm is analyzed with the same step-output set; an assignment inside an
-    /// arm to a local that is not already a step output is FRST012 (nothing to merge against).
+    /// arm to a local that is not already a step output is RAUN012 (nothing to merge against).
     /// </summary>
     private static void AnalyzeIf(
         SyntaxNodeAnalysisContext context,
@@ -2110,22 +2110,22 @@ FRST012 | Freista.Usage | Error | Conditionally assigned local has no step-produ
     }
 ```
 
-Note: the FRST012 loop must run **before** `AnalyzeStatement(context, arm, ...)` adds the arm's own declarations to `stepOutputs`, which is why it is written first above. Arms declaring new locals with `var x = await ...` still register through `AnalyzeLocalDeclaration`.
+Note: the RAUN012 loop must run **before** `AnalyzeStatement(context, arm, ...)` adds the arm's own declarations to `stepOutputs`, which is why it is written first above. Arms declaring new locals with `var x = await ...` still register through `AnalyzeLocalDeclaration`.
 
 - [ ] **Step 6: Run the analyzer tests**
 
-Run: `dotnet test test/Freista.Generator.Test/Freista.Generator.Test.csproj --filter "FullyQualifiedName~AnalyzerTests"`
+Run: `dotnet test test/Raun.Generator.Test/Raun.Generator.Test.csproj --filter "FullyQualifiedName~AnalyzerTests"`
 Expected: PASS.
 
 - [ ] **Step 7: Full solution green**
 
-Run: `dotnet build Freista.slnx` then `dotnet test Freista.slnx`
+Run: `dotnet build Raun.slnx` then `dotnet test Raun.slnx`
 Expected: 0 warnings (including no `RS2008`/release-tracking warning for the new rule ids); all tests pass.
 
 - [ ] **Step 8: Commit**
 
 ```bash
-jj commit -m "feat(analyzer): narrow FRST003 to loops; add FRST011 and FRST012 for conditionals"
+jj commit -m "feat(analyzer): narrow RAUN003 to loops; add RAUN011 and RAUN012 for conditionals"
 ```
 
 ---
@@ -2133,8 +2133,8 @@ jj commit -m "feat(analyzer): narrow FRST003 to loops; add FRST011 and FRST012 f
 ### Task 5: MTP wiring — exclude synthetics, map NotTaken, and run the reporting spike
 
 **Files:**
-- Modify: `src/Freista.Mtp/FreistaDiscoverer.cs`, `src/Freista.Mtp/ScenarioStepNumbering.cs`, `src/Freista.Mtp/MtpReportSink.cs`, `src/Freista.Mtp/HtmlReport/HtmlReportModelBuilder.cs`
-- Test: `test/Freista.Mtp.Test/FreistaDiscovererTests.cs`, `ScenarioStepNumberingTests.cs`, `MtpReportSinkTests.cs`, `RunLoopTests.cs`
+- Modify: `src/Raun.Mtp/RaunDiscoverer.cs`, `src/Raun.Mtp/ScenarioStepNumbering.cs`, `src/Raun.Mtp/MtpReportSink.cs`, `src/Raun.Mtp/HtmlReport/HtmlReportModelBuilder.cs`
+- Test: `test/Raun.Mtp.Test/RaunDiscovererTests.cs`, `ScenarioStepNumberingTests.cs`, `MtpReportSinkTests.cs`, `RunLoopTests.cs`
 
 **Interfaces:**
 - Consumes: `ScenarioNode.IsSynthetic`, `StepStatus.NotTaken` (Task 1); the scheduler's suppressed start callback for `NotTaken` (Task 2).
@@ -2149,7 +2149,7 @@ Option 2 is preferred but unverified; it may trip the run loop's accounting or t
 
 - [ ] **Step 1: Write the failing tests**
 
-`test/Freista.Mtp.Test/FreistaDiscovererTests.cs` — add a `synthetic` flag to the local `Node` helper (`bool synthetic = false` → `IsSynthetic = synthetic`) and:
+`test/Raun.Mtp.Test/RaunDiscovererTests.cs` — add a `synthetic` flag to the local `Node` helper (`bool synthetic = false` → `IsSynthetic = synthetic`) and:
 
 ```csharp
     [Fact]
@@ -2163,7 +2163,7 @@ Option 2 is preferred but unverified; it may trip the run loop's accounting or t
                 Node(2, "b", "step b"),
             ]);
 
-        var nodes = FreistaDiscoverer.BuildNodes(definition);
+        var nodes = RaunDiscoverer.BuildNodes(definition);
 
         Assert.Equal(2, nodes.Count);
         Assert.DoesNotContain(nodes, n => n.DisplayName.Contains("merge", StringComparison.Ordinal));
@@ -2180,14 +2180,14 @@ Option 2 is preferred but unverified; it may trip the run loop's accounting or t
                 Node(2, "b", "step b"),
             ]);
 
-        var nodes = FreistaDiscoverer.BuildNodes(definition);
+        var nodes = RaunDiscoverer.BuildNodes(definition);
 
         Assert.Equal("1. step a", nodes[0].DisplayName);
         Assert.Equal("2. step b", nodes[1].DisplayName);
     }
 ```
 
-`test/Freista.Mtp.Test/ScenarioStepNumberingTests.cs` — add `bool synthetic = false` to its `Node` helper too, and:
+`test/Raun.Mtp.Test/ScenarioStepNumberingTests.cs` — add `bool synthetic = false` to its `Node` helper too, and:
 
 ```csharp
     [Fact]
@@ -2212,7 +2212,7 @@ Option 2 is preferred but unverified; it may trip the run loop's accounting or t
     }
 ```
 
-`test/Freista.Mtp.Test/MtpReportSinkTests.cs` — add `bool synthetic = false` to its `Node` helper and:
+`test/Raun.Mtp.Test/MtpReportSinkTests.cs` — add `bool synthetic = false` to its `Node` helper and:
 
 ```csharp
     [Fact]
@@ -2256,7 +2256,7 @@ Option 2 is preferred but unverified; it may trip the run loop's accounting or t
 
 (Use whatever the existing tests in this file use to feed the sink — they call the sink's public `IRunEventSink` entry point; match their exact call shape rather than inventing one. If the existing tests construct `StepStarted`/`StepFinished` and call `sink.HandleAsync(...)`, do the same.)
 
-`test/Freista.Mtp.Test/RunLoopTests.cs` — an end-to-end pair, using the local `Node` helper extended with `Guard[]? guards = null`, `int[]? mergeSources = null`, `bool synthetic = false`, and `Func<object?, bool>? evaluate = null`:
+`test/Raun.Mtp.Test/RunLoopTests.cs` — an end-to-end pair, using the local `Node` helper extended with `Guard[]? guards = null`, `int[]? mergeSources = null`, `bool synthetic = false`, and `Func<object?, bool>? evaluate = null`:
 
 ```csharp
     [Fact]
@@ -2282,10 +2282,10 @@ Reuse this file's existing end-to-end run helper rather than adding `RunAndColle
 
 - [ ] **Step 2: Run the MTP tests to verify they fail**
 
-Run: `dotnet test test/Freista.Mtp.Test/Freista.Mtp.Test.csproj`
+Run: `dotnet test test/Raun.Mtp.Test/Raun.Mtp.Test.csproj`
 Expected: FAIL — synthetics are discovered and numbered; the sink publishes for them; `NotTaken` hits `MapState`'s `_ =>` arm and produces an `ErrorTestNodeStateProperty`.
 
-- [ ] **Step 3: Exclude synthetics from discovery** — in `src/Freista.Mtp/FreistaDiscoverer.cs`, `BuildNodes`:
+- [ ] **Step 3: Exclude synthetics from discovery** — in `src/Raun.Mtp/RaunDiscoverer.cs`, `BuildNodes`:
 
 ```csharp
         foreach (var step in definition.Nodes)
@@ -2301,7 +2301,7 @@ Expected: FAIL — synthetics are discovered and numbered; the sink publishes fo
         }
 ```
 
-- [ ] **Step 4: Skip synthetics when numbering** — in `src/Freista.Mtp/ScenarioStepNumbering.cs`, `Compute`, inside the `foreach`, before the `GroupId` branches:
+- [ ] **Step 4: Skip synthetics when numbering** — in `src/Raun.Mtp/ScenarioStepNumbering.cs`, `Compute`, inside the `foreach`, before the `GroupId` branches:
 
 ```csharp
             if (node.IsSynthetic)
@@ -2348,7 +2348,7 @@ Because the label of a synthetic reuses the *previous* top-level number, `Format
 
 Leave `MapState` otherwise unchanged; `NotTaken` never reaches it under option 2.
 
-- [ ] **Step 6: Handle `NotTaken` in the HTML report model** — `src/Freista.Mtp/HtmlReport/HtmlReportModelBuilder.cs`:
+- [ ] **Step 6: Handle `NotTaken` in the HTML report model** — `src/Raun.Mtp/HtmlReport/HtmlReportModelBuilder.cs`:
 
 ```csharp
             // NotTaken renders with the existing "skipped" styling; the distinction survives in the
@@ -2359,12 +2359,12 @@ Leave `MapState` otherwise unchanged; `NotTaken` never reaches it under option 2
 
 - [ ] **Step 7: Run the MTP tests**
 
-Run: `dotnet test test/Freista.Mtp.Test/Freista.Mtp.Test.csproj`
+Run: `dotnet test test/Raun.Mtp.Test/Raun.Mtp.Test.csproj`
 Expected: PASS. The `HtmlReportModelBuilderTests` verified snapshot must not move (no conditional scenario feeds it).
 
 - [ ] **Step 8: Run the spike against the sample.** This needs Task 6's sample scenario, so do it in this order: add ONLY the sample scenario + DSL steps from Task 6 Step 1 now (temporarily, uncommitted), run the spike, then decide.
 
-Run: `dotnet build Freista.slnx`
+Run: `dotnet build Raun.slnx`
 Run: `dotnet run --project samples/AppointmentTests/AppointmentTests.csproj`
 Expected (option 2 healthy): exit code 0; the untaken arm's step appears in neither the passed nor the failed tally, or appears as "not run"/"skipped"; no MTP warning or error about a node lacking a terminal state; the process exits promptly.
 
@@ -2387,7 +2387,7 @@ Expected: exit code 0, no error mentioning an un-updated or unknown test node.
 
 - [ ] **Step 11: Full solution green**
 
-Run: `dotnet build Freista.slnx` then `dotnet test Freista.slnx`
+Run: `dotnet build Raun.slnx` then `dotnet test Raun.slnx`
 Expected: 0 warnings; all tests pass.
 
 - [ ] **Step 12: Commit**
@@ -2402,8 +2402,8 @@ jj commit -m "feat(mtp): exclude synthetic merge nodes from discovery and map No
 
 **Files:**
 - Modify: `samples/AppointmentTests/AppointmentDsl.cs`, `samples/AppointmentTests/Scenarios.cs`
-- Modify: `test/Freista.Generator.Test/GeneratorSnapshotTests.cs`
-- Create: `test/Freista.Generator.Test/Snapshots/GeneratorSnapshotTests.Conditional_scenario#FreistaScenarios.g.verified.cs` (by accepting the received file)
+- Modify: `test/Raun.Generator.Test/GeneratorSnapshotTests.cs`
+- Create: `test/Raun.Generator.Test/Snapshots/GeneratorSnapshotTests.Conditional_scenario#RaunScenarios.g.verified.cs` (by accepting the received file)
 - Modify: `README.md`
 
 **Interfaces:**
@@ -2461,7 +2461,7 @@ In the `extension(When)` block, a second creation step so both arms produce an `
 Run: `dotnet run --project samples/AppointmentTests/AppointmentTests.csproj`
 Expected: exit code 0; the new scenario's steps are numbered contiguously with no `«merge appointment»` entry in the test list; the untaken arm is not reported as passed.
 
-- [ ] **Step 4: Add the snapshot test** in `test/Freista.Generator.Test/GeneratorSnapshotTests.cs`
+- [ ] **Step 4: Add the snapshot test** in `test/Raun.Generator.Test/GeneratorSnapshotTests.cs`
 
 ```csharp
     [Fact]
@@ -2472,8 +2472,8 @@ Expected: exit code 0; the new scenario's steps are numbered contiguously with n
 
 - [ ] **Step 5: Run it, review the received output, and accept it**
 
-Run: `dotnet test test/Freista.Generator.Test/Freista.Generator.Test.csproj --filter "FullyQualifiedName~GeneratorSnapshotTests"`
-Expected: the five existing snapshot tests PASS unchanged; `Conditional_scenario` FAILS with a new `.received.cs`. Read the received file and confirm it contains: `Guards = new global::Freista.Model.Guard[] { new global::Freista.Model.Guard(1, true) }` on the if-arm node, `(1, false)` on the else-arm node, `MergeSources`/`IsSynthetic = true` on the merge node, and `EvaluateCondition = static __o => ((bool)__o!) ? true : false` on the condition node. Then accept it by copying `GeneratorSnapshotTests.Conditional_scenario#FreistaScenarios.g.received.cs` over the `.verified.cs` name in `test/Freista.Generator.Test/Snapshots/` and re-running the filter — expected: PASS.
+Run: `dotnet test test/Raun.Generator.Test/Raun.Generator.Test.csproj --filter "FullyQualifiedName~GeneratorSnapshotTests"`
+Expected: the five existing snapshot tests PASS unchanged; `Conditional_scenario` FAILS with a new `.received.cs`. Read the received file and confirm it contains: `Guards = new global::Raun.Model.Guard[] { new global::Raun.Model.Guard(1, true) }` on the if-arm node, `(1, false)` on the else-arm node, `MergeSources`/`IsSynthetic = true` on the merge node, and `EvaluateCondition = static __o => ((bool)__o!) ? true : false` on the condition node. Then accept it by copying `GeneratorSnapshotTests.Conditional_scenario#RaunScenarios.g.received.cs` over the `.verified.cs` name in `test/Raun.Generator.Test/Snapshots/` and re-running the filter — expected: PASS.
 
 - [ ] **Step 6: Update `README.md`.** Replace the "Supported scenario subset (v1)" control-flow bullet (currently line 78–79) and add a conditionals bullet:
 
@@ -2497,7 +2497,7 @@ See [the design spec](docs/scenario-graph-extension-design.md), the
 
 - [ ] **Step 7: Full solution green**
 
-Run: `dotnet build Freista.slnx` then `dotnet test Freista.slnx`
+Run: `dotnet build Raun.slnx` then `dotnet test Raun.slnx`
 Expected: 0 warnings; all tests pass; the test count is the 262 baseline plus every test added in Tasks 1–6.
 
 - [ ] **Step 8: Commit**
@@ -2512,8 +2512,8 @@ jj commit -m "docs: conditional sample scenario, generator snapshot, and README 
 
 | Spec section | Task |
 |---|---|
-| Surface: condition is an awaited phase-marker call | 3 (parser), 4 (FRST011) |
-| Condition result type / `EvaluateCondition` coercion | 1 (property), 3 (emit), 4 (FRST011 type check) |
+| Surface: condition is an awaited phase-marker call | 3 (parser), 4 (RAUN011) |
+| Condition result type / `EvaluateCondition` coercion | 1 (property), 3 (emit), 4 (RAUN011 type check) |
 | Condition retains its output for later steps | 3 (`BuildStep` binds normally; the coercion is guard-only) |
 | Guards, `DependsOn` stays all-of | 1, 2, 3 |
 | Merge (phi) nodes, `IStepInputs.Get<T>(int)` unchanged | 1, 2, 3 |
@@ -2528,8 +2528,8 @@ jj commit -m "docs: conditional sample scenario, generator snapshot, and README 
 | Simulated time treats `NotTaken` as zero duration | 2 |
 | New `Validate()` invariants (3) | 1 |
 | MTP mapping spike, option 1 fallback | 5 |
-| FRST003 narrowed; FRST011; FRST012 | 4 |
-| FRST009 behaviour inside branches (explicit tests, not an assumption) | **gap — see below** |
+| RAUN003 narrowed; RAUN011; RAUN012 | 4 |
+| RAUN009 behaviour inside branches (explicit tests, not an assumption) | **gap — see below** |
 | Testing split across the three projects + sample | 1–6 |
 
 **Gap found and closed:** the spec's analyzer table asks for explicit tests that a resource `[Created]` in an untaken arm never records its lineage claim. Add to Task 3, Step 2 (`ConditionalLoweringTests`) before implementing:
@@ -2538,7 +2538,7 @@ jj commit -m "docs: conditional sample scenario, generator snapshot, and README 
     [Fact]
     public async Task Resource_claims_in_an_untaken_arm_are_never_recorded()
     {
-        // FRST009 interaction: a [Created] resource inside a branch that was not taken never exists,
+        // RAUN009 interaction: a [Created] resource inside a branch that was not taken never exists,
         // so no effect and no lineage relation is recorded — exactly as for a skipped step today.
         var result = GeneratorHarness.Run(SampleSources.ConditionalDsl + SampleSources.IfElseScenario);
         result.AssertCompiles();
@@ -2554,6 +2554,6 @@ jj commit -m "docs: conditional sample scenario, generator snapshot, and README 
 
 (The `ConditionalDsl` steps carry no role attributes, so this asserts the terminal-node contract — `StepResult`s produced by `ApplyTerminalAsync` carry no effects at all. That is the guarantee the spec wants; if a role-bearing conditional DSL is wanted later it is a follow-up.)
 
-**2. Placeholder scan:** none. Every code step carries the actual code. The two `SampleSources` snippets that were shown twice in Task 3 Step 1 (`BareIfScenario`) and Task 4 Step 1 (the FRST011 bad-condition body) are corrections shown inline — use the second, corrected form in both cases.
+**2. Placeholder scan:** none. Every code step carries the actual code. The two `SampleSources` snippets that were shown twice in Task 3 Step 1 (`BareIfScenario`) and Task 4 Step 1 (the RAUN011 bad-condition body) are corrections shown inline — use the second, corrected form in both cases.
 
 **3. Type consistency:** `Guard(int ConditionIndex, bool WhenValue)` (runtime) and `ParsedGuard(int, bool)` (generator IR) are used consistently; `MergeSources` is `IReadOnlyList<int>` everywhere; `EvaluateCondition` is `Func<object?, bool>?` in the model, emitted as `static __o => ((T)__o!) ? true : false`, and read only through `EvaluateGuard`; `ApplyTerminalAsync(int, StepStatus, string)` replaces `ApplySkipAsync(int, string)` at all three call sites; `IsSynthetic` is the single spelling in model, IR, discoverer, numbering, and sink.

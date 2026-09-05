@@ -7,7 +7,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
     <IsAspireHost>true</IsAspireHost>
-    <UserSecretsId>freista-aspire-appointments</UserSecretsId>
+    <UserSecretsId>raun-aspire-appointments</UserSecretsId>
     <NoWarn>$(NoWarn);CA1852;CA2007;ASPIRE010</NoWarn>
   </PropertyGroup>
 

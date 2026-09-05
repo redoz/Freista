@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <!-- A library, not a runnable test app: the same opt-out Raun.Mtp needs, because
+         Microsoft.Testing.Platform (referenced transitively) defaults this to true. -->
+    <IsTestingPlatformApplication>false</IsTestingPlatformApplication>
+    <Description>
+      Aspire integration for Raun: a bootstrap that builds a DistributedApplication, starts it as
+      the run's preflight while waiting for the resources you declare, and registers it for your
+      steps. Plumbing only — it ships no phase markers and no steps, so the DSL stays yours.
+    </Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Raun\Raun.csproj" />
+    <ProjectReference Include="..\Raun.Mtp\Raun.Mtp.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The options' Apply* seams stay internal; the unit tests exercise them directly rather than
+         only through a real AppHost run, which would need a container runtime. -->
+    <InternalsVisibleTo Include="Raun.Aspire.Test" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.Testing" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+</Project>

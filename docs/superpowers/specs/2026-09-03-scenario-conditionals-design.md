@@ -2,14 +2,14 @@
 
 - **Date:** 2026-09-03
 - **Status:** Design approved in brainstorming; implementation plan pending.
-- **Scope:** `src/Freista` (model, scheduler), `src/Freista.Generator` (lowering, analysis),
-  `src/Freista.Mtp` (discovery, numbering, report sink), `samples/AppointmentTests`, all three test
+- **Scope:** `src/Raun` (model, scheduler), `src/Raun.Generator` (lowering, analysis),
+  `src/Raun.Mtp` (discovery, numbering, report sink), `samples/AppointmentTests`, all three test
   projects.
 - **Out of scope:** rendering decision/merge diamonds in the HTML report (see "Non-Goals").
 
 ## Problem
 
-`[Scenario]` bodies reject all control flow (FRST003). A step is an ordinary `async Task<T>` method,
+`[Scenario]` bodies reject all control flow (RAUN003). A step is an ordinary `async Task<T>` method,
 so a step can already loop, retry, or poll *internally* — but a step cannot cause a **later, sibling
 step to not run**. That is the actual gap, and only `if`/`else` fills it.
 
@@ -85,7 +85,7 @@ EvaluateCondition = static o => ((MyResult)o!) ? true : false,
 
 `x ? true : false` is the single spelling covering all three cases; Roslyn selects the mechanism at
 compile time. No reflection, no runtime type tests, and an unusable type fails at generated-code
-compile time as a backstop behind FRST011.
+compile time as a backstop behind RAUN011.
 
 The condition node retains its original output, so `var r = await Given.Thing(); if (r) ...` still
 binds `r` to the real value for later steps. Coercion applies only to the guard.
@@ -125,7 +125,7 @@ The merge node is the **only** place any-of semantics exist.
 
 ### `IsSynthetic`
 
-Merge nodes are graph plumbing, not business steps. `FreistaDiscoverer.BuildNodes` and
+Merge nodes are graph plumbing, not business steps. `RaunDiscoverer.BuildNodes` and
 `ScenarioStepNumbering` must exclude them, so users never see a gap in "1, 2, 3". The HTML report
 retains them — it wants the merge diamond.
 
@@ -166,7 +166,7 @@ post-`if` bar starting after the arm).
 ### Single-assignment / definition map
 
 The existing lowering is already single-assignment by construction: each step output is bound to
-`__rN` for producing node N, `IdentifierReplacer` rewrites uses, and FRST007 forbids locals that are
+`__rN` for producing node N, `IdentifierReplacer` rewrites uses, and RAUN007 forbids locals that are
 not step outputs. `if` introduces the first case of one local having **two** definitions — which is
 exactly what SSA exists for, and a merge node is a phi node.
 
@@ -192,7 +192,7 @@ Nesting works because the maps chain.
 ### Why not full SSA
 
 Dominance frontiers, iterated phi placement, and a real CFG exist to find merge points in
-unstructured code with `goto`. Freista has structured control flow only, so every merge point is
+unstructured code with `goto`. Raun has structured control flow only, so every merge point is
 syntactically obvious — it is the closing brace. Building a CFG to rediscover that would be pure
 ceremony. Adopt the SSA vocabulary and the definition map; skip the machinery.
 
@@ -289,10 +289,10 @@ downstream depends on the outcome.
 
 | ID | Rule |
 |---|---|
-| FRST003 | Narrowed from "no control flow" to `for`/`foreach`/`while`/`do`/`switch`/`try`/`goto`. The message must point at the real answer: put the loop or retry **inside a step**. |
-| FRST011 | *(new)* Condition must be an awaited phase-marker call whose result is usable as a C# condition. |
-| FRST012 | *(new)* A conditionally-assigned local has no step-produced definition on some path. `Appointment appt = null!; if (c) appt = await When.Create();` type-checks in C#, but the merge's "parent definition" source is an initializer, not a node, so there is nothing to merge against. Reassignment *within* one arm is not an error — the definition map handles it, last definition wins. |
-| FRST009 | Verify behaviour inside branches. A resource `[Created]` in an untaken arm never exists, so its lineage claim never records — expected to work as it does for a skipped step today, but it is the interaction most likely to surprise us and gets explicit tests rather than an assumption. |
+| RAUN003 | Narrowed from "no control flow" to `for`/`foreach`/`while`/`do`/`switch`/`try`/`goto`. The message must point at the real answer: put the loop or retry **inside a step**. |
+| RAUN011 | *(new)* Condition must be an awaited phase-marker call whose result is usable as a C# condition. |
+| RAUN012 | *(new)* A conditionally-assigned local has no step-produced definition on some path. `Appointment appt = null!; if (c) appt = await When.Create();` type-checks in C#, but the merge's "parent definition" source is an initializer, not a node, so there is nothing to merge against. Reassignment *within* one arm is not an error — the definition map handles it, last definition wins. |
+| RAUN009 | Verify behaviour inside branches. A resource `[Created]` in an untaken arm never exists, so its lineage claim never records — expected to work as it does for a skipped step today, but it is the interaction most likely to surprise us and gets explicit tests rather than an assumption. |
 
 ## Testing
 
@@ -300,9 +300,9 @@ TDD, behavioural tests first, following the existing project split.
 
 | Project | Coverage |
 |---|---|
-| `Freista.Test` | `SchedulerTests`: guard resolution; all four merge outcomes; `NotTaken` propagation; **condition-throws produces `Skipped`, not `NotTaken`**. `ModelTests`: the new `Validate()` invariants. |
-| `Freista.Generator.Test` | New `ConditionalLoweringTests.cs` beside `LinearLoweringTests`/`ParallelLoweringTests`; `SampleSources` gains a conditional DSL and scenarios; `AnalyzerTests` gains FRST011/FRST012 and the narrowed FRST003; snapshot re-accept. |
-| `Freista.Mtp.Test` | `FreistaDiscovererTests`: synthetic merge nodes are not discovered. `ScenarioStepNumberingTests`: numbering skips synthetics. `MtpReportSinkTests`: `NotTaken` mapping. `RunLoopTests`: end-to-end, both arms. |
+| `Raun.Test` | `SchedulerTests`: guard resolution; all four merge outcomes; `NotTaken` propagation; **condition-throws produces `Skipped`, not `NotTaken`**. `ModelTests`: the new `Validate()` invariants. |
+| `Raun.Generator.Test` | New `ConditionalLoweringTests.cs` beside `LinearLoweringTests`/`ParallelLoweringTests`; `SampleSources` gains a conditional DSL and scenarios; `AnalyzerTests` gains RAUN011/RAUN012 and the narrowed RAUN003; snapshot re-accept. |
+| `Raun.Mtp.Test` | `RaunDiscovererTests`: synthetic merge nodes are not discovered. `ScenarioStepNumberingTests`: numbering skips synthetics. `MtpReportSinkTests`: `NotTaken` mapping. `RunLoopTests`: end-to-end, both arms. |
 | `samples/AppointmentTests` | A conditional scenario — the living demo and the spike target. |
 
 ## Alternatives considered
@@ -318,14 +318,14 @@ Rejected. What the static model buys, in order of weight:
 1. **Discovery without execution.** MTP requests the test list before a run (Test Explorer
    population, `--list-tests`, filter resolution). A runnable model cannot enumerate steps without
    executing the body, which means standing up containers and databases. It also breaks the stable
-   `{ScenarioId}:{StepId}` uid contract (`FreistaDiscoverer.cs:16`) that lets a single failed step be
+   `{ScenarioId}:{StepId}` uid contract (`RaunDiscoverer.cs:16`) that lets a single failed step be
    re-run by filter — the node would not exist until the run reached it.
 2. **Partial-failure continuation.** A failed step skips its transitive dependents while independent
    branches keep running. A running body cannot do this; a throw unwinds everything after it. Poison
    values would be needed, and execution would still walk sequentially through the dead region.
-3. **Compile-time diagnostics.** FRST001–FRST012 become runtime errors.
+3. **Compile-time diagnostics.** RAUN001–RAUN012 become runtime errors.
 
-Parallelism is **not** an argument: Freista is sequential by default, and the tuple/array forms
+Parallelism is **not** an argument: Raun is sequential by default, and the tuple/array forms
 would be plain `Task.WhenAll` in a runnable model.
 
 "Every business step is its own test, discoverable and individually re-runnable before anything

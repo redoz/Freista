@@ -1,4 +1,4 @@
-using Freista;
+using Raun;
 using System.ComponentModel;
 
 namespace AppointmentTests;
@@ -27,7 +27,7 @@ public static class LifecycleScenarios
         var appointment = await When.CreateAppointment(patient, morning);
 
         // Sequential on purpose. `await (When.HoldSlot(afternoon), When.Reschedule(appointment, afternoon))`
-        // would be rejected at compile time (FRST013): both steps touch `afternoon` in one parallel
+        // would be rejected at compile time (RAUN013): both steps touch `afternoon` in one parallel
         // group and HoldSlot mutates it, so nothing would order the hold before the move.
         var held = await When.HoldSlot(afternoon);
         var moved = await When.Reschedule(appointment, held);

@@ -1,11 +1,11 @@
-# Freista
+# Raun
 
 > Scenario / integration tests for .NET — Given/When/Then steps, each reported as its own test, wired into a fork/join dependency graph.
 
-Freista lets you write integration-style scenario tests as readable `Given` / `When` / `Then` C# and have each business step show up as its own test: sequential by default, explicitly parallel where you ask for it, with typed state flowing between steps and dependent steps auto-skipped after a failure.
+Raun lets you write integration-style scenario tests as readable `Given` / `When` / `Then` C# and have each business step show up as its own test: sequential by default, explicitly parallel where you ask for it, with typed state flowing between steps and dependent steps auto-skipped after a failure.
 
 ```csharp
-using Freista;
+using Raun;
 
 [Scenario("customer books an appointment")]
 public static async Task Booking()
@@ -55,10 +55,10 @@ independent ready branches keep running.
 
 | Project | What it is |
 | --- | --- |
-| `src/Freista` | Runner-neutral core: phase markers, parallel awaiters, `ScenarioContext`, the graph model, and the DAG scheduler. No xUnit dependency. |
-| `src/Freista.Generator` | Roslyn incremental generator + analyzer (FRST000–010). netstandard2.0. |
-| `src/Freista.Mtp` | Microsoft.Testing.Platform test framework: `[Scenario]`, discovery, run loop, per-step node reporter. |
-| `src/Freista.Aspire` | Aspire integration: builds the AppHost, starts it as the run's preflight while waiting for the resources you declare, registers it for your steps. Plumbing only — no phase markers, no steps. |
+| `src/Raun` | Runner-neutral core: phase markers, parallel awaiters, `ScenarioContext`, the graph model, and the DAG scheduler. No xUnit dependency. |
+| `src/Raun.Generator` | Roslyn incremental generator + analyzer (RAUN000–010). netstandard2.0. |
+| `src/Raun.Mtp` | Microsoft.Testing.Platform test framework: `[Scenario]`, discovery, run loop, per-step node reporter. |
+| `src/Raun.Aspire` | Aspire integration: builds the AppHost, starts it as the run's preflight while waiting for the resources you declare, registers it for your steps. Plumbing only — no phase markers, no steps. |
 | `samples/AppointmentTests` | End-to-end sample (linear / tuple / array / LINQ / conditionals / teardown). |
 | `samples/AspireAppointments` | Aspire end-to-end: an AppHost, a mock API, and a suite that starts it as preflight and drives it as two actors. |
 | `test/*` | Scheduler tests (xUnit-free), generator/analyzer tests (behavioral + Verify snapshots), and MTP acceptance tests. |
@@ -111,11 +111,11 @@ output and appear under it in the runner and the HTML report.
 ctx.GetLogger<BookingSteps>().LogInformation("seeded {Count} patients", count);
 ```
 
-Registering `FreistaLoggerProvider` with an in-process system under test attributes *its* logs to the
+Registering `RaunLoggerProvider` with an in-process system under test attributes *its* logs to the
 step that provoked them, because the destination is resolved per write from the step that is running:
 
 ```csharp
-builder.Logging.AddProvider(new FreistaLoggerProvider());
+builder.Logging.AddProvider(new RaunLoggerProvider());
 ```
 
 ### Teardown

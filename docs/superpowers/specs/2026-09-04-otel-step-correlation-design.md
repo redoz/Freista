@@ -9,8 +9,8 @@
   document for two findings that cost real effort: the .NET OTLP exporter speaks only `grpc` and
   `http/protobuf` (so a JSON receiver is not an option), and exporter batching — not correlation — is
   the actual hard problem.
-- **Scope:** `src/Freista` (per-step `Activity`, telemetry on `StepResult`), a new OTLP receiver,
-  `src/Freista.Mtp` (feed the existing per-step output channel), the HTML report.
+- **Scope:** `src/Raun` (per-step `Activity`, telemetry on `StepResult`), a new OTLP receiver,
+  `src/Raun.Mtp` (feed the existing per-step output channel), the HTML report.
 - **Out of scope:** being a real collector (batching, retry, sampling, tail sampling, multiple
   receivers). Point at a real collector for that.
 
@@ -26,7 +26,7 @@ Correlate the system under test's OpenTelemetry spans and log records back to th
 provoked them, and surface them where the tooling already looks — MTP's per-step output — as well as
 in the self-contained HTML report.
 
-The framing matters: Freista does not define a logging API. Any SUT that can export OTLP
+The framing matters: Raun does not define a logging API. Any SUT that can export OTLP
 participates, in whatever language or stack. This is also why `ScenarioContext.Log()` should not
 grow — long term, OTEL subsumes it.
 
@@ -36,7 +36,7 @@ grow — long term, OTEL subsumes it.
 
 - `HttpClient`'s `DiagnosticsHandler` injects a W3C `traceparent` header from `Activity.Current` on
   every outgoing request, enabled by default.
-- `Activity.Current` is `AsyncLocal`, so it flows correctly through Freista's **concurrent** steps
+- `Activity.Current` is `AsyncLocal`, so it flows correctly through Raun's **concurrent** steps
   without any of the sharing hazards a per-scenario instance would have had.
 - When the SUT handles a request under that trace context, its OTEL log records carry the same
   `TraceId`.
@@ -47,15 +47,15 @@ has no `Activity` usage at all, so this is greenfield but small.
 ## Correlation model
 
 **Each step is its own root trace.** The scheduler starts an `Activity` from an `ActivitySource`
-named `Freista` around each step's invocation; `StepResult` records its `TraceId` and `SpanId`.
+named `Raun` around each step's invocation; `StepResult` records its `TraceId` and `SpanId`.
 
 This gives a clean 1:1 map from `TraceId` to step, which is what makes correlation robust. The
 alternative — scenario as root trace, steps as child spans — forces walking a parent-span hierarchy
 to attribute an arriving span to a step, and any gap in propagation breaks the walk.
 
 The cost is that no single trace spans the scenario. That is bought back with attributes rather than
-hierarchy: every step Activity carries `freista.scenario.id`, `freista.scenario.name`,
-`freista.step.id`, and `freista.step.name`, so a tracing UI can group a scenario's steps by
+hierarchy: every step Activity carries `raun.scenario.id`, `raun.scenario.name`,
+`raun.step.id`, and `raun.step.name`, so a tracing UI can group a scenario's steps by
 attribute.
 
 Arriving telemetry is attributed by `TraceId`:
@@ -75,18 +75,18 @@ only — not `http/json` — so a JSON receiver, though far simpler, would not a
 framework; a minimal `HttpListener` plus the generated `opentelemetry-proto` types is enough for a
 receiver that only has to deserialize and dispatch.
 
-- **Off by default.** Enabled by an MTP command-line option (`--freista-otlp`, optional port;
+- **Off by default.** Enabled by an MTP command-line option (`--raun-otlp`, optional port;
   ephemeral port when unspecified), matching how the HTML report is already opted into.
 - The chosen endpoint is exposed to the SUT the standard way, via `OTEL_EXPORTER_OTLP_ENDPOINT` and
   `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`.
 - Aspire needs no special handling: its AppHost already sets `OTEL_EXPORTER_OTLP_ENDPOINT` on every
-  child it launches, so this is a matter of pointing children at Freista's endpoint instead of (or
+  child it launches, so this is a matter of pointing children at Raun's endpoint instead of (or
   as well as) the dashboard.
 
 ## Surfacing
 
 **The channel already exists.** `MtpReportSink` already builds a per-step string of logs and effects
-and publishes it as `StandardOutputProperty` ([MtpReportSink.cs:188](../../../src/Freista.Mtp/MtpReportSink.cs)).
+and publishes it as `StandardOutputProperty` ([MtpReportSink.cs:188](../../../src/Raun.Mtp/MtpReportSink.cs)).
 Correlated telemetry becomes another section of that same string — so VS Test Explorer, TRX, and CI
 dashboards get it with no new plumbing.
 
@@ -141,15 +141,15 @@ shipping on its own first.**
 
 | Project | Coverage |
 |---|---|
-| `Freista.Test` | An `Activity` is current inside a step's invoke; concurrent steps get distinct `TraceId`s and do not observe each other's; `StepResult` carries the ids; scenario/step attributes are stamped. |
+| `Raun.Test` | An `Activity` is current inside a step's invoke; concurrent steps get distinct `TraceId`s and do not observe each other's; `StepResult` carries the ids; scenario/step attributes are stamped. |
 | New receiver tests | OTLP protobuf payloads deserialize; spans and log records attribute to the right step by `TraceId`; unmatched telemetry lands in the unattributed bucket; a malformed payload is rejected without killing the run. |
-| `Freista.Mtp.Test` | Correlated telemetry reaches `StandardOutputProperty`; oversized telemetry becomes a file artifact instead; the drain window resolves before publication (per the decision above). |
+| `Raun.Mtp.Test` | Correlated telemetry reaches `StandardOutputProperty`; oversized telemetry becomes a file artifact instead; the drain window resolves before publication (per the decision above). |
 | `samples/` | End-to-end against a real child process exporting OTLP. |
 
 ## Non-goals
 
-- **Being a collector.** No batching, retry, sampling, or persistence. Freista receives, correlates,
+- **Being a collector.** No batching, retry, sampling, or persistence. Raun receives, correlates,
   renders, and forgets.
 - **Metrics.** Spans and log records only. Per-step metric correlation has no obvious consumer in a
   test report.
-- **Defining a logging API.** The point is that Freista does not have one.
+- **Defining a logging API.** The point is that Raun does not have one.

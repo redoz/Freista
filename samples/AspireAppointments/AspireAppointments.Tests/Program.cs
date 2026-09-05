@@ -1,7 +1,7 @@
 using Aspire.Hosting;
 using Aspire.Hosting.Testing;
 using AspireAppointments.Tests;
-using Freista;
+using Raun;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Testing.Extensions;
 
@@ -9,7 +9,7 @@ using Microsoft.Testing.Extensions;
 // AppHost is described, where you say what must be healthy before scenarios run, and where the
 // suite's own services are registered.
 
-return await FreistaAspire.RunAsync<Projects.AspireAppointments_AppHost>(args, aspire =>
+return await RaunAspire.RunAsync<Projects.AspireAppointments_AppHost>(args, aspire =>
 {
     // Declarative: scenarios do not start until these report healthy. Starting and waiting happen
     // inside the run as the "Preflight" node, so both are timed and reported.

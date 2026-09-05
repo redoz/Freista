@@ -1,7 +1,7 @@
 # Cross-Process Code Coverage for Aspire — Spike Result
 
 - **Date:** 2026-09-04
-- **Status:** **Answered. It already works** — no Freista feature needed.
+- **Status:** **Answered. It already works** — no Raun feature needed.
 - **Target:** `samples/AspireAppointments`, .NET 10.0.303, Aspire 13.5.3,
   Microsoft.Testing.Platform 2.2.3, Microsoft.Testing.Extensions.CodeCoverage 18.7.0, Windows.
 
@@ -27,13 +27,13 @@ The API's `Main` is recorded as hit. The test host never executes that code, so 
 child process's coverage. Child processes inherit the profiled test host's environment, and DCP does
 not scrub it — so the profiler attaches to everything Aspire launches.
 
-`AspireAppointments.AppHost` appears in the report too, as do the Freista assemblies.
+`AspireAppointments.AppHost` appears in the report too, as do the Raun assemblies.
 
 ## What it did take
 
-Two things, neither of which is a Freista feature:
+Two things, neither of which is a Raun feature:
 
-1. **Explicit extension registration.** Because a Freista/Aspire suite owns its own `Main`, the
+1. **Explicit extension registration.** Because a Raun/Aspire suite owns its own `Main`, the
    coverage extension is not auto-wired and `--coverage` is not even a recognised option until it is
    registered. The `ConfigureTestApplication` hook that `AspireRunOptions` already exposes is exactly
    the seam:
@@ -66,6 +66,6 @@ Two things, neither of which is a Freista feature:
 
 ## Consequence
 
-The roadmap item is closed with **no code**. `Freista.Aspire` needs no coverage feature; the
+The roadmap item is closed with **no code**. `Raun.Aspire` needs no coverage feature; the
 `ConfigureTestApplication` seam it already has is sufficient, and the finding belongs in
 documentation rather than in the framework.

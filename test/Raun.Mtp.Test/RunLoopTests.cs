@@ -1,0 +1,680 @@
+using System.Collections.Concurrent;
+using Microsoft.Testing.Platform.CommandLine;
+using Microsoft.Testing.Platform.Extensions.Messages;
+using Microsoft.Testing.Platform.Messages;
+using Microsoft.Testing.Platform.TestHost;
+using Raun.Model;
+using Raun.Reporting;
+using Raun.Scheduling;
+using Xunit;
+
+namespace Raun.Mtp.Test;
+
+/// <summary>
+/// Phase 3 behavioral tests for the run loop. On a run request the loop reads the filter
+/// (a <c>TestNodeUidListFilter</c> uid set, or null = run everything), maps each requested step-uid
+/// onto its owning scenario, and runs each <em>distinct</em> scenario exactly once via the
+/// <see cref="ScenarioScheduler"/> with the Phase-3 <see cref="MtpReportSink"/> and a per-run
+/// <see cref="CancellationTokenSource"/> owned by the loop. Because the sink fans events out to all
+/// subscribers, every step the scheduler executes lights up — including the dependency siblings of a
+/// single-step run.
+/// </summary>
+public class RunLoopTests
+{
+    private static ScenarioNode Node(
+        int index,
+        string stepId,
+        string template,
+        int[]? dependsOn = null,
+        Func<IStepInputs, ScenarioContext, Task<object?>>? invoke = null,
+        Guard[]? guards = null,
+        int[]? mergeSources = null,
+        bool synthetic = false,
+        Func<object?, bool>? evaluate = null) => new()
+        {
+            Index = index,
+            StepId = stepId,
+            Phase = "Given",
+            OperationName = $"Op{index}",
+            DisplayNameTemplate = template,
+            SourceFile = @"C:\src\S.cs",
+            SourceLine = index + 1,
+            DependsOn = dependsOn ?? [],
+            Guards = guards ?? [],
+            MergeSources = mergeSources ?? [],
+            IsSynthetic = synthetic,
+            EvaluateCondition = evaluate,
+            Invoke = invoke ?? ((_, _) => Task.FromResult<object?>(null)),
+        };
+
+    private static ScenarioDefinition Definition(string id, string display, params ScenarioNode[] nodes) => new()
+    {
+        ScenarioId = id,
+        DisplayName = display,
+        MethodName = $"Ns.{id}",
+        Nodes = nodes,
+    };
+
+    private static string Uid(string scenarioId, string stepId) => scenarioId + ":" + stepId;
+
+    private static string PassedUid(StepFinished e) =>
+        RaunDiscoverer.MakeUid(e.Definition.ScenarioId, e.Result.Node.StepId);
+
+    /// <summary>A step body that advances its per-step clock by <paramref name="delta"/> via
+    /// <see cref="ScenarioContext.SimulateElapsed"/> with no real waiting (an inert no-op in real mode).</summary>
+    private static Func<IStepInputs, ScenarioContext, Task<object?>> Elapse(TimeSpan delta)
+        => (_, ctx) => { ctx.SimulateElapsed(delta); return Task.FromResult<object?>(null); };
+
+    // -- Scenario selection (filter -> distinct scenarios) ---------------------------------------
+
+    [Fact]
+    public void Null_filter_selects_every_registered_scenario()
+    {
+        var a = Definition("a", "A", Node(0, "x", "x"));
+        var b = Definition("b", "B", Node(0, "y", "y"));
+
+        var selected = RaunRunLoop.SelectScenarios([a, b], uids: null);
+
+        Assert.Equal(["a", "b"], selected.Select(d => d.ScenarioId).Order());
+    }
+
+    [Fact]
+    public void Empty_uid_set_selects_nothing()
+    {
+        var a = Definition("a", "A", Node(0, "x", "x"));
+
+        var selected = RaunRunLoop.SelectScenarios([a], uids: new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+
+        Assert.Empty(selected);
+    }
+
+    [Fact]
+    public void Multi_step_filter_for_one_scenario_selects_that_scenario_once()
+    {
+        var a = Definition("a", "A", Node(0, "x", "x"), Node(1, "y", "y"), Node(2, "z", "z"));
+        var b = Definition("b", "B", Node(0, "x", "x"));
+
+        // Three step uids of the SAME scenario must map to a single distinct scenario.
+        var uids = new HashSet<string>([Uid("a", "x"), Uid("a", "y"), Uid("a", "z")], StringComparer.OrdinalIgnoreCase);
+        var selected = RaunRunLoop.SelectScenarios([a, b], uids);
+
+        var only = Assert.Single(selected);
+        Assert.Equal("a", only.ScenarioId);
+    }
+
+    [Fact]
+    public void Filter_spanning_two_scenarios_selects_both()
+    {
+        var a = Definition("a", "A", Node(0, "x", "x"));
+        var b = Definition("b", "B", Node(0, "y", "y"));
+        var c = Definition("c", "C", Node(0, "z", "z"));
+
+        var uids = new HashSet<string>([Uid("a", "x"), Uid("c", "z")], StringComparer.OrdinalIgnoreCase);
+        var selected = RaunRunLoop.SelectScenarios([a, b, c], uids);
+
+        Assert.Equal(["a", "c"], selected.Select(d => d.ScenarioId).Order());
+    }
+
+    // -- Run loop end-to-end (over a real ScenarioScheduler) -------------------------------------
+
+    [Fact]
+    public async Task Multi_step_filter_for_one_scenario_runs_the_scheduler_exactly_once()
+    {
+        var def = Definition("a", "A",
+            Node(0, "x", "x"),
+            Node(1, "y", "y", dependsOn: [0]),
+            Node(2, "z", "z", dependsOn: [1]));
+
+        var runs = 0;
+        var loop = new RaunRunLoop(
+            () => [def],
+            runScenario: (_, _, _, _, _) => { Interlocked.Increment(ref runs); return Task.FromResult<IReadOnlyList<StepResult>>([]); });
+
+        var uids = new HashSet<string>([Uid("a", "x"), Uid("a", "z")], StringComparer.OrdinalIgnoreCase);
+        var sink = new RecordingSink();
+        await loop.RunAsync(uids, sink, CancellationToken.None);
+
+        Assert.Equal(1, runs);
+    }
+
+    [Fact]
+    public async Task Single_step_filter_lights_up_all_executed_siblings()
+    {
+        // z depends on y depends on x. A filter naming only the last step must still publish the
+        // whole chain, because running z requires running x and y first.
+        var def = Definition("chain", "chain",
+            Node(0, "x", "x"),
+            Node(1, "y", "y", dependsOn: [0]),
+            Node(2, "z", "z", dependsOn: [1]));
+
+        var loop = new RaunRunLoop(() => [def]);
+
+        var sink = new RecordingSink();
+        var uids = new HashSet<string>([Uid("chain", "z")], StringComparer.OrdinalIgnoreCase);
+        await loop.RunAsync(uids, sink, CancellationToken.None);
+
+        // All three siblings reported (each at least one finished Passed update).
+        Assert.Contains(Uid("chain", "x"), sink.PassedUids);
+        Assert.Contains(Uid("chain", "y"), sink.PassedUids);
+        Assert.Contains(Uid("chain", "z"), sink.PassedUids);
+    }
+
+    [Fact]
+    public async Task Null_filter_runs_all_registered_scenarios()
+    {
+        var a = Definition("a", "A", Node(0, "x", "x"));
+        var b = Definition("b", "B", Node(0, "y", "y"));
+
+        var loop = new RaunRunLoop(() => [a, b]);
+
+        var sink = new RecordingSink();
+        await loop.RunAsync(uids: null, sink, CancellationToken.None);
+
+        Assert.Contains(Uid("a", "x"), sink.PassedUids);
+        Assert.Contains(Uid("b", "y"), sink.PassedUids);
+    }
+
+    [Fact]
+    public async Task Distinct_scenarios_run_sequentially_for_v1()
+    {
+        // Records the max observed concurrency across scenario runs; sequential => never exceeds 1.
+        var current = 0;
+        var max = 0;
+        var sync = new object();
+
+        async Task<object?> Body(IStepInputs _, ScenarioContext __)
+        {
+            lock (sync)
+            {
+                current++;
+                max = Math.Max(max, current);
+            }
+
+            await Task.Delay(20);
+
+            lock (sync)
+            {
+                current--;
+            }
+
+            return null;
+        }
+
+        var a = Definition("a", "A", Node(0, "x", "x", invoke: Body));
+        var b = Definition("b", "B", Node(0, "y", "y", invoke: Body));
+        var c = Definition("c", "C", Node(0, "z", "z", invoke: Body));
+
+        var loop = new RaunRunLoop(() => [a, b, c]);
+        await loop.RunAsync(uids: null, new RecordingSink(), CancellationToken.None);
+
+        Assert.Equal(1, max);
+    }
+
+    [Fact]
+    public async Task One_steps_cancellation_does_not_kill_the_shared_run_for_siblings()
+    {
+        // The loop owns ONE CTS per scenario run, linked to the platform token — it is never tied to
+        // a single step node's lifecycle. So a step that itself throws OperationCanceledException
+        // (a step that observed cancellation locally / timed out internally) must NOT abort the
+        // independent siblings sharing that run: the loop's run token stays live, and the scheduler
+        // keeps launching the other ready steps. Here "lonely" and "sibling" have no dependency
+        // between them, so the scheduler runs both regardless of "lonely"'s outcome.
+        var siblingRan = false;
+
+        var def = Definition("scn", "scn",
+            Node(0, "lonely", "lonely", invoke: (_, _) =>
+                // An OCE NOT tied to the run token surfaces as an ordinary failure, not a scenario
+                // cancel — proving the run token was untouched.
+                throw new OperationCanceledException("this step canceled itself")),
+            Node(1, "sibling", "sibling", invoke: (_, _) =>
+            {
+                siblingRan = true;
+                return Task.FromResult<object?>(null);
+            }));
+
+        var loop = new RaunRunLoop(() => [def]);
+
+        var sink = new RecordingSink();
+        // Both steps are selected: a filter naming only "lonely" would (correctly) leave "sibling" out.
+        var uids = new HashSet<string>([Uid("scn", "lonely"), Uid("scn", "sibling")], StringComparer.OrdinalIgnoreCase);
+        await loop.RunAsync(uids, sink, CancellationToken.None);
+
+        Assert.True(siblingRan);
+        // The sibling completes successfully; nothing was skipped (the run token never canceled).
+        Assert.Contains(Uid("scn", "sibling"), sink.PassedUids);
+        Assert.Empty(sink.SkippedUids);
+    }
+
+    [Fact]
+    public async Task Honors_an_already_cancelled_platform_token_by_skipping_steps()
+    {
+        var bodyRan = false;
+        var def = Definition("scn", "scn",
+            Node(0, "x", "x", invoke: (_, _) => { bodyRan = true; return Task.FromResult<object?>(null); }));
+
+        var loop = new RaunRunLoop(() => [def]);
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var sink = new RecordingSink();
+        await loop.RunAsync(uids: null, sink, cts.Token);
+
+        // The scheduler skips steps when the run token is already canceled; the body never runs.
+        Assert.False(bodyRan);
+        Assert.Contains(Uid("scn", "x"), sink.SkippedUids);
+    }
+
+    [Fact]
+    public async Task Cancellation_mid_run_stops_launching_further_scenarios()
+    {
+        // When the platform cancels mid-run, the loop must stop launching scenarios it has not yet
+        // started — rather than iterating every remaining scenario only to report all-skipped (which
+        // would flood the runner with skipped updates for work the user never started). The first
+        // scenario cancels the platform token from inside its body; the second must never run.
+        using var cts = new CancellationTokenSource();
+        var secondRan = false;
+
+        var first = Definition("first", "first",
+            Node(0, "a", "a", invoke: (_, _) => { cts.Cancel(); return Task.FromResult<object?>(null); }));
+        var second = Definition("second", "second",
+            Node(0, "b", "b", invoke: (_, _) => { secondRan = true; return Task.FromResult<object?>(null); }));
+
+        var loop = new RaunRunLoop(() => [first, second]);
+
+        var sink = new RecordingSink();
+        await loop.RunAsync(uids: null, sink, cts.Token);
+
+        Assert.False(secondRan);
+        // The second scenario was never started at all (not even as skipped).
+        Assert.DoesNotContain("second",
+            sink.Events.OfType<ScenarioStarted>().Select(e => e.Definition.ScenarioId));
+    }
+
+    [Fact]
+    public async Task Through_the_framework_run_request_executes_the_registered_scenario()
+    {
+        // End-to-end through RaunTestFramework.OnExecute (registry-backed), proving the framework
+        // wires the run loop into the run request path.
+        var method = $"Raun.Mtp.Test.RunLoop.{Guid.NewGuid():N}";
+        ScenarioRegistry.Register(method, () => Definition("fw-scn", "fw scenario",
+            Node(0, "a", "a"),
+            Node(1, "b", "b", dependsOn: [0])));
+
+        var framework = new RaunTestFramework();
+        var uid = new SessionUid("fw-run");
+        await framework.CreateTestSession(uid);
+
+        var bus = new RecordingMessageBus();
+        var completed = false;
+        await framework.OnExecute(uid, filter: null, bus, () => completed = true, CancellationToken.None);
+
+        Assert.True(completed);
+        var passed = bus.Nodes
+            .Where(n => n.Properties.OfType<PassedTestNodeStateProperty>().Length != 0)
+            .Select(n => n.Uid.Value).ToList();
+        Assert.Contains("fw-scn:a", passed);
+        Assert.Contains("fw-scn:b", passed);
+    }
+
+    // -- Simulated-time opt-in threaded through the loop (A4) -------------------------------------
+
+    [Fact]
+    public async Task Default_runner_in_simulated_mode_yields_nonzero_overlapping_timings()
+    {
+        // simulateTime:true must reach DefaultRunScenario, which builds a ScenarioScheduler(simulatedTime:true).
+        // Two parallel siblings advance their own per-step clocks (NO real waiting), producing exact,
+        // overlapping durations on one shared timeline — only possible if the flag threaded all the way down.
+        var slow = TimeSpan.FromMilliseconds(700);
+        var fast = TimeSpan.FromMilliseconds(500);
+        var def = Definition("sim", "sim",
+            Node(0, "root", "root", invoke: Elapse(TimeSpan.Zero)),
+            Node(1, "slow", "slow", dependsOn: [0], invoke: Elapse(slow)),
+            Node(2, "fast", "fast", dependsOn: [0], invoke: Elapse(fast)));
+
+        var loop = new RaunRunLoop(() => [def], runScenario: null, simulateTime: true);
+        var sink = new RecordingSink();
+        await loop.RunAsync(uids: null, sink, CancellationToken.None);
+
+        var finished = sink.Events.OfType<StepFinished>()
+            .Where(e => e.Result.Status == StepStatus.Passed)
+            .ToDictionary(e => e.Result.Node.StepId, e => e.Result, StringComparer.Ordinal);
+
+        // Durations are exactly the simulated amounts (non-zero, deterministic).
+        Assert.Equal(slow, finished["slow"].Duration);
+        Assert.Equal(fast, finished["fast"].Duration);
+
+        // The two siblings share a start instant and genuinely overlap on the one timeline.
+        var s1 = finished["slow"].StartedAt; var e1 = s1 + finished["slow"].Duration;
+        var s2 = finished["fast"].StartedAt; var e2 = s2 + finished["fast"].Duration;
+        Assert.True(s1 < e2 && s2 < e1, "parallel siblings must overlap under simulated time");
+    }
+
+    [Fact]
+    public async Task Default_runner_in_real_mode_ignores_SimulateElapsed()
+    {
+        // simulateTime defaults to false: the same SimulateElapsed body is an inert no-op and the measured
+        // duration is real wall-clock for a no-op step — nowhere near the simulated 5s.
+        var def = Definition("real", "real",
+            Node(0, "x", "x", invoke: Elapse(TimeSpan.FromSeconds(5))));
+
+        var loop = new RaunRunLoop(() => [def]); // simulateTime defaults to false
+        var sink = new RecordingSink();
+        await loop.RunAsync(uids: null, sink, CancellationToken.None);
+
+        var finished = sink.Events.OfType<StepFinished>().Single(e => e.Result.Status == StepStatus.Passed);
+        Assert.True(finished.Result.Duration < TimeSpan.FromSeconds(1),
+            $"real mode must not absorb the simulated 5s (was {finished.Result.Duration})");
+    }
+
+    [Fact]
+    public async Task Framework_built_with_simulateTime_threads_the_flag_to_the_scheduler()
+    {
+        // The (IServiceProvider, bool) overload carries the opt-in flag from RunAsync down through the run
+        // loop to the scheduler: a body that SimulateElapsed(800ms) reports exactly that on the published
+        // node's TimingProperty — only reachable if simulated mode arrived at the scheduler.
+        var method = $"Raun.Mtp.Test.SimRun.{Guid.NewGuid():N}";
+        var work = TimeSpan.FromMilliseconds(800);
+        ScenarioRegistry.Register(method, () => Definition("sim-fw", "sim scenario",
+            Node(0, "a", "a", invoke: Elapse(work))));
+
+        var framework = new RaunTestFramework(services: null!, simulateTime: true);
+        var uid = new SessionUid("sim-fw-run");
+        await framework.CreateTestSession(uid);
+
+        var bus = new RecordingMessageBus();
+        await framework.OnExecute(uid, filter: null, bus, () => { }, CancellationToken.None);
+
+        var node = bus.Nodes.Single(n => n.Uid.Value == "sim-fw:a"
+            && n.Properties.OfType<PassedTestNodeStateProperty>().Length != 0);
+        var timing = node.Properties.OfType<TimingProperty>().Single();
+        Assert.Equal(work, timing.GlobalTiming.Duration);
+    }
+
+    // -- Service provider threaded through the loop into ScenarioContext.Services ------------------
+
+    [Fact]
+    public async Task Provider_given_to_the_loop_reaches_a_steps_ScenarioContext()
+    {
+        // The loop's default runner must hand its provider to the scheduler, which puts it on every
+        // ScenarioContext — otherwise ctx.Services is null for user step code in a real run.
+        IServiceProvider? seen = null;
+        var def = Definition("di", "di",
+            Node(0, "x", "x", invoke: (_, ctx) => { seen = ctx.Services; return Task.FromResult<object?>(null); }));
+
+        var provider = new StubServiceProvider();
+        var loop = new RaunRunLoop(() => [def], services: provider);
+        await loop.RunAsync(uids: null, new RecordingSink(), CancellationToken.None);
+
+        Assert.Same(provider, seen);
+    }
+
+    [Fact]
+    public async Task No_provider_leaves_ScenarioContext_Services_null_without_throwing()
+    {
+        // The null path is real: RaunTestFramework's parameterless ctor leaves the provider null.
+        IServiceProvider? seen = new StubServiceProvider();
+        var ran = false;
+        var def = Definition("no-di", "no-di",
+            Node(0, "x", "x", invoke: (_, ctx) => { seen = ctx.Services; ran = true; return Task.FromResult<object?>(null); }));
+
+        var loop = new RaunRunLoop(() => [def]);
+        var sink = new RecordingSink();
+        await loop.RunAsync(uids: null, sink, CancellationToken.None);
+
+        Assert.True(ran);
+        Assert.Null(seen);
+        Assert.Contains(Uid("no-di", "x"), sink.PassedUids);
+    }
+
+    [Fact]
+    public async Task Framework_built_with_a_provider_threads_it_to_the_step_context()
+    {
+        // End-to-end: the CONSUMER's provider -> run loop -> scheduler -> ctx.Services.
+        //
+        // MTP's own provider is deliberately NOT what steps see. It carries platform internals
+        // (command-line options, the logger factory), and letting a step resolve those would couple
+        // user code to the platform. The framework keeps it for its own use and threads the
+        // consumer's provider — the one built in their Program.cs — to step bodies instead.
+        var method = $"Raun.Mtp.Test.DiRun.{Guid.NewGuid():N}";
+        IServiceProvider? seen = null;
+        ScenarioRegistry.Register(method, () => Definition("di-fw", "di scenario",
+            Node(0, "a", "a", invoke: (_, ctx) => { seen = ctx.Services; return Task.FromResult<object?>(null); })));
+
+        var mtpProvider = new StubServiceProvider();
+        var userProvider = new StubServiceProvider();
+        var framework = new RaunTestFramework(mtpProvider, simulateTime: false, userProvider);
+        var uid = new SessionUid("di-fw-run");
+        await framework.CreateTestSession(uid);
+
+        await framework.OnExecute(uid, filter: null, new RecordingMessageBus(), () => { }, CancellationToken.None);
+
+        Assert.Same(userProvider, seen);
+        Assert.NotSame(mtpProvider, seen);
+    }
+
+    [Fact]
+    public async Task Without_a_consumer_provider_the_step_context_has_no_services()
+    {
+        // MTP's provider must not leak in as a fallback.
+        var method = $"Raun.Mtp.Test.DiRun.{Guid.NewGuid():N}";
+        IServiceProvider? seen = null;
+        var ran = false;
+        ScenarioRegistry.Register(method, () => Definition("di-none", "no di scenario",
+            Node(0, "a", "a", invoke: (_, ctx) => { seen = ctx.Services; ran = true; return Task.FromResult<object?>(null); })));
+
+        var framework = new RaunTestFramework(new StubServiceProvider());
+        var uid = new SessionUid("di-none-run");
+        await framework.CreateTestSession(uid);
+
+        await framework.OnExecute(uid, filter: null, new RecordingMessageBus(), () => { }, CancellationToken.None);
+
+        Assert.True(ran);
+        Assert.Null(seen);
+    }
+
+    /// <summary>
+    /// A provider standing in for MTP's own. Identity is what these tests assert on; it only has to
+    /// answer <see cref="ICommandLineOptions"/> because the framework consults it (for --report-html)
+    /// before the run loop starts, and MTP's accessor extension throws on a missing service.
+    /// </summary>
+    private sealed class StubServiceProvider : IServiceProvider
+    {
+        public object? GetService(Type serviceType) =>
+            serviceType == typeof(ICommandLineOptions) ? new NoOptions() : null;
+
+        private sealed class NoOptions : ICommandLineOptions
+        {
+            public bool IsOptionSet(string optionName) => false;
+
+            public bool TryGetOptionArgumentList(
+                string optionName,
+                [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string[]? arguments)
+            {
+                arguments = null;
+                return false;
+            }
+        }
+    }
+
+    private sealed class RecordingSink : IRunEventSink
+    {
+        public List<RunEvent> Events { get; } = [];
+
+        public ValueTask PublishAsync(RunEvent evt)
+        {
+            lock (Events) { Events.Add(evt); }
+            return default;
+        }
+
+        public IEnumerable<string> PassedUids => Events
+            .OfType<StepFinished>()
+            .Where(e => e.Result.Status == StepStatus.Passed)
+            .Select(PassedUid);
+
+        public IEnumerable<string> SkippedUids => Events
+            .OfType<StepFinished>()
+            .Where(e => e.Result.Status == StepStatus.Skipped)
+            .Select(e => RaunDiscoverer.MakeUid(e.Definition.ScenarioId, e.Result.Node.StepId));
+    }
+
+    private sealed class RecordingMessageBus : IMessageBus
+    {
+        private readonly List<TestNodeUpdateMessage> updates = [];
+
+        public IReadOnlyList<TestNode> Nodes
+        {
+            get { lock (updates) { return updates.Select(u => u.TestNode).ToList(); } }
+        }
+
+        public Task PublishAsync(IDataProducer dataProducer, IData data)
+        {
+            if (data is TestNodeUpdateMessage update)
+            {
+                lock (updates) { updates.Add(update); }
+            }
+
+            return Task.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task Conditional_scenario_runs_the_taken_arm_and_reports_the_other_as_not_green()
+    {
+        var def = Definition("c", "Conditional",
+            Node(0, "cond", "is priority",
+                invoke: (_, _) => Task.FromResult<object?>(true),
+                evaluate: static o => (bool)o!),
+            Node(1, "urgent", "create urgent", dependsOn: [0], guards: [new Guard(0, true)]),
+            Node(2, "standard", "create standard", dependsOn: [0], guards: [new Guard(0, false)]),
+            Node(3, "merge", "«merge appt»", mergeSources: [1, 2], synthetic: true));
+
+        var loop = new RaunRunLoop(() => [def]);
+        var sink = new RecordingSink();
+        await loop.RunAsync(uids: null, sink, CancellationToken.None);
+
+        var finished = sink.Events.OfType<StepFinished>().ToDictionary(e => e.Result.Node.StepId, e => e.Result);
+
+        Assert.Equal(StepStatus.Passed, finished["urgent"].Status);
+        Assert.Equal(StepStatus.NotTaken, finished["standard"].Status);
+        Assert.DoesNotContain("standard", sink.PassedUids.Select(u => u.Split(':')[1]));
+    }
+
+    [Fact]
+    public async Task Not_taken_step_never_reaches_the_passed_tally()
+    {
+        var def = Definition("c2", "Conditional",
+            Node(0, "cond", "is priority",
+                invoke: (_, _) => Task.FromResult<object?>(false),
+                evaluate: static o => (bool)o!),
+            Node(1, "urgent", "create urgent", dependsOn: [0], guards: [new Guard(0, true)]));
+
+        var loop = new RaunRunLoop(() => [def]);
+        var sink = new RecordingSink();
+        await loop.RunAsync(uids: null, sink, CancellationToken.None);
+
+        Assert.DoesNotContain(Uid("c2", "urgent"), sink.PassedUids);
+    }
+
+    // -- Filtered runs: a step runs with everything up to and including it, and nothing after ------
+
+    private static IEnumerable<string> FinishedUids(RecordingSink sink) =>
+        sink.Events.OfType<StepFinished>().Select(PassedUid);
+
+    private static IEnumerable<string> StartedUids(RecordingSink sink) =>
+        sink.Events.OfType<StepStarted>().Select(e => RaunDiscoverer.MakeUid(e.Definition.ScenarioId, e.Context.Node.StepId));
+
+    [Fact]
+    public async Task Selecting_a_middle_step_runs_its_predecessors_and_leaves_the_rest_out()
+    {
+        var def = Definition("chain", "chain",
+            Node(0, "x", "x"),
+            Node(1, "y", "y", dependsOn: [0]),
+            Node(2, "z", "z", dependsOn: [1]));
+
+        var loop = new RaunRunLoop(() => [def]);
+        var sink = new RecordingSink();
+        await loop.RunAsync(new HashSet<string>([Uid("chain", "y")], StringComparer.OrdinalIgnoreCase), sink, CancellationToken.None);
+
+        Assert.Contains(Uid("chain", "x"), sink.PassedUids);
+        Assert.Contains(Uid("chain", "y"), sink.PassedUids);
+        // z is not reported at all — not started, not finished, not skipped.
+        Assert.DoesNotContain(Uid("chain", "z"), FinishedUids(sink));
+        Assert.DoesNotContain(Uid("chain", "z"), StartedUids(sink));
+    }
+
+    [Fact]
+    public async Task Selecting_one_branch_of_a_fork_leaves_the_other_branch_out()
+    {
+        var def = Definition("fork", "fork",
+            Node(0, "root", "root"),
+            Node(1, "left", "left", dependsOn: [0]),
+            Node(2, "right", "right", dependsOn: [0]));
+
+        var loop = new RaunRunLoop(() => [def]);
+        var sink = new RecordingSink();
+        await loop.RunAsync(new HashSet<string>([Uid("fork", "left")], StringComparer.OrdinalIgnoreCase), sink, CancellationToken.None);
+
+        Assert.Contains(Uid("fork", "root"), sink.PassedUids);
+        Assert.Contains(Uid("fork", "left"), sink.PassedUids);
+        Assert.DoesNotContain(Uid("fork", "right"), FinishedUids(sink));
+    }
+
+    [Fact]
+    public async Task Selecting_a_guarded_step_pulls_in_its_condition()
+    {
+        var def = Definition("cond", "cond",
+            Node(0, "patient", "patient"),
+            Node(1, "priority", "priority", dependsOn: [0], invoke: (_, _) => Task.FromResult<object?>(true), evaluate: static o => (bool)o!),
+            Node(2, "urgent", "urgent", dependsOn: [1], guards: [new Guard(1, true)]),
+            Node(3, "notify", "notify", dependsOn: [0]));
+
+        var loop = new RaunRunLoop(() => [def]);
+        var sink = new RecordingSink();
+        await loop.RunAsync(new HashSet<string>([Uid("cond", "urgent")], StringComparer.OrdinalIgnoreCase), sink, CancellationToken.None);
+
+        Assert.Contains(Uid("cond", "priority"), sink.PassedUids);
+        Assert.Contains(Uid("cond", "urgent"), sink.PassedUids);
+        Assert.DoesNotContain(Uid("cond", "notify"), FinishedUids(sink));
+    }
+
+    [Fact]
+    public async Task A_filtered_run_still_runs_and_reports_teardown()
+    {
+        var teardown = new ScenarioNode
+        {
+            Index = 2,
+            StepId = "teardown",
+            Phase = "Then",
+            OperationName = "Teardown",
+            DisplayNameTemplate = "Teardown",
+            DependsOn = [],
+            IsTeardown = true,
+            Invoke = (_, _) => Task.FromResult<object?>(null),
+        };
+        var def = Definition("td", "td",
+            Node(0, "x", "x"),
+            Node(1, "y", "y", dependsOn: [0]),
+            teardown);
+
+        var loop = new RaunRunLoop(() => [def]);
+        var sink = new RecordingSink();
+        await loop.RunAsync(new HashSet<string>([Uid("td", "x")], StringComparer.OrdinalIgnoreCase), sink, CancellationToken.None);
+
+        Assert.Contains(Uid("td", "x"), sink.PassedUids);
+        Assert.Contains(Uid("td", "teardown"), sink.PassedUids);
+        Assert.DoesNotContain(Uid("td", "y"), FinishedUids(sink));
+    }
+
+    [Fact]
+    public void SelectTargets_maps_uids_to_node_indices_and_null_to_everything()
+    {
+        var def = Definition("a", "A", Node(0, "x", "x"), Node(1, "y", "y"), Node(2, "z", "z"));
+
+        Assert.Null(RaunRunLoop.SelectTargets(def, uids: null));
+
+        var targets = RaunRunLoop.SelectTargets(
+            def, new HashSet<string>([Uid("a", "y"), Uid("other", "x")], StringComparer.OrdinalIgnoreCase));
+        Assert.Equal([1], targets!.Order());
+    }
+}

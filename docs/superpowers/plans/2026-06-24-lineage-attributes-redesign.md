@@ -4,14 +4,14 @@
 
 **Goal:** Move lineage declaration from the target parameter to the producing subject — `[return: Created(References=[nameof(user)], Consumes=[nameof(slot)])]` instead of `[References(Subject.Return)] User user`.
 
-**Architecture:** Front-end-only change. The runtime (`ResourceContext.Reference/Consume`, `ResourceLineageRelation`, `LifecycleVerb`) is untouched. Attribute classes are renamed to participle form and `[References]`/`[Consumes]` are deleted as standalone attributes, becoming `string[]` properties on `[Created]`/`[Loaded]`/`[Edited]`. The generator reads those properties off the producer and synthesizes the *same* `ResourceRoleClaim`s it built before (target expression + producer subject expression), so the emitter is unchanged. The analyzer's FRST009/FRST010 checks invert to the subject side.
+**Architecture:** Front-end-only change. The runtime (`ResourceContext.Reference/Consume`, `ResourceLineageRelation`, `LifecycleVerb`) is untouched. Attribute classes are renamed to participle form and `[References]`/`[Consumes]` are deleted as standalone attributes, becoming `string[]` properties on `[Created]`/`[Loaded]`/`[Edited]`. The generator reads those properties off the producer and synthesizes the *same* `ResourceRoleClaim`s it built before (target expression + producer subject expression), so the emitter is unchanged. The analyzer's RAUN009/RAUN010 checks invert to the subject side.
 
 **Tech Stack:** C# 14 / .NET 10, Roslyn incremental source generator (netstandard2.0), xUnit + Verify snapshots, jj for version control.
 
 ## Global Constraints
 
 - **Version control: `jj` only.** Never run `git commit/add/...`. Commit each task with `jj commit -m "..."`. No `Co-Authored-By` / tooling trailers.
-- **Build/test:** `dotnet build Freista.slnx` and `dotnet test Freista.slnx`. Keep zero warnings.
+- **Build/test:** `dotnet build Raun.slnx` and `dotnet test Raun.slnx`. Keep zero warnings.
 - **Naming:** participle attributes — `Created`, `Loaded`, `Edited`, `Read`, `Deleted`. Runtime verb strings (`Create/Load/Read/Edit/Delete/Reference/Consume`) are unchanged.
 - **Behavior-preserving:** the set of recorded effects and `ResourceLineageRelation`s for an equivalent scenario must be identical before and after. Being named in a producer's `References`/`Consumes` confers the `Reference`/`Consume` role+effect on the bare target parameter.
 - **`Subject.Return`** retained only as a *target* token (an `[Edited]` param referencing the step's own return).
@@ -26,20 +26,20 @@
 
 | File | Change |
 |---|---|
-| `src/Freista/Resources/ResourceRoleAttributes.cs` | rename to participle; delete `References`/`Consumes` attrs; add `string[] References`/`string[] Consumes` props to `Created`/`Loaded`/`Edited` |
-| `src/Freista/Resources/Subject.cs` | doc-comment refresh (token retained) |
-| `src/Freista/Resources/ResourceContext.cs` | doc-comment refresh (`[Creates]`→`[Created]` mentions) |
-| `src/Freista/Model/ResourceLineageRelation.cs` | doc-comment refresh |
-| `src/Freista.Generator/Lowering/AttributeReader.cs` | rename role mapping; replace `ParameterSubjects` with `ProducerLineage` (reads named props off Created/Loaded/Edited) |
-| `src/Freista.Generator/Lowering/ScenarioParser.cs` | `BuildResourceClaims` synthesizes lineage claims from producer; `ResolveSubjectExpressions`→`ResolveTargetExpressions` |
-| `src/Freista.Generator/Analysis/Descriptors.cs` | FRST009/FRST010 message text |
-| `src/Freista.Generator/Analysis/ScenarioAnalyzer.cs` | role-name updates; FRST009 treats lineage targets as covered; FRST010 inverts to subject side |
-| `test/Freista.Test/Resources/SubjectAttributeTests.cs` | rewrite for property-based lineage |
-| `test/Freista.Test/Resources/ResourceRoleAttributeTests.cs` | rename attrs |
-| `test/Freista.Generator.Test/SampleSources.cs` | new syntax in `ResourceDsl`/`BookWithLineage` |
-| `test/Freista.Generator.Test/AnalyzerTests.cs` | rewrite FRST010 cases to subject side |
-| `test/Freista.Generator.Test/ResourceLoweringTests.cs` | comment refresh (asserts should pass unchanged) |
-| `test/Freista.Generator.Test/Snapshots/...verified.cs` | re-accept |
+| `src/Raun/Resources/ResourceRoleAttributes.cs` | rename to participle; delete `References`/`Consumes` attrs; add `string[] References`/`string[] Consumes` props to `Created`/`Loaded`/`Edited` |
+| `src/Raun/Resources/Subject.cs` | doc-comment refresh (token retained) |
+| `src/Raun/Resources/ResourceContext.cs` | doc-comment refresh (`[Creates]`→`[Created]` mentions) |
+| `src/Raun/Model/ResourceLineageRelation.cs` | doc-comment refresh |
+| `src/Raun.Generator/Lowering/AttributeReader.cs` | rename role mapping; replace `ParameterSubjects` with `ProducerLineage` (reads named props off Created/Loaded/Edited) |
+| `src/Raun.Generator/Lowering/ScenarioParser.cs` | `BuildResourceClaims` synthesizes lineage claims from producer; `ResolveSubjectExpressions`→`ResolveTargetExpressions` |
+| `src/Raun.Generator/Analysis/Descriptors.cs` | RAUN009/RAUN010 message text |
+| `src/Raun.Generator/Analysis/ScenarioAnalyzer.cs` | role-name updates; RAUN009 treats lineage targets as covered; RAUN010 inverts to subject side |
+| `test/Raun.Test/Resources/SubjectAttributeTests.cs` | rewrite for property-based lineage |
+| `test/Raun.Test/Resources/ResourceRoleAttributeTests.cs` | rename attrs |
+| `test/Raun.Generator.Test/SampleSources.cs` | new syntax in `ResourceDsl`/`BookWithLineage` |
+| `test/Raun.Generator.Test/AnalyzerTests.cs` | rewrite RAUN010 cases to subject side |
+| `test/Raun.Generator.Test/ResourceLoweringTests.cs` | comment refresh (asserts should pass unchanged) |
+| `test/Raun.Generator.Test/Snapshots/...verified.cs` | re-accept |
 | `README` / docs | sweep old syntax |
 
 ---
@@ -47,15 +47,15 @@
 ### Task 1: Rename role attributes to participle + lineage properties
 
 **Files:**
-- Modify: `src/Freista/Resources/ResourceRoleAttributes.cs`
-- Test: `test/Freista.Test/Resources/SubjectAttributeTests.cs`, `test/Freista.Test/Resources/ResourceRoleAttributeTests.cs`
+- Modify: `src/Raun/Resources/ResourceRoleAttributes.cs`
+- Test: `test/Raun.Test/Resources/SubjectAttributeTests.cs`, `test/Raun.Test/Resources/ResourceRoleAttributeTests.cs`
 
 **Produces:** `CreatedAttribute`, `LoadedAttribute`, `EditedAttribute` (each with `string[] References`/`string[] Consumes` get/set props, default `[]`); `ReadAttribute`, `DeletedAttribute`. Deletes `CreatesAttribute`/`LoadsAttribute`/`ReadsAttribute`/`EditsAttribute`/`DeletesAttribute`/`ReferencesAttribute`/`ConsumesAttribute`.
 
 - [ ] **Step 1: Rewrite the attribute file**
 
 ```csharp
-namespace Freista;
+namespace Raun;
 
 /// <summary>Return/method role: the step produces a <b>new</b> resource (exclusive in C2).
 /// <see cref="References"/>/<see cref="Consumes"/> name input parameters (or <see cref="Subject.Return"/>)
@@ -100,10 +100,10 @@ public sealed class DeletedAttribute : Attribute;
 - [ ] **Step 2: Rewrite `SubjectAttributeTests.cs`** to assert the new property surface
 
 ```csharp
-using Freista;
+using Raun;
 using Xunit;
 
-namespace Freista.Test.Resources;
+namespace Raun.Test.Resources;
 
 public class SubjectAttributeTests
 {
@@ -136,7 +136,7 @@ public class SubjectAttributeTests
 ```
 
 - [ ] **Step 3:** Update `ResourceRoleAttributeTests.cs` references to renamed attrs (mechanical: `Creates`→`Created`, `Loads`→`Loaded`, `Reads`→`Read`, `Edits`→`Edited`, `Deletes`→`Deleted`; remove any `References`/`Consumes` attribute construction).
-- [ ] **Step 4:** `dotnet build src/Freista/Freista.csproj` — expect green (generator not yet updated, but the runtime lib compiles).
+- [ ] **Step 4:** `dotnet build src/Raun/Raun.csproj` — expect green (generator not yet updated, but the runtime lib compiles).
 - [ ] **Step 5:** Commit: `jj commit -m "refactor(resources): participle role attributes; lineage as Created/Loaded/Edited properties"`
 
 ---
@@ -144,8 +144,8 @@ public class SubjectAttributeTests
 ### Task 2: Generator reads lineage off the producer
 
 **Files:**
-- Modify: `src/Freista.Generator/Lowering/AttributeReader.cs`
-- Modify: `src/Freista.Generator/Lowering/ScenarioParser.cs`
+- Modify: `src/Raun.Generator/Lowering/AttributeReader.cs`
+- Modify: `src/Raun.Generator/Lowering/ScenarioParser.cs`
 
 **Interfaces:**
 - Consumes: renamed attribute class names from Task 1.
@@ -188,7 +188,7 @@ private static ImmutableArray<string> NamedStringArray(AttributeData attr, strin
 }
 ```
 
-- [ ] **Step 3:** In `ScenarioParser.BuildResourceClaims`, synthesize lineage claims from the producer side. For each role-bearing parameter, build its plain claim (no `SubjectExpressions`). Then, for the producing position (return when `hasResult`, plus any `[Edited]` parameter), read `ProducerLineage` and for each target name emit a `Reference`/`Consume` claim whose `Expression` is the **target** parameter's rewritten argument expression (or `__r` for `Subject.Return`) and whose `SubjectExpressions = [producerExpr]` (the producer's `__r` or edited-param expression). Emit these synthesized claims **before** the producer's own role claim. Replace `ResolveSubjectExpressions` with `ResolveTargetExpressions(targetName, method, arguments, rewriter)` returning the single target expression (param arg or `__r`), null when unresolved (analyzer reports FRST010).
+- [ ] **Step 3:** In `ScenarioParser.BuildResourceClaims`, synthesize lineage claims from the producer side. For each role-bearing parameter, build its plain claim (no `SubjectExpressions`). Then, for the producing position (return when `hasResult`, plus any `[Edited]` parameter), read `ProducerLineage` and for each target name emit a `Reference`/`Consume` claim whose `Expression` is the **target** parameter's rewritten argument expression (or `__r` for `Subject.Return`) and whose `SubjectExpressions = [producerExpr]` (the producer's `__r` or edited-param expression). Emit these synthesized claims **before** the producer's own role claim. Replace `ResolveSubjectExpressions` with `ResolveTargetExpressions(targetName, method, arguments, rewriter)` returning the single target expression (param arg or `__r`), null when unresolved (analyzer reports RAUN010).
 
 ```csharp
 // inside BuildResourceClaims, replacing the param loop's subject logic and the return tail:
@@ -249,7 +249,7 @@ private static string? ResolveTargetExpression(
 }
 ```
 
-- [ ] **Step 4:** `dotnet build Freista.slnx` — expect green.
+- [ ] **Step 4:** `dotnet build Raun.slnx` — expect green.
 - [ ] **Step 5:** Commit: `jj commit -m "feat(generator): lower producer-side References/Consumes into lineage claims"`
 
 ---
@@ -257,9 +257,9 @@ private static string? ResolveTargetExpression(
 ### Task 3: Update samples and re-green the lowering tests
 
 **Files:**
-- Modify: `test/Freista.Generator.Test/SampleSources.cs`
-- Modify: `test/Freista.Generator.Test/ResourceLoweringTests.cs` (comments only; asserts unchanged)
-- Modify: `test/Freista.Generator.Test/Snapshots/GeneratorSnapshotTests.Resource_scenario#FreistaScenarios.g.verified.cs` (re-accept)
+- Modify: `test/Raun.Generator.Test/SampleSources.cs`
+- Modify: `test/Raun.Generator.Test/ResourceLoweringTests.cs` (comments only; asserts unchanged)
+- Modify: `test/Raun.Generator.Test/Snapshots/GeneratorSnapshotTests.Resource_scenario#RaunScenarios.g.verified.cs` (re-accept)
 
 - [ ] **Step 1:** In `SampleSources.ResourceDsl`, rewrite roles to participle and `BookWithLineage` to producer-side lineage:
 
@@ -278,31 +278,31 @@ public static async Task<Appointment> BookWithLineage(User user, Slot slot)
 
 - [ ] **Step 2:** Run lowering tests:
 
-Run: `dotnet test test/Freista.Generator.Test/Freista.Generator.Test.csproj --filter "FullyQualifiedName~ResourceLoweringTests"`
+Run: `dotnet test test/Raun.Generator.Test/Raun.Generator.Test.csproj --filter "FullyQualifiedName~ResourceLoweringTests"`
 Expected: PASS — `Reference_and_consume_subjects_emit_edge_calls`, `Reference_and_consume_params_lower_to_shared_lineage_effects` (effects `[Reference(user), Consume(slot), Create(appt)]`), and `BookWithLineage_records_relations_from_the_created_appointment` (lineage appt→user Ref, appt→slot Consume) all green, proving behavior preserved.
 
 - [ ] **Step 3:** Re-accept the snapshot: run the snapshot test, diff `.received.cs` vs `.verified.cs` to confirm only the lineage call-emission/attribute-comment lines changed as expected, then accept (copy received→verified).
 
-Run: `dotnet test test/Freista.Generator.Test/Freista.Generator.Test.csproj --filter "FullyQualifiedName~GeneratorSnapshotTests"`
+Run: `dotnet test test/Raun.Generator.Test/Raun.Generator.Test.csproj --filter "FullyQualifiedName~GeneratorSnapshotTests"`
 
 - [ ] **Step 4:** Commit: `jj commit -m "test(generator): producer-side lineage samples + re-accepted snapshot"`
 
 ---
 
-### Task 4: Analyzer — FRST009 coverage + FRST010 inversion
+### Task 4: Analyzer — RAUN009 coverage + RAUN010 inversion
 
 **Files:**
-- Modify: `src/Freista.Generator/Analysis/Descriptors.cs`
-- Modify: `src/Freista.Generator/Analysis/ScenarioAnalyzer.cs`
-- Modify: `test/Freista.Generator.Test/AnalyzerTests.cs`
+- Modify: `src/Raun.Generator/Analysis/Descriptors.cs`
+- Modify: `src/Raun.Generator/Analysis/ScenarioAnalyzer.cs`
+- Modify: `test/Raun.Generator.Test/AnalyzerTests.cs`
 
 - [ ] **Step 1:** Update Descriptors messages:
-  - FRST009 → `"...declare its access: [Read], [Edited], or [Deleted] on a parameter, or [Created], [Loaded], or [Edited] on the return — or be named in a producer's References/Consumes — there is no default"`.
-  - FRST010 title `"Lineage target must name a step input"`; message `"'{0}' is not a valid lineage target for step '{1}' — References/Consumes must name a parameter (via nameof) or Subject.Return"`.
+  - RAUN009 → `"...declare its access: [Read], [Edited], or [Deleted] on a parameter, or [Created], [Loaded], or [Edited] on the return — or be named in a producer's References/Consumes — there is no default"`.
+  - RAUN010 title `"Lineage target must name a step input"`; message `"'{0}' is not a valid lineage target for step '{1}' — References/Consumes must name a parameter (via nameof) or Subject.Return"`.
 
 - [ ] **Step 2:** Rewrite `AnalyzeStepResources`:
-  - Build the set of param names named in any producer's `References`/`Consumes` (call `AttributeReader.ProducerLineage` on each `[Edited]` param's attributes and on the return attributes). A resource param with no own role **but** present in that set is *covered* — skip FRST009 for it.
-  - FRST010: for each producer (each `[Edited]` param + the return when it is `Created`/`Loaded`/`Edited`), validate each `References`/`Consumes` target name resolves to a parameter or `Subject.Return`; and that it does not name the producer itself (self-lineage). Report FRST010 otherwise.
+  - Build the set of param names named in any producer's `References`/`Consumes` (call `AttributeReader.ProducerLineage` on each `[Edited]` param's attributes and on the return attributes). A resource param with no own role **but** present in that set is *covered* — skip RAUN009 for it.
+  - RAUN010: for each producer (each `[Edited]` param + the return when it is `Created`/`Loaded`/`Edited`), validate each `References`/`Consumes` target name resolves to a parameter or `Subject.Return`; and that it does not name the producer itself (self-lineage). Report RAUN010 otherwise.
 
 ```csharp
 var paramNames = method.Parameters.Select(p => p.Name).ToImmutableHashSet();
@@ -312,18 +312,18 @@ var paramNames = method.Parameters.Select(p => p.Name).ToImmutableHashSet();
         p.Locations.FirstOrDefault() ?? method.Locations.FirstOrDefault() ?? Location.None);
 // (return producer: selfName = Subject.Return token; loc = method location)
 
-// 1) lineage targets that satisfy FRST009 for bare params
+// 1) lineage targets that satisfy RAUN009 for bare params
 var coveredByLineage = ... // union of all producers' refs+cons that name a parameter
 
-// 2) FRST009 over params/return, skipping coveredByLineage
-// 3) FRST010 over each producer's targets: must be in paramNames or == ReturnSubject, and != producer's own subject
+// 2) RAUN009 over params/return, skipping coveredByLineage
+// 3) RAUN010 over each producer's targets: must be in paramNames or == ReturnSubject, and != producer's own subject
 ```
 
-- [ ] **Step 3:** Rewrite the FRST010 tests to the subject side:
+- [ ] **Step 3:** Rewrite the RAUN010 tests to the subject side:
 
 ```csharp
 [Fact] // unknown target
-public async Task FRST010_unknown_target_name()
+public async Task RAUN010_unknown_target_name()
 {
     var source = LineageDsl + """
         public static class BadDsl { extension(When) {
@@ -332,11 +332,11 @@ public async Task FRST010_unknown_target_name()
             public static async Task<Account> Transfer(User who) { await Task.Yield(); return new Account("a"); }
         } }
         """;
-    AssertHas(await GeneratorHarness.AnalyzeAsync(source), "FRST010");
+    AssertHas(await GeneratorHarness.AnalyzeAsync(source), "RAUN010");
 }
 
 [Fact] // Subject.Return target but return is not a subject
-public async Task FRST010_return_target_without_a_subject_return()
+public async Task RAUN010_return_target_without_a_subject_return()
 {
     var source = LineageDsl + """
         public static class BadDsl { extension(When) {
@@ -344,11 +344,11 @@ public async Task FRST010_return_target_without_a_subject_return()
             public static async Task LookUp([Edited(References = [Subject.Return])] Account acc) { await Task.Yield(); }
         } }
         """;
-    AssertHas(await GeneratorHarness.AnalyzeAsync(source), "FRST010");
+    AssertHas(await GeneratorHarness.AnalyzeAsync(source), "RAUN010");
 }
 
 [Fact] // clean
-public async Task FRST010_clean_for_valid_targets()
+public async Task RAUN010_clean_for_valid_targets()
 {
     var source = LineageDsl + """
         public static class GoodDsl { extension(When) {
@@ -360,24 +360,24 @@ public async Task FRST010_clean_for_valid_targets()
             public static async Task<Account> Create(User who) { await Task.Yield(); return new Account("a"); }
         } }
         """;
-    Assert.DoesNotContain(await GeneratorHarness.AnalyzeAsync(source), d => d.Id == "FRST010");
+    Assert.DoesNotContain(await GeneratorHarness.AnalyzeAsync(source), d => d.Id == "RAUN010");
 }
 ```
 (Note: in the `Assign` clean case `who` is `[Read]` *and* referenced — allowed; the `[Read]` gives its lock, the reference adds lineage. In `Create`, `who` is bare and covered by the reference.)
 
 - [ ] **Step 4:** Run analyzer tests:
 
-Run: `dotnet test test/Freista.Generator.Test/Freista.Generator.Test.csproj --filter "FullyQualifiedName~AnalyzerTests"`
+Run: `dotnet test test/Raun.Generator.Test/Raun.Generator.Test.csproj --filter "FullyQualifiedName~AnalyzerTests"`
 Expected: PASS.
 
-- [ ] **Step 5:** Commit: `jj commit -m "feat(analyzer): FRST009 lineage-target coverage + subject-side FRST010"`
+- [ ] **Step 5:** Commit: `jj commit -m "feat(analyzer): RAUN009 lineage-target coverage + subject-side RAUN010"`
 
 ---
 
 ### Task 5: Doc-comment refresh + README/docs sweep + full green
 
 **Files:**
-- Modify: `src/Freista/Resources/Subject.cs`, `src/Freista/Resources/ResourceContext.cs`, `src/Freista/Model/ResourceLineageRelation.cs`
+- Modify: `src/Raun/Resources/Subject.cs`, `src/Raun/Resources/ResourceContext.cs`, `src/Raun/Model/ResourceLineageRelation.cs`
 - Modify: `README*` and any doc referencing old syntax
 
 - [ ] **Step 1:** Refresh doc comments mentioning `[Creates]`/`[Edits]`/`[References]`/`[Consumes]` to the new attribute names and producer-side framing (Subject.cs summary, ResourceContext `Reference`/`Consume` summaries, ResourceLineageRelation `Subject` summary).
@@ -388,13 +388,13 @@ Expected after fixes: only legitimate new-form usages remain (property `Referenc
 
 - [ ] **Step 3:** Full build + test:
 
-Run: `dotnet build Freista.slnx` then `dotnet test Freista.slnx`
+Run: `dotnet build Raun.slnx` then `dotnet test Raun.slnx`
 Expected: 0 warnings, all tests PASS.
 
 - [ ] **Step 4:** Commit: `jj commit -m "docs: producer-side lineage across comments, README, and samples"`
 
 ## Self-Review
 
-- **Spec coverage:** flip (Tasks 2-3) ✓; two-axis vocabulary + participle naming (Task 1) ✓; `[Loaded]` keeps lineage (Task 1 props on Loaded) ✓; `Subject.Return` as target token (Tasks 2,4) ✓; FRST010 inversion (Task 4) ✓; runtime unchanged (no runtime task — by construction) ✓; full replacement (Task 1 deletes old attrs) ✓; testing (Tasks 3,4) ✓.
+- **Spec coverage:** flip (Tasks 2-3) ✓; two-axis vocabulary + participle naming (Task 1) ✓; `[Loaded]` keeps lineage (Task 1 props on Loaded) ✓; `Subject.Return` as target token (Tasks 2,4) ✓; RAUN010 inversion (Task 4) ✓; runtime unchanged (no runtime task — by construction) ✓; full replacement (Task 1 deletes old attrs) ✓; testing (Tasks 3,4) ✓.
 - **Placeholder scan:** none — all code shown.
 - **Type consistency:** `ProducerLineage` returns the tuple consumed by ScenarioParser and ScenarioAnalyzer; verb strings `"Reference"`/`"Consume"`/`"Create"`/`"Edit"` unchanged; `ResourceRoleClaim` shape reused (Expression=target, SubjectExpressions=[producer]).

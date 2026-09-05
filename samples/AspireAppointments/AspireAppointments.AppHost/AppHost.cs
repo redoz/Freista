@@ -1,6 +1,6 @@
 // The smallest AppHost that still exercises the integration: one project resource, no containers.
 // A container resource (Postgres, say) would be more realistic but would make the sample require a
-// container runtime to run at all — the Freista wiring is identical either way.
+// container runtime to run at all — the Raun wiring is identical either way.
 
 var builder = DistributedApplication.CreateBuilder(args);
 

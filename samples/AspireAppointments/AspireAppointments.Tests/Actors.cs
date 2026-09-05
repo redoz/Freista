@@ -18,7 +18,7 @@ public enum Actor
 /// <remarks>
 /// Actor is a property of the CALL, not of the scenario or even of the step — one scenario
 /// routinely acts as an admin and then as a patient. That is why the identity is an argument here
-/// rather than ambient state, and why nothing mutates headers on a shared client: Freista runs a
+/// rather than ambient state, and why nothing mutates headers on a shared client: Raun runs a
 /// scenario's steps concurrently, so a shared client's <c>DefaultRequestHeaders</c> would race.
 /// <para>
 /// Clients come from <see cref="IHttpClientFactory"/>, which pools and rotates the underlying
@@ -45,7 +45,7 @@ public sealed class AppointmentsApi(IHttpClientFactory factory)
 /// <summary>
 /// A hand-written typed client. Deliberately not Kiota: the dependency-injection shape is identical,
 /// and generating it would drag an OpenAPI document and a codegen step into a sample that is meant to
-/// teach Freista.
+/// teach Raun.
 /// </summary>
 public sealed class AppointmentsClient(HttpClient http)
 {
