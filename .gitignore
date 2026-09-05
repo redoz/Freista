@@ -18,6 +18,10 @@ coverage/
 *.user
 *.suo
 
+# Per-person agent instructions (the committed guidance is AGENTS.md)
+CLAUDE.local.md
+.claude/settings.local.json
+
 # Verify (snapshot testing) – received files are transient, accepted are committed
 *.received.*
 
