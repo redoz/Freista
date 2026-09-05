@@ -299,10 +299,15 @@ internal static class ScenarioEmitter
                 .WithLeadingTrivia(HiddenTrivia());
         }
 
-        // No roles ⇒ [callStmt, returnStmt], identical to the prior output. Roles ⇒ the resource
-        // calls slot in between, each carrying its own hidden-line directive.
-        var bodyStatements = new List<StatementSyntax> { callStmt };
-        bodyStatements.AddRange(step.ResourceClaims.Select(ResourceCallStatement));
+        // No roles ⇒ [callStmt, returnStmt], identical to the prior output. Roles ⇒ declare what you
+        // touch, then touch it: claims on the step's INPUTS go before the call, so a conflict with an
+        // unordered sibling is refused before the step performs its real side effect; anything that
+        // names the step's own return (__r) can only follow the call. Relative order is kept within
+        // each half, so the effect stream still reads parameters first, then return.
+        var bodyStatements = new List<StatementSyntax>();
+        bodyStatements.AddRange(step.ResourceClaims.Where(c => !MentionsReturn(c)).Select(ResourceCallStatement));
+        bodyStatements.Add(callStmt);
+        bodyStatements.AddRange(step.ResourceClaims.Where(MentionsReturn).Select(ResourceCallStatement));
         bodyStatements.Add(returnStmt);
 
         return ParenthesizedLambdaExpression()
@@ -314,6 +319,11 @@ internal static class ScenarioEmitter
             })))
             .WithBlock(Block(bodyStatements));
     }
+
+    /// <summary>True when the claim's target or any of its lineage subjects is the step's own return
+    /// value, which exists only after the DSL call has run.</summary>
+    private static bool MentionsReturn(ResourceRoleClaim claim)
+        => claim.IsReturn || claim.Expression == "__r" || claim.SubjectExpressions.Contains("__r");
 
     /// <summary>
     /// Builds <c>await __ctx.Resources.{Verb}({Expression});</c> as a hidden-trivia expression

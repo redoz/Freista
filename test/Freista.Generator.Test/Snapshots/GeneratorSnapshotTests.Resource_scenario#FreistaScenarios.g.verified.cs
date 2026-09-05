@@ -65,9 +65,9 @@ namespace Freista.Generated
                 },
                 Invoke = static async (__inputs, __ctx) =>
                 {
-                    var __r = await When.Suspend(__inputs.Get<global::ResourceDemo.User>(0));
 #line hidden
                     await __ctx.Resources.Edit(__inputs.Get<global::ResourceDemo.User>(0));
+                    var __r = await When.Suspend(__inputs.Get<global::ResourceDemo.User>(0));
 #line hidden
                     await __ctx.Resources.Edit(__r);
 #line hidden
@@ -91,9 +91,9 @@ namespace Freista.Generated
                 },
                 Invoke = static async (__inputs, __ctx) =>
                 {
-                    await Then.CannotSignIn(__inputs.Get<global::ResourceDemo.User>(1));
 #line hidden
                     await __ctx.Resources.Read(__inputs.Get<global::ResourceDemo.User>(1));
+                    await Then.CannotSignIn(__inputs.Get<global::ResourceDemo.User>(1));
 #line hidden
                     return (object? )null;
                 }

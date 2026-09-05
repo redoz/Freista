@@ -147,4 +147,39 @@ public class ResourceLoweringTests
         Assert.Equal("Appointment:jane@acme.com@1", consume.Subject.ToString());
         Assert.Equal("Slot:1", consume.Target.ToString());
     }
+
+    [Fact]
+    public void Param_role_claims_are_emitted_before_the_call_and_return_claims_after()
+    {
+        // Declare what you touch, then touch it: a parameter claim that conflicts with an unordered
+        // sibling's must be refused BEFORE the step performs its real side effect. The return claim can
+        // only follow the call, because __r does not exist until then.
+        var result = GeneratorHarness.Run(SampleSources.ResourceDsl + SampleSources.ResourceScenario);
+        result.AssertCompiles();
+        var source = result.GeneratedSource;
+
+        var paramClaim = source.IndexOf("__ctx.Resources.Edit(__inputs.Get<global::ResourceDemo.User>(0))", StringComparison.Ordinal);
+        var call = source.IndexOf("var __r = await When.Suspend(", StringComparison.Ordinal);
+        var returnClaim = source.IndexOf("__ctx.Resources.Edit(__r)", StringComparison.Ordinal);
+
+        Assert.True(paramClaim >= 0 && call >= 0 && returnClaim >= 0, "expected all three statements in the generated source");
+        Assert.True(paramClaim < call, "the parameter claim must precede the DSL call");
+        Assert.True(call < returnClaim, "the return claim must follow the DSL call");
+    }
+
+    [Fact]
+    public void Lineage_claims_whose_subject_is_the_return_are_emitted_after_the_call()
+    {
+        // Reference(user, __r) names the return as its subject, so it cannot move before the call even
+        // though its target is a parameter.
+        var result = GeneratorHarness.Run(SampleSources.ResourceDsl + SampleSources.LineageScenario);
+        result.AssertCompiles();
+        var source = result.GeneratedSource;
+
+        var call = source.IndexOf("var __r = await When.BookWithLineage(", StringComparison.Ordinal);
+        var reference = source.IndexOf("__ctx.Resources.Reference(", StringComparison.Ordinal);
+
+        Assert.True(call >= 0 && reference >= 0, "expected the call and the lineage claim in the generated source");
+        Assert.True(call < reference, "a lineage claim with the return as subject must follow the call");
+    }
 }
