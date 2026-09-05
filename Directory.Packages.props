@@ -20,12 +20,15 @@
 
     <!-- ILogger bridge: step logs written through the standard .NET logging abstraction.
          Abstractions only — no logging implementation is taken as a dependency. -->
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
 
     <!-- DI: Freista.Mtp needs only the abstractions (IServiceScopeFactory); the test project needs
          the implementation to build a provider. -->
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
+
+    <!-- Aspire integration (Freista.Aspire + the Aspire sample). -->
+    <PackageVersion Include="Aspire.Hosting.Testing" Version="13.5.3" />
 
     <!--
       Roslyn the primary generator builds against. Installed SDK 10.0.300 ships Roslyn

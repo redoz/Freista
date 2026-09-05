@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <!-- xUnit project testing Freista.Aspire; it uses the Test SDK's entry point. -->
+    <FreistaGenerateProgram>false</FreistaGenerateProgram>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <CompilerVisibleProperty Include="FreistaGenerateProgram" />
+  </ItemGroup>
+
+  <!-- Unit-level coverage only: everything here runs WITHOUT a container runtime. Actually standing
+       up an AppHost is the Aspire sample's job, which is the integration test for this package. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3.mtp-v2" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Freista.Aspire\Freista.Aspire.csproj" />
+  </ItemGroup>
+
+</Project>

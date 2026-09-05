@@ -58,7 +58,8 @@ independent ready branches keep running.
 | `src/Freista` | Runner-neutral core: phase markers, parallel awaiters, `ScenarioContext`, the graph model, and the DAG scheduler. No xUnit dependency. |
 | `src/Freista.Generator` | Roslyn incremental generator + analyzer (FRST000–010). netstandard2.0. |
 | `src/Freista.Mtp` | Microsoft.Testing.Platform test framework: `[Scenario]`, discovery, run loop, per-step node reporter. |
-| `samples/AppointmentTests` | End-to-end sample (linear / tuple / array / LINQ). |
+| `src/Freista.Aspire` | Aspire integration: builds the AppHost, starts it as the run's preflight while waiting for the resources you declare, registers it for your steps. Plumbing only — no phase markers, no steps. |
+| `samples/AppointmentTests` | End-to-end sample (linear / tuple / array / LINQ / conditionals / teardown). |
 | `test/*` | Scheduler tests (xUnit-free), generator/analyzer tests (behavioral + Verify snapshots), and MTP acceptance tests. |
 
 ## Run it
