@@ -77,9 +77,21 @@ public enum Cleanup { Optional, Required }
 public enum Run { Always, OnSuccess, Never }
 
 // on ScenarioContext
-public void OnTeardown(Func<Task> cleanup);                   // ordinary
-public void OnTeardown(Cleanup kind, Func<Task> cleanup);     // explicit kind
+public void OnTeardown(Func<Task> cleanup);                                    // ordinary, reports nothing
+public void OnTeardown(Cleanup kind, Func<Task> cleanup);                      // explicit kind
+public void OnTeardown(Func<ScenarioContext, Task> cleanup);                   // handed the TEARDOWN context
+public void OnTeardown(Cleanup kind, Func<ScenarioContext, Task> cleanup);
 ```
+
+**Amendment 2026-09-05 — the teardown context.** A cleanup runs inside the Teardown step, after the
+step that registered it has been reported, so anything it logged through the captured step `ctx`
+was lost (found when the samples' "cleaned up patient" line never reached the report). Cleanups can
+now take the teardown node's own `ScenarioContext`: its `Log`/`AddAttachment`/resource verbs land on
+the Teardown node, it is `ScenarioContext.Current` while cleanups run (so domain code below a cleanup
+attributes correctly), its `Services` is still the scenario's DI scope, and its `CancellationToken`
+is never cancelled. It is deliberately not attached to the resource conflict ledger: teardown is
+ordered after every node, so a cleanup's `Delete` of what a step `Create`d is never a conflict. The
+parameterless form stays for cleanups that report nothing.
 
 The enum is `Cleanup`, not `Teardown`: a type named `Teardown` in scope makes `[Teardown(...)]`
 ambiguous with `TeardownAttribute` (CS1614).

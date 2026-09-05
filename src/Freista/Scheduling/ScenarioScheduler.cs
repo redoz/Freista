@@ -335,38 +335,55 @@ public sealed class ScenarioScheduler
             // The STATUS answers one question — did teardown succeed? Whether the policy skipped
             // anything is information, not a verdict, so it goes in the log. Otherwise every suite
             // that never uses teardown, and every deliberate Run.Never, would carry a non-passing node.
-            var log = new List<string>();
+            //
+            // One context for the teardown node. Cleanups log and attach through it — the step that
+            // registered them has long since been reported — and it is the ambient
+            // ScenarioContext.Current while they run, so domain code below a cleanup attributes its
+            // lines here. Its token is None on purpose: cleanups run after cancellation so nothing
+            // leaks. It is NOT attached to the conflict ledger: teardown runs after every other node is
+            // terminal, so it is ordered after all of them, and a cleanup's Delete must never be refused
+            // as a conflict with the step that created the thing.
+            var teardownContext = new ScenarioContext(
+                node.StepId, name, services, resolver: null, _timeProvider, CancellationToken.None);
             var skipped = new List<string>();
             var stopwatch = Stopwatch.StartNew();
             List<Exception>? errors = null;
 
-            foreach (var entry in ordered)
+            ScenarioContext.SetCurrent(teardownContext);
+            try
             {
-                var owner = nodes[entry.OwningStepIndex].OperationName;
-                if (entry.Kind == Cleanup.Optional && !optionalAllowed)
+                foreach (var entry in ordered)
                 {
-                    skipped.Add(owner);
-                    continue;
-                }
+                    var owner = nodes[entry.OwningStepIndex].OperationName;
+                    if (entry.Kind == Cleanup.Optional && !optionalAllowed)
+                    {
+                        skipped.Add(owner);
+                        continue;
+                    }
 
-                try
-                {
-                    await entry.Cleanup().ConfigureAwait(false);
-                    log.Add($"cleaned up: {owner}");
+                    try
+                    {
+                        await entry.Cleanup(teardownContext).ConfigureAwait(false);
+                        teardownContext.Log($"cleaned up: {owner}");
+                    }
+                    catch (Exception ex)
+                    {
+                        // Recorded, never rethrown here: aborting would leak everything behind it.
+                        (errors ??= []).Add(ex);
+                        teardownContext.Log($"cleanup FAILED: {owner} — {ex.Message}");
+                    }
                 }
-                catch (Exception ex)
-                {
-                    // Recorded, never rethrown here: aborting would leak everything behind it.
-                    (errors ??= []).Add(ex);
-                    log.Add($"cleanup FAILED: {owner} — {ex.Message}");
-                }
+            }
+            finally
+            {
+                ScenarioContext.SetCurrent(null);
             }
 
             stopwatch.Stop();
 
             if (ordered.Count == 0)
             {
-                log.Add("no cleanup registered");
+                teardownContext.Log("no cleanup registered");
             }
 
             if (skipped.Count > 0)
@@ -375,7 +392,7 @@ public sealed class ScenarioScheduler
                     + (definition.TeardownPolicy == Run.OnSuccess && !succeeded
                         ? " and the scenario failed"
                         : string.Empty);
-                log.Add($"skipped {skipped.Count} optional cleanup(s) — {why}: {string.Join(", ", skipped)}");
+                teardownContext.Log($"skipped {skipped.Count} optional cleanup(s) — {why}: {string.Join(", ", skipped)}");
             }
 
             status[i] = errors is null ? StepStatus.Passed : StepStatus.Failed;
@@ -386,7 +403,10 @@ public sealed class ScenarioScheduler
                 Status = status[i],
                 StartedAt = startedAt,
                 Duration = stopwatch.Elapsed,
-                Logs = log,
+                Logs = teardownContext.Logs,
+                Attachments = teardownContext.Attachments,
+                Effects = teardownContext.Resources.Effects,
+                Lineage = teardownContext.Resources.Lineage,
                 Exception = errors is null
                     ? null
                     : new AggregateException($"{errors.Count} teardown action(s) failed.", errors),

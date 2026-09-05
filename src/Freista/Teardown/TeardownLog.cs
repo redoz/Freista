@@ -7,9 +7,9 @@ namespace Freista;
 /// orders teardown by the reverse topological position of this step.</param>
 /// <param name="Sequence">Global registration order, used to break ties within one step.</param>
 /// <param name="Kind">Whether the scenario's policy may skip this cleanup.</param>
-/// <param name="Cleanup">The work to run.</param>
+/// <param name="Cleanup">The work to run, handed the teardown node's <see cref="ScenarioContext"/>.</param>
 public readonly record struct TeardownRegistration(
-    int OwningStepIndex, int Sequence, Cleanup Kind, Func<Task> Cleanup);
+    int OwningStepIndex, int Sequence, Cleanup Kind, Func<ScenarioContext, Task> Cleanup);
 
 /// <summary>
 /// Scenario-scoped collector for cleanups registered by steps. Owned by the scheduler and shared by
@@ -22,7 +22,7 @@ public sealed class TeardownLog
     private int _sequence = -1;
 
     /// <summary>Records a cleanup for <paramref name="owningStepIndex"/>.</summary>
-    public void Add(int owningStepIndex, Cleanup kind, Func<Task> cleanup)
+    public void Add(int owningStepIndex, Cleanup kind, Func<ScenarioContext, Task> cleanup)
     {
         ArgumentNullException.ThrowIfNull(cleanup);
         _entries.Enqueue(new TeardownRegistration(

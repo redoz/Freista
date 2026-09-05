@@ -70,9 +70,9 @@ public static class LifecycleDsl
         public static Task<Slot> HoldSlot([Edited] Slot slot, ScenarioContext? ctx = null)
         {
             ctx?.SimulateElapsed(TimeSpan.FromMilliseconds(140));
-            ctx?.OnTeardown(Cleanup.Required, () =>
+            ctx?.OnTeardown(Cleanup.Required, teardown =>
             {
-                ctx.Log($"released hold on slot {slot.Id}");
+                teardown.Log($"released hold on slot {slot.Id}");
                 return Task.CompletedTask;
             });
 

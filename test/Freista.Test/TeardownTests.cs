@@ -139,6 +139,127 @@ public class TeardownTests
     }
 
     [Fact]
+    public async Task A_cleanup_receives_the_teardown_context_and_its_output_lands_on_the_teardown_node()
+    {
+        var def = Def(Run.Always,
+            Step(0, (_, ctx) =>
+            {
+                ctx.OnTeardown(teardown =>
+                {
+                    teardown.Log("released the hold");
+                    teardown.AddAttachment("released", "slot 14");
+                    return Task.CompletedTask;
+                });
+                return Task.FromResult<object?>(null);
+            }),
+            TeardownNode(1));
+
+        var results = await new ScenarioScheduler().RunAsync(def);
+
+        var teardown = results[1];
+        Assert.Equal(StepStatus.Passed, teardown.Status);
+        Assert.Equal(["released the hold", "cleaned up: Op0"], teardown.Logs);
+        Assert.Equal("slot 14", teardown.Attachments["released"]);
+        Assert.Empty(results[0].Logs); // nothing leaks back onto the step that registered it
+    }
+
+    [Fact]
+    public async Task The_teardown_context_is_the_teardown_node_with_the_scenario_services_and_no_cancellation()
+    {
+        var services = new StubServices();
+        using var cts = new CancellationTokenSource();
+        ScenarioContext? handed = null;
+        var def = Def(Run.Always,
+            Step(0, (_, ctx) =>
+            {
+                ctx.OnTeardown(Cleanup.Required, teardown =>
+                {
+                    handed = teardown;
+                    return Task.CompletedTask;
+                });
+                cts.Cancel(); // the scenario is cancelled after registration; the required cleanup still runs
+                return Task.FromResult<object?>(null);
+            }),
+            TeardownNode(1));
+
+        await new ScenarioScheduler().RunAsync(def, services, cancellationToken: cts.Token);
+
+        Assert.NotNull(handed);
+        Assert.Equal("step-1", handed.StepId);
+        Assert.Equal("Teardown", handed.StepDisplayName);
+        Assert.Same(services, handed.Services);
+        Assert.False(handed.CancellationToken.IsCancellationRequested);
+        Assert.False(handed.CancellationToken.CanBeCanceled);
+    }
+
+    [Fact]
+    public async Task ScenarioContext_Current_is_the_teardown_context_while_cleanups_run()
+    {
+        ScenarioContext? handed = null;
+        ScenarioContext? ambient = null;
+        var def = Def(Run.Always,
+            Step(0, (_, ctx) =>
+            {
+                ctx.OnTeardown(teardown =>
+                {
+                    handed = teardown;
+                    ambient = ScenarioContext.Current;
+                    return Task.CompletedTask;
+                });
+                return Task.FromResult<object?>(null);
+            }),
+            TeardownNode(1));
+
+        await new ScenarioScheduler().RunAsync(def);
+
+        Assert.NotNull(handed);
+        Assert.Same(handed, ambient);
+        Assert.Null(ScenarioContext.Current);
+    }
+
+    [Fact]
+    public async Task Cleanup_resource_verbs_trace_on_the_teardown_node_and_are_never_a_conflict()
+    {
+        // The teardown node has no DependsOn edges, yet it runs after everything; a cleanup deleting
+        // what a step created must trace as a Delete on the teardown node, not fail as a conflict.
+        var user = new Resources.User("jane@x");
+        var def = Def(Run.Always,
+            Step(0, async (_, ctx) =>
+            {
+                await ctx.Resources.Create(user);
+                ctx.OnTeardown(teardown => teardown.Resources.Delete(user).AsTask());
+                return null;
+            }),
+            TeardownNode(1));
+
+        var results = await new ScenarioScheduler().RunAsync(def);
+
+        Assert.Equal(StepStatus.Passed, results[1].Status);
+        var effect = Assert.Single(results[1].Effects);
+        Assert.Equal(LifecycleVerb.Delete, effect.Verb);
+        Assert.Equal("User:jane@x", effect.Identity.ToString());
+    }
+
+    [Fact]
+    public async Task The_parameterless_form_still_registers_and_runs()
+    {
+        var log = new TeardownLog();
+        var ctx = Context("a", log, stepIndex: 0);
+        var ran = false;
+
+        ctx.OnTeardown(() => { ran = true; return Task.CompletedTask; });
+        var entry = Assert.Single(log.Entries);
+        await entry.Cleanup(new ScenarioContext("t", "Teardown", services: null, CancellationToken.None));
+
+        Assert.True(ran);
+    }
+
+    private sealed class StubServices : IServiceProvider
+    {
+        public object? GetService(Type serviceType) => null;
+    }
+
+    [Fact]
     public async Task Within_one_step_cleanups_run_in_reverse_registration_order()
     {
         var order = new List<string>();

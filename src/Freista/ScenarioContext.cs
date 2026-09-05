@@ -143,7 +143,9 @@ public sealed class ScenarioContext
     /// <summary>
     /// Registers cleanup for something this step created. The closure captures the object and the
     /// connection, because it is written where both are in scope. Runs after the scenario, subject to
-    /// the scenario's <c>[Teardown(Run.…)]</c> policy.
+    /// the scenario's <c>[Teardown(Run.…)]</c> policy. This form is for cleanups that report nothing;
+    /// to log or attach from a cleanup, take the teardown context:
+    /// <see cref="OnTeardown(Func{ScenarioContext, Task})"/>.
     /// </summary>
     public void OnTeardown(Func<Task> cleanup) => OnTeardown(Cleanup.Optional, cleanup);
 
@@ -152,6 +154,24 @@ public sealed class ScenarioContext
     /// scenario's policy says — use it for things whose absence is a leak rather than a choice.
     /// </summary>
     public void OnTeardown(Cleanup kind, Func<Task> cleanup)
+    {
+        ArgumentNullException.ThrowIfNull(cleanup);
+        OnTeardown(kind, _ => cleanup());
+    }
+
+    /// <summary>
+    /// Registers cleanup that receives the <b>teardown node's</b> context. A cleanup runs inside the
+    /// scenario's Teardown step, long after this step has finished and its logs have been reported,
+    /// so anything it logs or attaches must go through the context it is handed — not through the
+    /// captured <c>ctx</c> of the step that registered it. That context is also
+    /// <see cref="Current"/> while cleanups run, its <see cref="Services"/> is still the scenario's
+    /// DI scope, and its <see cref="CancellationToken"/> is never cancelled: cleanups run after
+    /// cancellation precisely so nothing leaks.
+    /// </summary>
+    public void OnTeardown(Func<ScenarioContext, Task> cleanup) => OnTeardown(Cleanup.Optional, cleanup);
+
+    /// <summary>Registers cleanup of the given kind that receives the teardown node's context.</summary>
+    public void OnTeardown(Cleanup kind, Func<ScenarioContext, Task> cleanup)
         => _teardownLog?.Add(_teardownStepIndex, kind, cleanup);
 
     /// <summary>Records a named text attachment associated with the current step.</summary>

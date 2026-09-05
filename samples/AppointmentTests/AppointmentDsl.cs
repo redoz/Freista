@@ -65,10 +65,12 @@ public static class AppointmentDsl
             ctx?.SimulateElapsed(TimeSpan.FromMilliseconds(320));
 
             // Registered where the value is in scope: a real suite would delete the row here, on the
-            // connection this step used. The sample only has to show the closure running afterwards.
-            ctx?.OnTeardown(() =>
+            // connection this step used. The cleanup runs inside the scenario's Teardown step, long
+            // after this step has been reported, so it reports through the teardown context it is
+            // handed — not through this step's `ctx`.
+            ctx?.OnTeardown(teardown =>
             {
-                ctx.Log($"cleaned up patient {name}");
+                teardown.Log($"cleaned up patient {name}");
                 return Task.CompletedTask;
             });
 
