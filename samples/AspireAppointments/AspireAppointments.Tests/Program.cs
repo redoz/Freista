@@ -3,6 +3,7 @@ using Aspire.Hosting.Testing;
 using AspireAppointments.Tests;
 using Freista;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Testing.Extensions;
 
 // The entry point is real, readable code — no generated Main, nothing hidden. This is where the
 // AppHost is described, where you say what must be healthy before scenarios run, and where the
@@ -12,6 +13,8 @@ return await FreistaAspire.RunAsync<Projects.AspireAppointments_AppHost>(args, a
 {
     // Declarative: scenarios do not start until these report healthy. Starting and waiting happen
     // inside the run as the "Preflight" node, so both are timed and reported.
+    aspire.ConfigureTestApplication(b => b.AddCodeCoverageProvider());
+
     aspire.WaitFor("api");
     aspire.StartupTimeout = TimeSpan.FromMinutes(2);
 
