@@ -158,23 +158,23 @@ internal sealed class MtpReportSink : RunEventSink
 
     private static void AddOutput(TestNode testNode, StepResult result)
     {
-        if (result.Logs.Count == 0 && result.Effects.Count == 0)
+        if (result.Logs.Count == 0)
         {
             return;
         }
 
+        // One line per log entry, in the order they were written, each prefixed with the time since
+        // the scenario started ("+1.234s message"). Resource events are already part of the stream
+        // ("[resource] Create User:jane"), so nothing is appended after the logs. A result built
+        // without offsets (outside the scheduler) prints its plain lines.
+        var lines = result.LogEntries.Count > 0
+            ? result.LogEntries.Select(e => e.ToString())
+            : result.Logs;
+
         var builder = new StringBuilder();
-        foreach (var line in result.Logs)
+        foreach (var line in lines)
         {
             builder.AppendLine(line);
-        }
-
-        // Effect lines follow the logs, one per recorded resource effect, rendered as
-        // "[resource] {Verb} {Identity}" (the identity renders Type:Key, e.g. String:jane).
-        foreach (var effect in result.Effects)
-        {
-            builder.AppendLine(string.Format(
-                CultureInfo.InvariantCulture, "[resource] {0} {1}", effect.Verb, effect.Identity));
         }
 
         testNode.Properties.Add(new StandardOutputProperty(builder.ToString()));

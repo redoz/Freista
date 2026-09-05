@@ -344,7 +344,31 @@ public class MtpReportSinkTests
     }
 
     [Fact]
-    public async Task Resource_effects_surface_as_standard_output_on_the_finished_update()
+    public async Task Resource_events_appear_in_standard_output_in_log_order()
+    {
+        // The scheduler writes resource events into the step's log stream as they happen, so the
+        // sink prints them where they occurred — between the lines before and after — not appended.
+        var def = Definition(id: "s", nodes: [Node(0, "a", "step a")]);
+        var (sink, bus) = NewSink();
+
+        await sink.PublishAsync(new ScenarioStarted(def));
+        await sink.PublishAsync(new StepFinished(def, new StepResult
+        {
+            Node = def.Nodes[0],
+            DisplayName = "step a",
+            Status = StepStatus.Passed,
+            StartedAt = TestInstant,
+            Logs = ["looking up jane", "[resource] Create String:jane", "done"],
+        }));
+
+        var node = Assert.Single(bus.Nodes);
+        var output = Assert.Single(node.Properties.OfType<StandardOutputProperty>()).StandardOutput;
+        var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.TrimEnd('\r')).ToArray();
+        Assert.Equal(["looking up jane", "[resource] Create String:jane", "done"], lines);
+    }
+
+    [Fact]
+    public async Task Log_entries_render_with_the_time_since_scenario_start()
     {
         var def = Definition(id: "s", nodes: [Node(0, "a", "step a")]);
         var (sink, bus) = NewSink();
@@ -356,21 +380,18 @@ public class MtpReportSinkTests
             DisplayName = "step a",
             Status = StepStatus.Passed,
             StartedAt = TestInstant,
-            Effects =
+            Logs = ["booked", "[resource] Create String:jane"],
+            LogEntries =
             [
-                new ResourceEffect
-                {
-                    Verb = LifecycleVerb.Create,
-                    Identity = new ResourceIdentity(typeof(string), "jane"),
-                    StepId = "a",
-                    StepDisplayName = "step a",
-                },
+                new LogEntry(TimeSpan.FromMilliseconds(500), "booked"),
+                new LogEntry(TimeSpan.FromMilliseconds(1250), "[resource] Create String:jane"),
             ],
         }));
 
         var node = Assert.Single(bus.Nodes);
-        var output = Assert.Single(node.Properties.OfType<StandardOutputProperty>());
-        Assert.Contains("[resource] Create String:jane", output.StandardOutput, StringComparison.Ordinal);
+        var output = Assert.Single(node.Properties.OfType<StandardOutputProperty>()).StandardOutput;
+        Assert.Contains("+0.500s booked", output, StringComparison.Ordinal);
+        Assert.Contains("+1.250s [resource] Create String:jane", output, StringComparison.Ordinal);
     }
 
     [Fact]

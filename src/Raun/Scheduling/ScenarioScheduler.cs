@@ -117,7 +117,15 @@ public sealed class ScenarioScheduler
 
         // Simulated-time bookkeeping. The base instant is sampled once; per-node start/finish offsets
         // (TimeSpan from base) compose the DAG-correct timeline. Unused in real mode.
-        var simBase = _simulatedTime ? _timeProvider.GetUtcNow() : default;
+        // The simulated base instant (simulated mode only). Log offsets are measured from the scenario
+        // start held in scenarioStartRef: known up front in simulated mode, learned from the first step
+        // to start in real mode, so no extra clock read shifts any StartedAt.
+        var scenarioStart = _simulatedTime ? _timeProvider.GetUtcNow() : default;
+        var scenarioStartRef = new ScenarioStart();
+        if (_simulatedTime)
+        {
+            scenarioStartRef.Of(scenarioStart);
+        }
         var simStartOffset = _simulatedTime ? new TimeSpan[count] : null;
         var simFinishOffset = _simulatedTime ? new TimeSpan[count] : null;
 
@@ -296,7 +304,7 @@ public sealed class ScenarioScheduler
                         }
 
                         running[RunNodeAsync(
-                            node, inputs, services, displayName, simBase, startOffset, teardownLog, ledger, cancellationToken)] = i;
+                            node, inputs, services, displayName, scenarioStart, startOffset, teardownLog, ledger, scenarioStartRef, cancellationToken)] = i;
                         progressed = true;
                     }
                 }
@@ -410,6 +418,7 @@ public sealed class ScenarioScheduler
             // as a conflict with the step that created the thing.
             var teardownContext = new ScenarioContext(
                 node.StepId, name, services, resolver: null, _timeProvider, CancellationToken.None);
+            teardownContext.AttachScenarioStart(scenarioStartRef.Of(startedAt));
             var skipped = new List<string>();
             var stopwatch = Stopwatch.StartNew();
             List<Exception>? errors = null;
@@ -469,6 +478,7 @@ public sealed class ScenarioScheduler
                 StartedAt = startedAt,
                 Duration = stopwatch.Elapsed,
                 Logs = teardownContext.Logs,
+                LogEntries = teardownContext.LogEntries,
                 Attachments = teardownContext.Attachments,
                 Effects = teardownContext.Resources.Effects,
                 Lineage = teardownContext.Resources.Lineage,
@@ -504,7 +514,7 @@ public sealed class ScenarioScheduler
                 var startOffset = StartOffset(node, simFinishOffset!);
                 simStartOffset![i] = startOffset;
                 simFinishOffset![i] = startOffset; // skipped and not-taken steps have zero duration
-                startedAt = simBase + startOffset;
+                startedAt = scenarioStart + startOffset;
             }
 
             var result = new StepResult
@@ -578,7 +588,7 @@ public sealed class ScenarioScheduler
                 var startOffset = MergeStartOffset(node, simFinishOffset!);
                 simStartOffset![i] = startOffset;
                 simFinishOffset![i] = startOffset; // a merge is instantaneous
-                startedAt = simBase + startOffset;
+                startedAt = scenarioStart + startOffset;
             }
 
             var result = new StepResult
@@ -623,19 +633,20 @@ public sealed class ScenarioScheduler
         IStepInputs inputs,
         IServiceProvider? services,
         string displayName,
-        DateTimeOffset simBase,
+        DateTimeOffset scenarioStart,
         TimeSpan simStartOffset,
         TeardownLog teardownLog,
         ResourceLedger ledger,
+        ScenarioStart scenarioStartRef,
         CancellationToken scenarioToken)
     {
         // In simulated mode each step runs on its own clock seeded at base + start offset, so the
         // step's timing AND its resource-effect timestamps share one consistent timeline. Duration is
         // whatever the body advanced that clock. In real mode the step clock is the injected provider
         // and duration comes from the stopwatch — byte-for-byte the original path.
-        var simClock = _simulatedTime ? new SimulatedClock(simBase + simStartOffset) : null;
+        var simClock = _simulatedTime ? new SimulatedClock(scenarioStart + simStartOffset) : null;
         var stepTimeProvider = simClock ?? _timeProvider;
-        var startedAt = simClock is not null ? simBase + simStartOffset : _timeProvider.GetUtcNow();
+        var startedAt = simClock is not null ? scenarioStart + simStartOffset : _timeProvider.GetUtcNow();
         var stopwatch = Stopwatch.StartNew();
         TimeSpan Elapsed() => simClock?.Advanced ?? stopwatch.Elapsed;
         using var stepCts = CancellationTokenSource.CreateLinkedTokenSource(scenarioToken);
@@ -644,6 +655,7 @@ public sealed class ScenarioScheduler
 
         context.AttachTeardown(teardownLog, node.Index);
         context.AttachLedger(ledger, node.Index);
+        context.AttachScenarioStart(scenarioStartRef.Of(startedAt));
 
         // Ambient for the duration of this step. Set inside RunNodeAsync (which each step enters on
         // its own async flow) so it is visible to the step body and to anything it awaits, but never
@@ -692,6 +704,7 @@ public sealed class ScenarioScheduler
                     StartedAt = startedAt,
                     Duration = Elapsed(),
                     Logs = context.Logs,
+                    LogEntries = context.LogEntries,
                     Attachments = context.Attachments,
                     Effects = context.Resources.Effects,
                     Lineage = context.Resources.Lineage,
@@ -721,6 +734,7 @@ public sealed class ScenarioScheduler
                     Exception = exception,
                     SkipReason = skipReason,
                     Logs = context.Logs,
+                    LogEntries = context.LogEntries,
                     Attachments = context.Attachments,
                     Effects = context.Resources.Effects,
                     Lineage = context.Resources.Lineage,
@@ -777,6 +791,19 @@ public sealed class ScenarioScheduler
         return failed is not null
             ? $"dependency failed: {string.Join(", ", failed)}"
             : $"dependency skipped: {string.Join(", ", skipped!)}";
+    }
+
+    /// <summary>The instant a scenario's log offsets are measured from: fixed up front in simulated mode,
+    /// otherwise the first step's StartedAt. Thread-safe: concurrent first steps agree on one value.</summary>
+    private sealed class ScenarioStart
+    {
+        private long _ticks = -1;
+
+        public DateTimeOffset Of(DateTimeOffset candidate)
+        {
+            Interlocked.CompareExchange(ref _ticks, candidate.UtcTicks, -1);
+            return new DateTimeOffset(Interlocked.Read(ref _ticks), TimeSpan.Zero);
+        }
     }
 
     private readonly record struct NodeOutcome(StepResult Result, object? Output);

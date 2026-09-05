@@ -141,6 +141,50 @@ public class ScenarioContextTests
         Assert.Same(TimeProvider.System, ctx.TimeProvider);
     }
 
+    [Fact]
+    public void Log_entries_are_stamped_with_time_since_scenario_start()
+    {
+        var scenarioStart = new DateTimeOffset(2026, 9, 6, 8, 0, 0, TimeSpan.Zero);
+        var clock = new SimulatedClock(scenarioStart);
+        var ctx = new ScenarioContext(
+            "s", "n", services: null, resolver: null, timeProvider: clock, CancellationToken.None);
+        ctx.AttachScenarioStart(scenarioStart);
+
+        ctx.SimulateElapsed(TimeSpan.FromMilliseconds(1500));
+        ctx.Log("booked");
+
+        var entry = Assert.Single(ctx.LogEntries);
+        Assert.Equal(TimeSpan.FromMilliseconds(1500), entry.Elapsed);
+        Assert.Equal("booked", entry.Message);
+        Assert.Equal("+1.500s booked", entry.ToString());
+        Assert.Equal(["booked"], ctx.Logs); // the message-only view is unchanged
+    }
+
+    [Fact]
+    public void A_standalone_context_measures_offsets_from_its_own_creation()
+    {
+        var clock = new SimulatedClock(new DateTimeOffset(2026, 9, 6, 8, 0, 0, TimeSpan.Zero));
+        var ctx = new ScenarioContext(
+            "s", "n", services: null, resolver: null, timeProvider: clock, CancellationToken.None);
+
+        ctx.SimulateElapsed(TimeSpan.FromMilliseconds(250));
+        ctx.Log("x");
+
+        Assert.Equal(TimeSpan.FromMilliseconds(250), Assert.Single(ctx.LogEntries).Elapsed);
+    }
+
+    [Fact]
+    public async Task Resource_effects_land_in_the_log_stream_in_order()
+    {
+        var ctx = new ScenarioContext("s", "n", services: null, CancellationToken.None);
+
+        ctx.Log("before");
+        await ctx.Resources.Create(new Resources.User("jane@x"));
+        ctx.Log("after");
+
+        Assert.Equal(["before", "[resource] Create User:jane@x", "after"], ctx.Logs);
+    }
+
     private sealed record PlainWidget(string Name);
 
     private sealed class StubProvider(object value) : IServiceProvider

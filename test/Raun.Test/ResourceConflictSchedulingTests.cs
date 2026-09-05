@@ -172,4 +172,20 @@ public class ResourceConflictSchedulingTests
         Assert.Equal(StepStatus.Failed, results[1].Status);
         Assert.IsType<ResourceConflictException>(results[1].Exception);
     }
+
+    [Fact]
+    public async Task Effects_and_refused_claims_tell_their_story_in_the_step_log()
+    {
+        var firstClaimed = new TaskCompletionSource();
+        var def = Def(
+            Node(0, Touch(LifecycleVerb.Edit, "acc-1", open: firstClaimed)),
+            Node(1, Touch(LifecycleVerb.Delete, "acc-1", gate: firstClaimed.Task)));
+
+        var results = await Run(def);
+
+        Assert.Equal(["[resource] Edit Account:acc-1"], results[0].Logs);
+        var conflictLine = Assert.Single(results[1].Logs);
+        Assert.StartsWith("[resource] conflict: ", conflictLine, StringComparison.Ordinal);
+        Assert.Contains("Account:acc-1", conflictLine, StringComparison.Ordinal);
+    }
 }

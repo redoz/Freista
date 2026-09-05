@@ -25,6 +25,7 @@ public sealed class ResourceContext
     readonly string _stepDisplayName;
     ResourceLedger? _ledger;
     int _nodeIndex;
+    Action<string>? _log;
 
     /// <summary>Creates a tracer bound to one step, resolving identities via <paramref name="resolver"/>.</summary>
     public ResourceContext(
@@ -134,11 +135,25 @@ public sealed class ResourceContext
         _nodeIndex = nodeIndex;
     }
 
+    /// <summary>Routes a one-line note about each recorded (or refused) effect to the step's log, so the
+    /// resource story reads in order with the step's own lines. Set by <see cref="ScenarioContext"/>.</summary>
+    internal void AttachLog(Action<string> log) => _log = log;
+
     ValueTask Record(LifecycleVerb verb, ResourceIdentity identity, object? data)
     {
         // The ledger first: a refused claim is a ResourceConflictException that fails the step, and it
         // records no effect — the exception carries the identity instead.
-        _ledger?.Claim(_nodeIndex, _stepDisplayName, identity, verb);
+        try
+        {
+            _ledger?.Claim(_nodeIndex, _stepDisplayName, identity, verb);
+        }
+        catch (ResourceConflictException ex)
+        {
+            _log?.Invoke($"[resource] conflict: {ex.Message}");
+            throw;
+        }
+
+        _log?.Invoke($"[resource] {verb} {identity}");
 
         lock (_lock)
         {

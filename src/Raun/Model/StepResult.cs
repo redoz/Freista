@@ -26,8 +26,13 @@ public sealed class StepResult
     /// <summary>Why the step was skipped, e.g. <c>"dependency failed: creating an appointment"</c>.</summary>
     public string? SkipReason { get; init; }
 
-    /// <summary>Log lines collected during the step.</summary>
+    /// <summary>Log lines collected during the step, messages only. Resource events the step recorded
+    /// appear here too, in order, as <c>[resource] {Verb} {Identity}</c> lines.</summary>
     public IReadOnlyList<string> Logs { get; init; } = [];
+
+    /// <summary>The same lines with their offset from the scenario's start. Populated by the scheduler;
+    /// a result built elsewhere may leave it empty, in which case sinks fall back to <see cref="Logs"/>.</summary>
+    public IReadOnlyList<LogEntry> LogEntries { get; init; } = [];
 
     /// <summary>Attachments collected during the step.</summary>
     public IReadOnlyDictionary<string, string> Attachments { get; init; } =

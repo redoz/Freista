@@ -709,6 +709,24 @@ public class SchedulerTests
         Assert.Equal([1, 2], ran.Order());
     }
 
+    [Fact]
+    public async Task Log_offsets_are_measured_from_the_scenario_start_on_the_simulated_timeline()
+    {
+        // Step 0 runs 2s then logs; step 1 starts when 0 finishes, runs 1s, then logs. Its line is
+        // stamped 3s into the scenario, not 1s into the step.
+        var def = Def(
+            Node(0, (_, ctx) => { ctx.SimulateElapsed(TimeSpan.FromSeconds(2)); ctx.Log("first done"); return Task.FromResult<object?>(null); }),
+            Node(1, (_, ctx) => { ctx.SimulateElapsed(TimeSpan.FromSeconds(1)); ctx.Log("second done"); return Task.FromResult<object?>(null); }, [0]));
+
+        var results = await WithTimeout(new ScenarioScheduler(simulatedTime: true).RunAsync(def));
+
+        Assert.Equal(TimeSpan.FromSeconds(2), Assert.Single(results[0].LogEntries).Elapsed);
+        var second = Assert.Single(results[1].LogEntries);
+        Assert.Equal(TimeSpan.FromSeconds(3), second.Elapsed);
+        Assert.Equal("+3.000s second done", second.ToString());
+        Assert.Equal(["second done"], results[1].Logs);
+    }
+
     private sealed class RecordingObserver : IStepObserver
     {
         private readonly object _sync = new();

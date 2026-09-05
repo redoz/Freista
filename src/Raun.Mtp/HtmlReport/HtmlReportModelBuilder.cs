@@ -81,7 +81,8 @@ internal sealed class HtmlReportModelBuilder
                     Lane = lanes[i],
                     DependsOn = r.Node.DependsOn,
                     GroupId = r.Node.GroupId,
-                    Logs = r.Logs,
+                    // Timer-prefixed ("+1.234s …") when the scheduler supplied offsets; plain lines otherwise.
+                    Logs = r.LogEntries.Count > 0 ? r.LogEntries.Select(e => e.ToString()).ToList() : r.Logs,
                     Effects = r.Effects.Select(e => new ReportEffect
                     {
                         Verb = e.Verb.ToString(),

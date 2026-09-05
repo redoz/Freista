@@ -14,11 +14,15 @@ public sealed class ScenarioContext
 {
     private static readonly AsyncLocal<ScenarioContext?> CurrentContext = new();
 
-    private readonly ConcurrentQueue<string> _logs = new();
+    private readonly ConcurrentQueue<Model.LogEntry> _logs = new();
     private readonly ConcurrentDictionary<string, string> _attachments = new();
 
     private TeardownLog? _teardownLog;
     private int _teardownStepIndex;
+
+    // The instant log offsets are measured from. The scheduler attaches the scenario's start; a
+    // context built outside it measures from its own creation so offsets are still meaningful.
+    private DateTimeOffset _scenarioStart;
 
     /// <summary>
     /// The context of the step running on this execution flow, or null outside a step. Backed by
@@ -59,11 +63,16 @@ public sealed class ScenarioContext
             resolver
             ?? services?.GetService(typeof(ResourceIdentityResolver)) as ResourceIdentityResolver
             ?? new ResourceIdentityResolver();
+        _scenarioStart = TimeProvider.GetUtcNow();
         Resources = new ResourceContext(
             stepId,
             stepDisplayName,
             effectiveResolver,
             TimeProvider);
+
+        // Resource events are part of the step's story, so they land in the log stream in order,
+        // between the lines the step wrote before and after them.
+        Resources.AttachLog(Log);
     }
 
     /// <summary>Stable id of the step this context belongs to.</summary>
@@ -114,8 +123,17 @@ public sealed class ScenarioContext
         }
     }
 
-    /// <summary>Appends a log line associated with the current step.</summary>
-    public void Log(string message) => _logs.Enqueue(message);
+    /// <summary>Appends a log line associated with the current step, stamped with the time since the
+    /// scenario started (see <see cref="LogEntries"/>).</summary>
+    public void Log(string message)
+    {
+        var elapsed = TimeProvider.GetUtcNow() - _scenarioStart;
+        _logs.Enqueue(new Model.LogEntry(elapsed < TimeSpan.Zero ? TimeSpan.Zero : elapsed, message));
+    }
+
+    /// <summary>Sets the instant log offsets are measured from. Called by the scheduler with the
+    /// scenario's start (the simulated base instant in simulated-time mode).</summary>
+    internal void AttachScenarioStart(DateTimeOffset scenarioStart) => _scenarioStart = scenarioStart;
 
     /// <summary>
     /// A logger whose writes are collected as this step's log lines. Category is
@@ -178,8 +196,11 @@ public sealed class ScenarioContext
     /// <summary>Records a named text attachment associated with the current step.</summary>
     public void AddAttachment(string name, string value) => _attachments[name] = value;
 
-    /// <summary>Log lines collected for this step, in append order.</summary>
-    public IReadOnlyList<string> Logs => _logs.ToArray();
+    /// <summary>Log lines collected for this step, in append order, messages only.</summary>
+    public IReadOnlyList<string> Logs => _logs.Select(e => e.Message).ToArray();
+
+    /// <summary>Log lines collected for this step with their offset from the scenario's start.</summary>
+    public IReadOnlyList<Model.LogEntry> LogEntries => _logs.ToArray();
 
     /// <summary>Attachments collected for this step, keyed by name.</summary>
     public IReadOnlyDictionary<string, string> Attachments => _attachments;
