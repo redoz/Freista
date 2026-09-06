@@ -25,7 +25,7 @@ public sealed class ResourceContext
     readonly string _stepDisplayName;
     ResourceLedger? _ledger;
     int _nodeIndex;
-    Action<string>? _log;
+    Action<LifecycleVerb, ResourceIdentity, ResourceConflictException?>? _observer;
 
     /// <summary>Creates a tracer bound to one step, resolving identities via <paramref name="resolver"/>.</summary>
     public ResourceContext(
@@ -135,9 +135,10 @@ public sealed class ResourceContext
         _nodeIndex = nodeIndex;
     }
 
-    /// <summary>Routes a one-line note about each recorded (or refused) effect to the step's log, so the
-    /// resource story reads in order with the step's own lines. Set by <see cref="ScenarioContext"/>.</summary>
-    internal void AttachLog(Action<string> log) => _log = log;
+    /// <summary>Notifies <see cref="ScenarioContext"/> of each recorded effect, or of a refused claim
+    /// (non-null exception), so the resource story reaches the step's log and span in order.</summary>
+    internal void AttachObserver(Action<LifecycleVerb, ResourceIdentity, ResourceConflictException?> observer)
+        => _observer = observer;
 
     ValueTask Record(LifecycleVerb verb, ResourceIdentity identity, object? data)
     {
@@ -149,11 +150,11 @@ public sealed class ResourceContext
         }
         catch (ResourceConflictException ex)
         {
-            _log?.Invoke($"[resource] conflict: {ex.Message}");
+            _observer?.Invoke(verb, identity, ex);
             throw;
         }
 
-        _log?.Invoke($"[resource] {verb} {identity}");
+        _observer?.Invoke(verb, identity, null);
 
         lock (_lock)
         {

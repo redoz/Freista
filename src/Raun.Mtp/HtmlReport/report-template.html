@@ -2018,6 +2018,10 @@
           h += '<div class="sec"><h4>Logs</h4><ol class="logs">' +
             s.logs.map((l) => "<li>" + esc(l) + "</li>").join("") + "</ol></div>";
         }
+        if (s.traceId){
+          h += '<div class="sec"><h4>Trace</h4><ol class="logs"><li>trace ' + esc(s.traceId) +
+            (s.spanId ? " · span " + esc(s.spanId) : "") + "</li></ol></div>";
+        }
         if (s.effects && s.effects.length){
           h += '<div class="sec"><h4>Effects</h4><div class="eff">' +
             s.effects.map((e) =>

@@ -304,7 +304,7 @@ public sealed class ScenarioScheduler
                         }
 
                         running[RunNodeAsync(
-                            node, inputs, services, displayName, scenarioStart, startOffset, teardownLog, ledger, scenarioStartRef, cancellationToken)] = i;
+                            definition, node, inputs, services, displayName, scenarioStart, startOffset, teardownLog, ledger, scenarioStartRef, cancellationToken)] = i;
                         progressed = true;
                     }
                 }
@@ -419,6 +419,8 @@ public sealed class ScenarioScheduler
             var teardownContext = new ScenarioContext(
                 node.StepId, name, services, resolver: null, _timeProvider, CancellationToken.None);
             teardownContext.AttachScenarioStart(scenarioStartRef.Of(startedAt));
+            using var teardownActivity = StartStepActivity(definition, node, name);
+            teardownContext.AttachActivity(teardownActivity);
             var skipped = new List<string>();
             var stopwatch = Stopwatch.StartNew();
             List<Exception>? errors = null;
@@ -470,6 +472,19 @@ public sealed class ScenarioScheduler
             }
 
             status[i] = errors is null ? StepStatus.Passed : StepStatus.Failed;
+            if (teardownActivity is not null)
+            {
+                teardownActivity.SetTag(RaunTelemetry.Attributes.TestCaseResultStatus, errors is null ? "pass" : "fail");
+                if (errors is not null)
+                {
+                    teardownActivity.SetStatus(ActivityStatusCode.Error, $"{errors.Count} teardown action(s) failed.");
+                    foreach (var error in errors)
+                    {
+                        teardownActivity.AddException(error);
+                    }
+                }
+            }
+
             results[i] = new StepResult
             {
                 Node = node,
@@ -477,6 +492,8 @@ public sealed class ScenarioScheduler
                 Status = status[i],
                 StartedAt = startedAt,
                 Duration = stopwatch.Elapsed,
+                TraceId = teardownActivity?.TraceId.ToString(),
+                SpanId = teardownActivity?.SpanId.ToString(),
                 Logs = teardownContext.Logs,
                 LogEntries = teardownContext.LogEntries,
                 Attachments = teardownContext.Attachments,
@@ -525,6 +542,22 @@ public sealed class ScenarioScheduler
                 StartedAt = startedAt,
                 SkipReason = reason,
             };
+
+            // A step that never ran gets no span of its own — a span for no work is noise in a trace
+            // viewer — but the scenario span (ambient here when the run loop started one) records it.
+            if (Activity.Current is { IsAllDataRequested: true } scenarioActivity)
+            {
+                scenarioActivity.AddEvent(new ActivityEvent(
+                    RaunTelemetry.Events.StepSkipped,
+                    tags: new ActivityTagsCollection
+                    {
+                        ["step"] = name,
+                        [RaunTelemetry.Attributes.Step] = node.StepId,
+                        ["status"] = terminal.ToString(),
+                        ["reason"] = reason,
+                    }));
+            }
+
             results[i] = result;
             if (observer is not null)
             {
@@ -629,6 +662,7 @@ public sealed class ScenarioScheduler
     }
 
     private async Task<NodeOutcome> RunNodeAsync(
+        ScenarioDefinition definition,
         ScenarioNode node,
         IStepInputs inputs,
         IServiceProvider? services,
@@ -656,6 +690,12 @@ public sealed class ScenarioScheduler
         context.AttachTeardown(teardownLog, node.Index);
         context.AttachLedger(ledger, node.Index);
         context.AttachScenarioStart(scenarioStartRef.Of(startedAt));
+
+        // The step's span: a child of whatever is ambient (the scenario span when the run loop started
+        // one), and Activity.Current for the body, so outgoing HTTP carries its traceparent. Null when
+        // nothing listens. Real time, not the simulated clock — a trace viewer wants wall time.
+        using var activity = StartStepActivity(definition, node, displayName);
+        context.AttachActivity(activity);
 
         // Ambient for the duration of this step. Set inside RunNodeAsync (which each step enters on
         // its own async flow) so it is visible to the step body and to anything it awaits, but never
@@ -695,6 +735,7 @@ public sealed class ScenarioScheduler
             }
 
             stopwatch.Stop();
+            activity?.SetTag(RaunTelemetry.Attributes.TestCaseResultStatus, "pass");
             return new NodeOutcome(
                 new StepResult
                 {
@@ -708,17 +749,27 @@ public sealed class ScenarioScheduler
                     Attachments = context.Attachments,
                     Effects = context.Resources.Effects,
                     Lineage = context.Resources.Lineage,
+                    TraceId = activity?.TraceId.ToString(),
+                    SpanId = activity?.SpanId.ToString(),
                 },
                 output);
         }
         catch (OperationCanceledException) when (scenarioToken.IsCancellationRequested)
         {
             stopwatch.Stop();
+            activity?.SetTag(RaunTelemetry.Attributes.TestCaseResultStatus, "skipped");
             return Outcome(StepStatus.Skipped, skipReason: "scenario canceled");
         }
         catch (Exception ex)
         {
             stopwatch.Stop();
+            if (activity is not null)
+            {
+                activity.SetTag(RaunTelemetry.Attributes.TestCaseResultStatus, "fail");
+                activity.SetStatus(ActivityStatusCode.Error, ex.Message);
+                activity.AddException(ex);
+            }
+
             return Outcome(StepStatus.Failed, exception: ex);
         }
 
@@ -738,8 +789,34 @@ public sealed class ScenarioScheduler
                     Attachments = context.Attachments,
                     Effects = context.Resources.Effects,
                     Lineage = context.Resources.Lineage,
+                    TraceId = activity?.TraceId.ToString(),
+                    SpanId = activity?.SpanId.ToString(),
                 },
                 null);
+    }
+
+    /// <summary>Starts a step's span with its identity tags, or returns null when nothing listens.</summary>
+    private static Activity? StartStepActivity(ScenarioDefinition definition, ScenarioNode node, string displayName)
+    {
+        var activity = RaunTelemetry.Source.StartActivity(displayName, ActivityKind.Internal);
+        if (activity is null || !activity.IsAllDataRequested)
+        {
+            return activity;
+        }
+
+        activity.SetTag(RaunTelemetry.Attributes.TestSuiteName, definition.DisplayName);
+        activity.SetTag(RaunTelemetry.Attributes.TestCaseName, displayName);
+        activity.SetTag(RaunTelemetry.Attributes.Scenario, definition.ScenarioId);
+        activity.SetTag(RaunTelemetry.Attributes.Step, node.StepId);
+        activity.SetTag(RaunTelemetry.Attributes.StepPhase, node.Phase);
+        activity.SetTag(RaunTelemetry.Attributes.StepOperation, node.OperationName);
+        if (!string.IsNullOrEmpty(node.SourceFile) && node.SourceLine > 0)
+        {
+            activity.SetTag(RaunTelemetry.Attributes.CodeFilePath, node.SourceFile);
+            activity.SetTag(RaunTelemetry.Attributes.CodeLineNumber, node.SourceLine);
+        }
+
+        return activity;
     }
 
     private static string FormatName(ScenarioNode node, IStepInputs inputs)

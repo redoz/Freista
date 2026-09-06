@@ -48,6 +48,12 @@ public sealed record ReportStep
     public required IReadOnlyList<ReportEffect> Effects { get; init; }
     public string? Exception { get; init; }
     public string? SkipReason { get; init; }
+
+    /// <summary>W3C trace id of the step's span when a trace listener was subscribed; null otherwise.</summary>
+    public string? TraceId { get; init; }
+
+    /// <summary>Span id of the step's span when one was recorded; null otherwise.</summary>
+    public string? SpanId { get; init; }
 }
 
 public sealed record ReportEffect

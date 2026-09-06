@@ -24,6 +24,10 @@ public sealed class ScenarioContext
     // context built outside it measures from its own creation so offsets are still meaningful.
     private DateTimeOffset _scenarioStart;
 
+    // The step's span, when a listener is subscribed to RaunTelemetry.Source. Log lines and resource
+    // events are mirrored onto it as span events.
+    private System.Diagnostics.Activity? _activity;
+
     /// <summary>
     /// The context of the step running on this execution flow, or null outside a step. Backed by
     /// <see cref="AsyncLocal{T}"/>, so concurrent sibling steps each observe their own context and
@@ -71,8 +75,39 @@ public sealed class ScenarioContext
             TimeProvider);
 
         // Resource events are part of the step's story, so they land in the log stream in order,
-        // between the lines the step wrote before and after them.
-        Resources.AttachLog(Log);
+        // between the lines the step wrote before and after them — and on the span as events.
+        Resources.AttachObserver(OnResource);
+    }
+
+    /// <summary>The step's span, or null when nothing is listening to <see cref="RaunTelemetry.Source"/>.
+    /// Add your own tags to it if you like; Raun already records the step's identity, outcome, log
+    /// lines, and resource events.</summary>
+    public System.Diagnostics.Activity? Activity => _activity;
+
+    /// <summary>Binds this step to its span. Called by the scheduler.</summary>
+    internal void AttachActivity(System.Diagnostics.Activity? activity) => _activity = activity;
+
+    private void OnResource(LifecycleVerb verb, ResourceIdentity identity, ResourceConflictException? conflict)
+    {
+        var line = conflict is null
+            ? $"[resource] {verb} {identity}"
+            : $"[resource] conflict: {conflict.Message}";
+        Append(line);
+
+        if (_activity is { IsAllDataRequested: true })
+        {
+            var tags = new System.Diagnostics.ActivityTagsCollection
+            {
+                ["verb"] = verb.ToString(),
+                ["identity"] = identity.ToString(),
+            };
+            if (conflict is not null)
+            {
+                tags["conflict"] = conflict.Message;
+            }
+
+            _activity.AddEvent(new System.Diagnostics.ActivityEvent(RaunTelemetry.Events.Resource, tags: tags));
+        }
     }
 
     /// <summary>Stable id of the step this context belongs to.</summary>
@@ -126,6 +161,18 @@ public sealed class ScenarioContext
     /// <summary>Appends a log line associated with the current step, stamped with the time since the
     /// scenario started (see <see cref="LogEntries"/>).</summary>
     public void Log(string message)
+    {
+        Append(message);
+
+        if (_activity is { IsAllDataRequested: true })
+        {
+            _activity.AddEvent(new System.Diagnostics.ActivityEvent(
+                RaunTelemetry.Events.Log,
+                tags: new System.Diagnostics.ActivityTagsCollection { ["message"] = message }));
+        }
+    }
+
+    private void Append(string message)
     {
         var elapsed = TimeProvider.GetUtcNow() - _scenarioStart;
         _logs.Enqueue(new Model.LogEntry(elapsed < TimeSpan.Zero ? TimeSpan.Zero : elapsed, message));

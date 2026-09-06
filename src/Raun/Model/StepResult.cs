@@ -43,4 +43,11 @@ public sealed class StepResult
 
     /// <summary>Lineage relations the step recorded from a producer's [Created]/[Loaded]/[Edited] References/Consumes targets.</summary>
     public IReadOnlyList<ResourceLineageRelation> Lineage { get; init; } = [];
+
+    /// <summary>W3C trace id of the step's span, when a listener was subscribed to
+    /// <see cref="RaunTelemetry.Source"/>; otherwise null. Paste it into your trace viewer.</summary>
+    public string? TraceId { get; init; }
+
+    /// <summary>Span id of the step's span, when one was recorded; otherwise null.</summary>
+    public string? SpanId { get; init; }
 }

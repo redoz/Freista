@@ -39,7 +39,9 @@
             }
           ],
           "Exception": null,
-          "SkipReason": null
+          "SkipReason": null,
+          "TraceId": null,
+          "SpanId": null
         },
         {
           "StepId": "s",
@@ -56,7 +58,9 @@
           "Logs": [],
           "Effects": [],
           "Exception": null,
-          "SkipReason": null
+          "SkipReason": null,
+          "TraceId": null,
+          "SpanId": null
         },
         {
           "StepId": "c",
@@ -76,7 +80,9 @@
           "Logs": [],
           "Effects": [],
           "Exception": null,
-          "SkipReason": null
+          "SkipReason": null,
+          "TraceId": null,
+          "SpanId": null
         }
       ],
       "Resources": [

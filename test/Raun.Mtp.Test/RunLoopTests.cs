@@ -677,4 +677,101 @@ public class RunLoopTests
             def, new HashSet<string>([Uid("a", "y"), Uid("other", "x")], StringComparer.OrdinalIgnoreCase));
         Assert.Equal([1], targets!.Order());
     }
+
+    // -- Tracing: run span, scenario roots linked to it, step spans nested under the scenario --------
+
+    /// <summary>Captures Raun spans whose <c>raun.run</c> or <c>raun.scenario</c> tag matches this test.</summary>
+    private sealed class SpanCapture : IDisposable
+    {
+        private readonly List<System.Diagnostics.Activity> _all = [];
+        private readonly System.Diagnostics.ActivityListener _listener;
+
+        public SpanCapture()
+        {
+            _listener = new System.Diagnostics.ActivityListener
+            {
+                ShouldListenTo = source => source.Name == RaunTelemetry.SourceName,
+                Sample = (ref System.Diagnostics.ActivityCreationOptions<System.Diagnostics.ActivityContext> _)
+                    => System.Diagnostics.ActivitySamplingResult.AllDataAndRecorded,
+                ActivityStopped = activity =>
+                {
+                    lock (_all)
+                    {
+                        _all.Add(activity);
+                    }
+                },
+            };
+            System.Diagnostics.ActivitySource.AddActivityListener(_listener);
+        }
+
+        public List<System.Diagnostics.Activity> ForScenario(string scenarioId)
+        {
+            lock (_all)
+            {
+                return _all.Where(a => (string?)a.GetTagItem(RaunTelemetry.Attributes.Scenario) == scenarioId).ToList();
+            }
+        }
+
+        public System.Diagnostics.Activity? Run(string runId)
+        {
+            lock (_all)
+            {
+                return _all.SingleOrDefault(a => a.DisplayName == "raun.run" && (string?)a.GetTagItem(RaunTelemetry.Attributes.Run) == runId);
+            }
+        }
+
+        public void Dispose() => _listener.Dispose();
+    }
+
+    [Fact]
+    public async Task Each_scenario_is_its_own_trace_linked_to_the_run_span_with_steps_nested_under_it()
+    {
+        var scenarioId = "trace-" + Guid.NewGuid().ToString("N")[..8];
+        var def = Definition(scenarioId, "traced scenario",
+            Node(0, "x", "x"),
+            Node(1, "y", "y", dependsOn: [0]));
+        using var capture = new SpanCapture();
+
+        await new RaunRunLoop(() => [def]).RunAsync(uids: null, new RecordingSink(), CancellationToken.None);
+
+        var spans = capture.ForScenario(scenarioId);
+        var scenario = Assert.Single(spans, s => s.DisplayName == "traced scenario");
+        var steps = spans.Where(s => s != scenario).ToList();
+        Assert.Equal(2, steps.Count);
+
+        // The scenario span is a ROOT that links to the run span; it does not nest under it.
+        Assert.Null(scenario.Parent);
+        Assert.Equal(default, scenario.ParentSpanId);
+        var link = Assert.Single(scenario.Links);
+        var runId = (string?)scenario.GetTagItem(RaunTelemetry.Attributes.Run);
+        Assert.NotNull(runId);
+        var run = capture.Run(runId);
+        Assert.NotNull(run);
+        Assert.Equal(run.Context.TraceId, link.Context.TraceId);
+        Assert.NotEqual(run.TraceId, scenario.TraceId);
+
+        // Steps share the scenario's trace and hang directly under it.
+        Assert.All(steps, step =>
+        {
+            Assert.Equal(scenario.TraceId, step.TraceId);
+            Assert.Equal(scenario.SpanId, step.ParentSpanId);
+        });
+        Assert.Equal("success", scenario.GetTagItem(RaunTelemetry.Attributes.TestSuiteRunStatus));
+        Assert.Equal("traced scenario", scenario.GetTagItem(RaunTelemetry.Attributes.TestSuiteName));
+    }
+
+    [Fact]
+    public async Task A_failing_step_marks_the_scenario_span_as_a_failure()
+    {
+        var scenarioId = "trace-" + Guid.NewGuid().ToString("N")[..8];
+        var def = Definition(scenarioId, "failing scenario",
+            Node(0, "x", "x", invoke: (_, _) => throw new InvalidOperationException("boom")));
+        using var capture = new SpanCapture();
+
+        await new RaunRunLoop(() => [def]).RunAsync(uids: null, new RecordingSink(), CancellationToken.None);
+
+        var scenario = Assert.Single(capture.ForScenario(scenarioId), s => s.DisplayName == "failing scenario");
+        Assert.Equal("failure", scenario.GetTagItem(RaunTelemetry.Attributes.TestSuiteRunStatus));
+        Assert.Equal(System.Diagnostics.ActivityStatusCode.Error, scenario.Status);
+    }
 }

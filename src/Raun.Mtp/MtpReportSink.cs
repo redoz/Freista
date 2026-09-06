@@ -158,7 +158,7 @@ internal sealed class MtpReportSink : RunEventSink
 
     private static void AddOutput(TestNode testNode, StepResult result)
     {
-        if (result.Logs.Count == 0)
+        if (result.Logs.Count == 0 && result.TraceId is null)
         {
             return;
         }
@@ -166,10 +166,15 @@ internal sealed class MtpReportSink : RunEventSink
         // One line per log entry, in the order they were written, each prefixed with the time since
         // the scenario started ("+1.234s message"). Resource events are already part of the stream
         // ("[resource] Create User:jane"), so nothing is appended after the logs. A result built
-        // without offsets (outside the scheduler) prints its plain lines.
+        // without offsets (outside the scheduler) prints its plain lines. When a trace listener was
+        // subscribed, the last line names the trace so it can be pasted into a trace viewer.
         var lines = result.LogEntries.Count > 0
             ? result.LogEntries.Select(e => e.ToString())
             : result.Logs;
+        if (result.TraceId is not null)
+        {
+            lines = lines.Append($"[trace] {result.TraceId} span {result.SpanId}");
+        }
 
         var builder = new StringBuilder();
         foreach (var line in lines)

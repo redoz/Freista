@@ -83,6 +83,8 @@ internal sealed class HtmlReportModelBuilder
                     GroupId = r.Node.GroupId,
                     // Timer-prefixed ("+1.234s …") when the scheduler supplied offsets; plain lines otherwise.
                     Logs = r.LogEntries.Count > 0 ? r.LogEntries.Select(e => e.ToString()).ToList() : r.Logs,
+                    TraceId = r.TraceId,
+                    SpanId = r.SpanId,
                     Effects = r.Effects.Select(e => new ReportEffect
                     {
                         Verb = e.Verb.ToString(),

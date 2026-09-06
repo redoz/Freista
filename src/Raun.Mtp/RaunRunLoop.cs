@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Raun.Model;
 using Microsoft.Extensions.DependencyInjection;
 using Raun.Reporting;
@@ -121,12 +122,26 @@ internal sealed class RaunRunLoop
         var selected = SelectScenarios(scenarioSource(), uids);
         await bus.PublishAsync(new RunStarted(selected.Count)).ConfigureAwait(false);
 
+        // The run's own span: a small root that every scenario span LINKS to rather than nests under,
+        // so a suite never becomes one giant trace and sampling can decide per scenario. Started, then
+        // cleared from Activity.Current so nothing parents under it (see RaunTelemetry).
+        var runId = Guid.NewGuid().ToString("N");
+        using var runActivity = RaunTelemetry.Source.StartActivity("raun.run", ActivityKind.Internal);
+        if (runActivity is { IsAllDataRequested: true })
+        {
+            runActivity.SetTag(RaunTelemetry.Attributes.Run, runId);
+            runActivity.SetTag("raun.scenario.count", selected.Count);
+        }
+
+        Activity.Current = null;
+        var runContext = runActivity?.Context;
+
         // Run-level setup, before any scenario. It runs even when the filter selected nothing: a
         // filtered run of one step still needs whatever preflight brings up.
         var preflightFailed = false;
         if (preflight is not null)
         {
-            var results = await RunOneAsync(Preflight.Definition(preflight), bus, uids: null, cancellationToken)
+            var results = await RunOneAsync(Preflight.Definition(preflight), bus, uids: null, runContext, runId, cancellationToken)
                 .ConfigureAwait(false);
             preflightFailed = results.Any(r => r.Status is StepStatus.Failed or StepStatus.Skipped);
         }
@@ -151,11 +166,11 @@ internal sealed class RaunRunLoop
             {
                 // Attribute the failure to a row rather than to an exit code: every step reports
                 // skipped naming preflight, and the run still completes so the report is whole.
-                await SkipScenarioAsync(definition, bus).ConfigureAwait(false);
+                await SkipScenarioAsync(definition, bus, runContext, runId).ConfigureAwait(false);
                 continue;
             }
 
-            await RunOneAsync(definition, bus, uids, cancellationToken).ConfigureAwait(false);
+            await RunOneAsync(definition, bus, uids, runContext, runId, cancellationToken).ConfigureAwait(false);
             started = true;
         }
 
@@ -163,9 +178,12 @@ internal sealed class RaunRunLoop
     }
 
     /// <summary>Reports every step of a scenario that never ran because preflight failed.</summary>
-    private static async ValueTask SkipScenarioAsync(ScenarioDefinition definition, IRunEventSink bus)
+    private static async ValueTask SkipScenarioAsync(
+        ScenarioDefinition definition, IRunEventSink bus, ActivityContext? runContext, string runId)
     {
         await bus.PublishAsync(new ScenarioStarted(definition)).ConfigureAwait(false);
+        using var scenarioActivity = StartScenarioActivity(definition, runContext, runId);
+        scenarioActivity?.SetTag(RaunTelemetry.Attributes.TestSuiteRunStatus, "skipped");
 
         var results = new List<StepResult>(definition.Nodes.Count);
         foreach (var node in definition.Nodes)
@@ -186,12 +204,22 @@ internal sealed class RaunRunLoop
     }
 
     private async ValueTask<IReadOnlyList<StepResult>> RunOneAsync(
-        ScenarioDefinition definition, IRunEventSink bus, ISet<string>? uids, CancellationToken cancellationToken)
+        ScenarioDefinition definition,
+        IRunEventSink bus,
+        ISet<string>? uids,
+        ActivityContext? runContext,
+        string runId,
+        CancellationToken cancellationToken)
     {
         // One CTS per scenario run, owned here and linked to the platform token. Tying cancellation
         // to the run (not to any single step node) is what keeps a sibling from canceling the run.
         using var runCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         await bus.PublishAsync(new ScenarioStarted(definition)).ConfigureAwait(false);
+
+        // The scenario's span is a ROOT (Activity.Current is null here) linked to the run span. It is
+        // ambient while the scheduler runs, so every step span nests under it and every outgoing
+        // HttpClient call inside a step carries this trace's id across the wire.
+        using var scenarioActivity = StartScenarioActivity(definition, runContext, runId);
 
         var observer = new BusObserver(definition, bus);
         var targets = SelectTargets(definition, uids);
@@ -209,6 +237,16 @@ internal sealed class RaunRunLoop
             var scenarioServices = scope?.ServiceProvider ?? services;
             var results = await runScenario(definition, observer, scenarioServices, targets, runCts.Token).ConfigureAwait(false);
 
+            if (scenarioActivity is not null)
+            {
+                var status = SuiteRunStatus(results);
+                scenarioActivity.SetTag(RaunTelemetry.Attributes.TestSuiteRunStatus, status);
+                if (status != "success")
+                {
+                    scenarioActivity.SetStatus(ActivityStatusCode.Error, status);
+                }
+            }
+
             await bus.PublishAsync(new ScenarioFinished(definition, results)).ConfigureAwait(false);
             return results;
         }
@@ -216,6 +254,47 @@ internal sealed class RaunRunLoop
         {
             scope?.Dispose();
         }
+    }
+
+    /// <summary>Starts a scenario's root span, linked (not parented) to the run span, with its identity tags.</summary>
+    private static Activity? StartScenarioActivity(ScenarioDefinition definition, ActivityContext? runContext, string runId)
+    {
+        var links = runContext is { } context ? new[] { new ActivityLink(context) } : null;
+        var activity = RaunTelemetry.Source.StartActivity(
+            definition.DisplayName, ActivityKind.Internal, parentContext: default, tags: null, links: links);
+        if (activity is null || !activity.IsAllDataRequested)
+        {
+            return activity;
+        }
+
+        activity.SetTag(RaunTelemetry.Attributes.TestSuiteName, definition.DisplayName);
+        activity.SetTag(RaunTelemetry.Attributes.Scenario, definition.ScenarioId);
+        activity.SetTag(RaunTelemetry.Attributes.Run, runId);
+        activity.SetTag("raun.scenario.method", definition.MethodName);
+        if (!string.IsNullOrEmpty(definition.SourceFile) && definition.SourceLine > 0)
+        {
+            activity.SetTag(RaunTelemetry.Attributes.CodeFilePath, definition.SourceFile);
+            activity.SetTag(RaunTelemetry.Attributes.CodeLineNumber, definition.SourceLine);
+        }
+
+        return activity;
+    }
+
+    /// <summary>The semconv <c>test.suite.run.status</c> for a scenario's results: <c>failure</c> when any
+    /// step failed, <c>aborted</c> when the run was cancelled, otherwise <c>success</c>.</summary>
+    private static string SuiteRunStatus(IReadOnlyList<StepResult> results)
+    {
+        if (results.Any(r => r.Status == StepStatus.Failed))
+        {
+            return "failure";
+        }
+
+        if (results.Any(r => r.Status == StepStatus.Skipped && r.SkipReason == "scenario canceled"))
+        {
+            return "aborted";
+        }
+
+        return "success";
     }
 
     /// <summary>
