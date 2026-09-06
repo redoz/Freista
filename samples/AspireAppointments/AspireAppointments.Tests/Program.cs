@@ -1,13 +1,31 @@
 using Aspire.Hosting;
 using Aspire.Hosting.Testing;
 using AspireAppointments.Tests;
-using Raun;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Testing.Extensions;
+using OpenTelemetry;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+using Raun;
 
 // The entry point is real, readable code — no generated Main, nothing hidden. This is where the
-// AppHost is described, where you say what must be healthy before scenarios run, and where the
-// suite's own services are registered.
+// AppHost is described, where you say what must be healthy before scenarios run, where the suite's
+// own services are registered, and where its traces go.
+
+// Tracing. Raun emits one span per scenario and one per step from the "Raun" ActivitySource, and
+// never exports; the suite decides where they go. Exporting only when an OTLP endpoint is configured
+// keeps a plain `dotnet run` quiet. With the endpoint set (a standalone Aspire dashboard is one
+// `docker run` away — see docs/superpowers/specs/2026-09-06-tracing-design.md), each scenario is one
+// trace: the step span, the HttpClient span under it, and the API's own spans under that, because the
+// step span is Activity.Current while the step runs and HttpClient forwards its traceparent.
+using var tracing = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT") is null
+    ? null
+    : Sdk.CreateTracerProviderBuilder()
+        .ConfigureResource(resource => resource.AddService("AspireAppointments.Tests"))
+        .AddSource(RaunTelemetry.SourceName)
+        .AddHttpClientInstrumentation()
+        .AddOtlpExporter()
+        .Build();
 
 return await RaunAspire.RunAsync<Projects.AspireAppointments_AppHost>(args, aspire =>
 {

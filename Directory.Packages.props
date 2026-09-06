@@ -35,6 +35,15 @@
     <!-- Coverage spike: does the profiler reach Aspire's child processes? -->
     <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.7.0" />
 
+    <!-- OpenTelemetry, for the Aspire sample only: the test process exports Raun's spans and the API
+         exports its own, both over OTLP, so one trace shows a step and the server work it caused.
+         Raun itself takes no OpenTelemetry dependency — it emits through System.Diagnostics. -->
+    <PackageVersion Include="OpenTelemetry" Version="1.*" />
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.*" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.*" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.*" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.*" />
+
     <!--
       Roslyn the primary generator builds against. Installed SDK 10.0.300 ships Roslyn
       5.6.0; 5.3.0 is the latest published Microsoft.CodeAnalysis.CSharp and is <= the

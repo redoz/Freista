@@ -8,4 +8,12 @@
     <NoWarn>$(NoWarn);CA1852;CA1050;CA2007;CA1812</NoWarn>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- The API exports its own spans over OTLP when an endpoint is configured, so they land under
+         the Raun step span whose traceparent arrived on the request. -->
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
+  </ItemGroup>
+
 </Project>

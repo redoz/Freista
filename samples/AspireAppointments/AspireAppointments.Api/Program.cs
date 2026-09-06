@@ -1,10 +1,23 @@
 using System.Collections.Concurrent;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 // A deliberately mock service: appointments live in a dictionary and "authentication" is an X-Role
 // header. The point of the sample is the Raun/Aspire wiring, not this API — anything more would
 // teach ASP.NET rather than Raun, and would drag in a database the sample does not need.
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Export the API's own spans when an OTLP endpoint is configured (the AppHost forwards the test
+// process's OTEL_EXPORTER_OTLP_ENDPOINT). Every request from a Raun step carries that step span's
+// traceparent, so these server spans land under the step that made the call — one trace per scenario.
+if (builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"] is not null)
+{
+    builder.Services.AddOpenTelemetry()
+        .ConfigureResource(resource => resource.AddService("AspireAppointments.Api"))
+        .WithTracing(tracing => tracing.AddAspNetCoreInstrumentation().AddOtlpExporter());
+}
+
 var app = builder.Build();
 
 var appointments = new ConcurrentDictionary<int, Appointment>();
