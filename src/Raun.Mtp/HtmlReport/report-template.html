@@ -222,6 +222,8 @@
   }
   .logs{ margin:0; padding-left:20px; }
   .logs li{ font-family:ui-monospace, Consolas, monospace; font-size:12px; color:var(--ink); margin:2px 0; }
+  .att{ margin:6px 0; }
+  .att .an{ font-size:12px; font-weight:600; color:var(--ink); margin:0 0 3px; }
   .eff{ display:flex; flex-direction:column; gap:5px; }
   .eff .e{ display:flex; align-items:center; gap:9px; font-size:12.5px; flex-wrap:wrap; }
   .eff .vd{ width:9px; height:9px; border-radius:50%; flex:none; }
@@ -2021,6 +2023,12 @@
         if (s.traceId){
           h += '<div class="sec"><h4>Trace</h4><ol class="logs"><li>trace ' + esc(s.traceId) +
             (s.spanId ? " · span " + esc(s.spanId) : "") + "</li></ol></div>";
+        }
+        if (s.attachments && s.attachments.length){
+          h += '<div class="sec"><h4>Attachments</h4>' +
+            s.attachments.map((a) =>
+              '<div class="att"><div class="an">' + esc(a.name) + '</div><pre class="exc">' + esc(a.value) + "</pre></div>"
+            ).join("") + "</div>";
         }
         if (s.effects && s.effects.length){
           h += '<div class="sec"><h4>Effects</h4><div class="eff">' +

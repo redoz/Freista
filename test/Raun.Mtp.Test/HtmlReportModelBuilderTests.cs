@@ -28,12 +28,33 @@ public class HtmlReportModelBuilderTests
 
     private static StepResult Result(ScenarioNode node, DateTimeOffset startedAt, double ms,
         StepStatus status = StepStatus.Passed, IReadOnlyList<ResourceEffect>? effects = null,
-        IReadOnlyList<string>? logs = null, IReadOnlyList<ResourceLineageRelation>? lineage = null) => new()
+        IReadOnlyList<string>? logs = null, IReadOnlyList<ResourceLineageRelation>? lineage = null,
+        IReadOnlyDictionary<string, string>? attachments = null) => new()
     {
         Node = node, DisplayName = node.DisplayNameTemplate, Status = status,
         StartedAt = startedAt, Duration = TimeSpan.FromMilliseconds(ms),
         Effects = effects ?? [], Logs = logs ?? [], Lineage = lineage ?? [],
+        Attachments = attachments ?? new Dictionary<string, string>(),
     };
+
+    [Fact]
+    public void Attachments_are_carried_per_step_ordered_by_name()
+    {
+        var n0 = Node(0, "r", "When", "When a travel reminder is sent");
+        var def = Def(n0);
+
+        var builder = new HtmlReport.HtmlReportModelBuilder();
+        builder.OnScenarioStarted(def);
+        builder.OnStepFinished(def, Result(n0, T0, 10, attachments: new Dictionary<string, string>
+        {
+            ["reminder"] = "Hi Sven, plan your trip.",
+            ["audit"] = "sent by admin",
+        }));
+
+        var step = Assert.Single(Assert.Single(builder.Build(generatedAtUtc: "2026-09-06T00:00:00Z").Scenarios).Steps);
+        Assert.Equal(["audit", "reminder"], step.Attachments.Select(a => a.Name));
+        Assert.Equal("Hi Sven, plan your trip.", step.Attachments[1].Value);
+    }
 
     [Fact]
     public Task Builds_the_expected_json_model()
@@ -54,7 +75,8 @@ public class HtmlReportModelBuilderTests
             },
         ]));
         builder.OnStepFinished(def, Result(n1, T0, 30));                 // concurrent with n0 → lane 1
-        builder.OnStepFinished(def, Result(n2, T0.AddMilliseconds(40), 50));
+        builder.OnStepFinished(def, Result(n2, T0.AddMilliseconds(40), 50,
+            attachments: new Dictionary<string, string> { ["confirmation"] = "booked #1" }));
 
         var model = builder.Build(generatedAtUtc: "2026-06-09T12:00:01Z");
         var json = JsonSerializer.Serialize(model, JsonOptions);

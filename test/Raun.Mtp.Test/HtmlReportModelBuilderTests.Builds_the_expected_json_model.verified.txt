@@ -41,7 +41,8 @@
           "Exception": null,
           "SkipReason": null,
           "TraceId": null,
-          "SpanId": null
+          "SpanId": null,
+          "Attachments": []
         },
         {
           "StepId": "s",
@@ -60,7 +61,8 @@
           "Exception": null,
           "SkipReason": null,
           "TraceId": null,
-          "SpanId": null
+          "SpanId": null,
+          "Attachments": []
         },
         {
           "StepId": "c",
@@ -82,7 +84,13 @@
           "Exception": null,
           "SkipReason": null,
           "TraceId": null,
-          "SpanId": null
+          "SpanId": null,
+          "Attachments": [
+            {
+              "Name": "confirmation",
+              "Value": "booked #1"
+            }
+          ]
         }
       ],
       "Resources": [

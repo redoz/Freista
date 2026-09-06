@@ -85,6 +85,10 @@ internal sealed class HtmlReportModelBuilder
                     Logs = r.LogEntries.Count > 0 ? r.LogEntries.Select(e => e.ToString()).ToList() : r.Logs,
                     TraceId = r.TraceId,
                     SpanId = r.SpanId,
+                    Attachments = r.Attachments
+                        .OrderBy(a => a.Key, StringComparer.Ordinal)
+                        .Select(a => new ReportAttachment { Name = a.Key, Value = a.Value })
+                        .ToList(),
                     Effects = r.Effects.Select(e => new ReportEffect
                     {
                         Verb = e.Verb.ToString(),

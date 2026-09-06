@@ -54,6 +54,15 @@ public sealed record ReportStep
 
     /// <summary>Span id of the step's span when one was recorded; null otherwise.</summary>
     public string? SpanId { get; init; }
+
+    /// <summary>Text attachments the step recorded via <c>ctx.AddAttachment</c>, by name.</summary>
+    public IReadOnlyList<ReportAttachment> Attachments { get; init; } = [];
+}
+
+public sealed record ReportAttachment
+{
+    public required string Name { get; init; }
+    public required string Value { get; init; }
 }
 
 public sealed record ReportEffect
