@@ -41,14 +41,19 @@ internal static class DisplayNameBuilder
             }
 
             var argExpr = ArgumentForParameter(method, args, token.Text);
-            // LINQ unrolling substitutes the loop variable, producing detached nodes the model
-            // can't evaluate; treat those as runtime-formatted.
+            // LINQ unrolling substitutes the loop variable with a literal, producing detached nodes the
+            // model cannot evaluate. Fold those syntactically when every part is a literal (a plain
+            // literal, or an interpolated string whose holes are literals) — `$"user-{1}"` is
+            // "user-1" — so each unrolled step lists under its real name at discovery time instead of
+            // three identical "{name}" entries. Anything else stays runtime-formatted.
             var inModel = argExpr is not null && argExpr.SyntaxTree == model.SyntaxTree;
             var constValue = inModel ? model.GetConstantValue(argExpr!) : default;
+            string? folded = null;
+            var foldedOk = argExpr is not null && !inModel && TryFoldDetached(argExpr, out folded);
 
-            if (argExpr is not null && constValue.HasValue)
+            if (argExpr is not null && (constValue.HasValue || foldedOk))
             {
-                var text = constValue.Value?.ToString() ?? "";
+                var text = constValue.HasValue ? constValue.Value?.ToString() ?? "" : folded!;
                 constant.Append(text);
                 interpolation.Append(EscapeForInterpolation(text));
             }
@@ -86,6 +91,48 @@ internal static class DisplayNameBuilder
         }
 
         return null;
+    }
+
+    /// <summary>Folds a detached expression made only of literals: a literal itself, a parenthesized
+    /// one, or an interpolated string whose every hole is such an expression (no alignment or format
+    /// clause). False for anything that needs evaluation.</summary>
+    private static bool TryFoldDetached(ExpressionSyntax expression, out string? text)
+    {
+        switch (expression)
+        {
+            case LiteralExpressionSyntax literal when literal.Token.Value is not null:
+                text = literal.Token.Value is string s ? s : System.Convert.ToString(literal.Token.Value, System.Globalization.CultureInfo.InvariantCulture);
+                return text is not null;
+
+            case ParenthesizedExpressionSyntax parenthesized:
+                return TryFoldDetached(parenthesized.Expression, out text);
+
+            case InterpolatedStringExpressionSyntax interpolated:
+                var builder = new StringBuilder();
+                foreach (var content in interpolated.Contents)
+                {
+                    switch (content)
+                    {
+                        case InterpolatedStringTextSyntax part:
+                            builder.Append(part.TextToken.ValueText);
+                            break;
+                        case InterpolationSyntax { AlignmentClause: null, FormatClause: null } hole
+                            when TryFoldDetached(hole.Expression, out var holeText):
+                            builder.Append(holeText);
+                            break;
+                        default:
+                            text = null;
+                            return false;
+                    }
+                }
+
+                text = builder.ToString();
+                return true;
+
+            default:
+                text = null;
+                return false;
+        }
     }
 
     private static string EscapeForInterpolation(string text)
